@@ -25,6 +25,18 @@ import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * True when a save changes anything a warm agent process captured at launch.
+ * Display names and other presentation fields do not need a restart.
+ */
+internal fun agentLaunchConfigChanged(
+    before: HostAgentConfigRow,
+    after: HostAgentConfigRow,
+): Boolean = before.path != after.path ||
+    before.args != after.args ||
+    before.binDir != after.binDir ||
+    before.enabled != after.enabled
+
 /** Agent catalog and sign-in state stored under `~/.harold` on the host. */
 @Singleton
 class HostAgentApi @Inject constructor(
@@ -89,21 +101,34 @@ class HostAgentApi @Inject constructor(
                     throw SshException("That path is not an executable file on the host: $path")
                 }
             }
+            val newBinDir = body.binDir
+            val binDir = if (newBinDir != null) {
+                resolveBinDir(connection, store.home, newBinDir)
+            } else {
+                row.binDir
+            }
             val updated = row.copy(
                 displayName = body.displayName ?: row.displayName,
                 path = if (newPath != null) newPath.ifBlank { null } else row.path,
                 args = body.args ?: row.args,
+                binDir = binDir,
                 enabled = body.enabled ?: row.enabled,
                 dismissed = body.dismissed ?: row.dismissed,
                 present = if (newPath?.isNotBlank() == true) true else row.present,
                 updatedAt = Instant.now().toString(),
             )
+            val launchChanged = agentLaunchConfigChanged(row, updated)
             store.updateAgentsConfig { rows ->
                 if (rows.any { it.id == agentId }) {
                     rows.map { if (it.id == agentId) updated else it }
                 } else {
                     rows + updated
                 }
+            }
+            if (launchChanged) {
+                // A warm process holds the old executable, args, and PATH.
+                // Close it so the next use starts with the saved settings.
+                restarter.restartAgent(connectionId, agentId).getOrThrow()
             }
             agentCollection(connection, connectionId, store.agentsConfig())
                 .items.find { it.id == agentId }
@@ -129,6 +154,7 @@ class HostAgentApi @Inject constructor(
                 displayName = body.displayName.ifBlank { allocateCustomDisplayName(rows) },
                 path = path,
                 args = body.args,
+                binDir = resolveBinDir(connection, store.home, body.binDir),
                 enabled = true,
                 dismissed = false,
                 custom = true,
@@ -229,13 +255,93 @@ class HostAgentApi @Inject constructor(
         existing: List<HostAgentConfigRow>,
     ): List<HostAgentConfigRow> = scanAgentRows(connection, existing)
 
+    /**
+     * Validates a chosen runtime bin directory. It must exist, contain a
+     * runnable `node`, and contain `npx` (the package runner the npx agents
+     * use). Blank clears the field. The normalised absolute path is stored.
+     */
+    private suspend fun resolveBinDir(
+        connection: SshConnection,
+        home: String,
+        raw: String?,
+    ): String? {
+        val binDir = raw?.trim()?.takeIf { dir -> dir.isNotEmpty() } ?: return null
+        if (binDir.contains('\n') || binDir.contains('\r') || binDir.contains('\t')) {
+            throw SshException("The bin directory has an invalid character.")
+        }
+        val homeDir = home.trimEnd('/')
+        val expanded = when {
+            binDir == "~" -> homeDir
+            binDir.startsWith("~/") -> "$homeDir/${binDir.removePrefix("~/")}"
+            else -> binDir
+        }
+        val normalised = expanded.trimEnd('/').ifEmpty { "/" }
+        val dir = SshSessionStore.shellQuote(normalised)
+        val node = SshSessionStore.shellQuote("$normalised/node")
+        val npx = SshSessionStore.shellQuote("$normalised/npx")
+        val probe = connection.runCommand(
+            "test -d $dir && test -x $node && test -x $npx && $node --version",
+        )
+        if (!probe.succeeded) {
+            throw SshException(
+                "No runnable node and npx in $normalised. " +
+                    "Choose the folder that contains both, for example " +
+                    "~/.nvm/versions/node/v22.19.0/bin.",
+            )
+        }
+        return normalised
+    }
+
     private suspend fun agentCollection(
         connection: SshConnection,
         connectionId: String,
         rows: List<HostAgentConfigRow>,
     ): AgentSettingsCollection {
         val authById = authSummaries(connection, connectionId, rows)
-        return AgentSettingsCollection(items = agentSettingsView(rows) { id -> authById[id] ?: unknownAuth })
+        val nodeVersions = nodeVersions(connection, rows)
+        return AgentSettingsCollection(
+            items = agentSettingsView(
+                rows = rows,
+                authOf = { id -> authById[id] ?: unknownAuth },
+                nodeVersionOf = { dir -> nodeVersions[dir] },
+            ),
+        )
+    }
+
+    /**
+     * Reads the Node version behind every distinct configured bin directory in
+     * one round trip. A missing or broken directory maps to null so the UI can
+     * say the runtime is gone without hiding the agent row.
+     */
+    private suspend fun nodeVersions(
+        connection: SshConnection,
+        rows: List<HostAgentConfigRow>,
+    ): Map<String, String?> {
+        val dirs = rows.mapNotNull { row -> row.binDir?.takeIf { dir -> dir.isNotBlank() } }.distinct()
+        if (dirs.isEmpty()) {
+            return emptyMap()
+        }
+        val script = dirs.joinToString("; ") { dir ->
+            val node = SshSessionStore.shellQuote("${dir.trimEnd('/')}/node")
+            "printf '%s\\t' ${SshSessionStore.shellQuote(dir)}; " +
+                "$node --version 2>/dev/null || printf 'missing\\n'"
+        }
+        val result = connection.runCommand(
+            "exec bash -lc ${SshSessionStore.shellQuote(script)}",
+        )
+        if (!result.succeeded) {
+            return dirs.associateWith { null }
+        }
+        val found = result.stdout.lineSequence().mapNotNull { line ->
+            val parts = line.split('\t', limit = 2)
+            if (parts.size != 2) {
+                null
+            } else {
+                val version = parts[1].trim().lineSequence().firstOrNull().orEmpty()
+                parts[0] to version.takeIf { value -> value.startsWith("v") }
+            }
+        }.toMap()
+        return dirs.associateWith { dir -> found[dir] }
     }
 
     /** Probes sign-in state for the agents a CLI can actually report on, with a TTL cache. */

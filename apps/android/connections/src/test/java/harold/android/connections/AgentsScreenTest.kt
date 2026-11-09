@@ -5,8 +5,10 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import harold.android.contracts.AgentAuthStatus
+import harold.android.contracts.FilesystemDirectory
 import harold.android.ui.theme.HaroldTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -152,6 +154,101 @@ class AgentsScreenTest {
     }
 
     @Test
+    fun editorShowsTheChosenNodeRuntime() {
+        var browseCalls = 0
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                AgentsScreen(
+                    uiState = AgentsUiState(
+                        loading = false,
+                        editingAgentId = "pi-acp",
+                        editBinDir = "/home/u/.nvm/versions/node/v22.19.0/bin",
+                        editBinDirVersion = "v22.19.0",
+                        rows = listOf(piRow()),
+                    ),
+                    onBack = {},
+                    onScan = {},
+                    onReload = {},
+                    onRestart = {},
+                    onToggleEnabled = { _, _ -> },
+                    onEdit = {},
+                    onDelete = {},
+                    onRestore = {},
+                    onEditDisplayNameChanged = {},
+                    onEditPathChanged = {},
+                    onEditArgsChanged = {},
+                    onEditEnabledChanged = {},
+                    onSaveEdit = {},
+                    onCancelEdit = {},
+                    onStartCreateCustom = {},
+                    onCreateNameChanged = {},
+                    onCreatePathChanged = {},
+                    onCreateArgsChanged = {},
+                    onCreateCustom = {},
+                    onCancelCreateCustom = {},
+                    onEditBinDirBrowse = { browseCalls += 1 },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("agent_edit_bin_dir").assertExists()
+        composeTestRule.onNodeWithTag("agent_edit_bin_dir_version").assertExists()
+        composeTestRule.onNodeWithText("Node v22.19.0").assertExists()
+        composeTestRule.onNodeWithTag("agent_edit_bin_dir_browse").performScrollTo().performClick()
+        assertEquals(1, browseCalls)
+    }
+
+    @Test
+    fun runtimePickerShowsFoldersAndCanUseTheCurrentOne() {
+        var used = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                AgentsScreen(
+                    uiState = AgentsUiState(
+                        loading = false,
+                        editingAgentId = "pi-acp",
+                        rows = listOf(piRow()),
+                        binDirPicker = BinDirPickerUiState(
+                            open = true,
+                            target = BinDirTarget.Edit,
+                            path = "/home/u",
+                            folders = listOf(
+                                FilesystemDirectory(name = ".nvm", path = "/home/u/.nvm"),
+                            ),
+                        ),
+                    ),
+                    onBack = {},
+                    onScan = {},
+                    onReload = {},
+                    onRestart = {},
+                    onToggleEnabled = { _, _ -> },
+                    onEdit = {},
+                    onDelete = {},
+                    onRestore = {},
+                    onEditDisplayNameChanged = {},
+                    onEditPathChanged = {},
+                    onEditArgsChanged = {},
+                    onEditEnabledChanged = {},
+                    onSaveEdit = {},
+                    onCancelEdit = {},
+                    onStartCreateCustom = {},
+                    onCreateNameChanged = {},
+                    onCreatePathChanged = {},
+                    onCreateArgsChanged = {},
+                    onCreateCustom = {},
+                    onCancelCreateCustom = {},
+                    onBinDirUseCurrent = { used = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("agent_bin_dir_folder_list").assertExists()
+        composeTestRule.onNodeWithTag("agent_bin_dir_folder_.nvm").assertExists()
+        composeTestRule.onNodeWithTag("agent_bin_dir_use_current").performClick()
+        assertTrue(used)
+    }
+
+    @Test
     fun filterByCategoryHidesNonMatching() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
@@ -217,4 +314,22 @@ class AgentsScreenTest {
         composeTestRule.onNodeWithTag("agent_cursor").assertIsDisplayed()
         composeTestRule.onNodeWithTag("agent_auggie").assertDoesNotExist()
     }
+
+    private fun piRow() = AgentRow(
+        id = "pi-acp",
+        displayName = "pi ACP",
+        path = null,
+        args = listOf("-y", "pi-acp@0.0.34"),
+        binDir = "/home/u/.nvm/versions/node/v22.19.0/bin",
+        binDirVersion = "v22.19.0",
+        requiredNodeMajor = 22,
+        enabled = true,
+        present = false,
+        popular = true,
+        custom = false,
+        dismissed = false,
+        authStatus = AgentAuthStatus.Unknown,
+        authError = null,
+        canLogout = false,
+    )
 }

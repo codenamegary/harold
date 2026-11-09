@@ -57,6 +57,9 @@ data class AgentSettings(
     val enabled: Boolean,
     val path: String?,
     val args: List<String> = emptyList(),
+    val binDir: String? = null,
+    val binDirVersion: String? = null,
+    val requiredNodeMajor: Int? = null,
     val present: Boolean = false,
     val popular: Boolean = false,
     val deletable: Boolean = false,
@@ -82,6 +85,7 @@ data class UpdateAgentBody(
     val displayName: String? = null,
     val path: String? = null,
     val args: List<String>? = null,
+    val binDir: String? = null,
     val enabled: Boolean? = null,
     val dismissed: Boolean? = null,
 )
@@ -92,4 +96,5 @@ data class CreateCustomAgentBody(
     val displayName: String,
     val path: String,
     val args: List<String> = emptyList(),
+    val binDir: String? = null,
 )

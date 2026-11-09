@@ -94,6 +94,17 @@
     <string name="agents_args_placeholder">acp</string>
     <string name="agents_path_label">Path on host</string>
     <string name="agents_path_placeholder">/usr/local/bin/opencode</string>
+    <string name="agents_bin_dir_label">Node bin directory</string>
+    <string name="agents_bin_dir_placeholder">/home/you/.nvm/versions/node/v22.19.0/bin</string>
+    <string name="agents_bin_dir_help">Prepended to PATH for this agent. Pick the folder that contains node and npx.</string>
+    <string name="agents_bin_dir_browse">Browse</string>
+    <string name="agents_bin_dir_clear">Clear</string>
+    <string name="agents_bin_dir_version">Node %1$s</string>
+    <string name="agents_bin_dir_too_old">Needs Node %1$d or newer</string>
+    <string name="agents_bin_dir_picker_title">Choose a Node bin directory</string>
+    <string name="agents_bin_dir_picker_close">Close the folder browser</string>
+    <string name="agents_bin_dir_summary">Node %1$s</string>
+    <string name="agents_bin_dir_runtime_missing">Node runtime missing</string>
     <string name="agents_display_name_label">Display name</string>
     <string name="agents_edit">Edit agent</string>
     <string name="agents_save">Save agent</string>

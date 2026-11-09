@@ -21,8 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Search
@@ -58,8 +60,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import harold.android.contracts.AgentAuthStatus
 import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonSize
 import harold.android.ui.components.HaroldButtonVariant
 import harold.android.ui.components.HaroldCard
 import harold.android.ui.components.HaroldCheckboxRow
@@ -67,6 +72,7 @@ import harold.android.ui.components.HaroldFormSection
 import harold.android.ui.components.HaroldSegmentOption
 import harold.android.ui.components.HaroldSegmentedControl
 import harold.android.ui.components.HaroldTextField
+import harold.android.ui.components.RemoteFolderBrowser
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -96,6 +102,17 @@ fun AgentsScreen(
     onCancelCreateCustom: () -> Unit,
     onSearchQueryChanged: (String) -> Unit = {},
     onCategorySelected: (AgentCategory) -> Unit = {},
+    onEditBinDirChanged: (String) -> Unit = {},
+    onEditBinDirBrowse: () -> Unit = {},
+    onEditBinDirClear: () -> Unit = {},
+    onCreateBinDirChanged: (String) -> Unit = {},
+    onCreateBinDirBrowse: () -> Unit = {},
+    onCreateBinDirClear: () -> Unit = {},
+    onBinDirOpenFolder: (String) -> Unit = {},
+    onBinDirUp: () -> Unit = {},
+    onBinDirQueryChanged: (String) -> Unit = {},
+    onBinDirUseCurrent: () -> Unit = {},
+    onBinDirCancel: () -> Unit = {},
 ) {
     val addCustomContentDescription = stringResource(R.string.agents_custom_add)
 
@@ -347,9 +364,14 @@ fun AgentsScreen(
                     name = uiState.createName,
                     path = uiState.createPath,
                     args = uiState.createArgs,
+                    binDir = uiState.createBinDir,
+                    binDirVersion = uiState.createBinDirVersion,
                     onNameChanged = onCreateNameChanged,
                     onPathChanged = onCreatePathChanged,
                     onArgsChanged = onCreateArgsChanged,
+                    onBinDirChanged = onCreateBinDirChanged,
+                    onBinDirBrowse = onCreateBinDirBrowse,
+                    onBinDirClear = onCreateBinDirClear,
                     onCreate = onCreateCustom,
                     onCancel = onCancelCreateCustom,
                 )
@@ -367,6 +389,9 @@ fun AgentsScreen(
                     onEditDisplayNameChanged = onEditDisplayNameChanged,
                     onEditPathChanged = onEditPathChanged,
                     onEditArgsChanged = onEditArgsChanged,
+                    onEditBinDirChanged = onEditBinDirChanged,
+                    onEditBinDirBrowse = onEditBinDirBrowse,
+                    onEditBinDirClear = onEditBinDirClear,
                     onEditEnabledChanged = onEditEnabledChanged,
                     onSaveEdit = onSaveEdit,
                     onCancelEdit = onCancelEdit,
@@ -395,6 +420,17 @@ fun AgentsScreen(
             Spacer(modifier = Modifier.height(88.dp))
         }
     }
+
+    if (uiState.binDirPicker.open) {
+        BinDirPickerDialog(
+            state = uiState.binDirPicker,
+            onDismiss = onBinDirCancel,
+            onOpenFolder = onBinDirOpenFolder,
+            onUp = onBinDirUp,
+            onQueryChanged = onBinDirQueryChanged,
+            onUseCurrent = onBinDirUseCurrent,
+        )
+    }
 }
 
 @Composable
@@ -409,6 +445,9 @@ private fun AgentCard(
     onEditDisplayNameChanged: (String) -> Unit,
     onEditPathChanged: (String) -> Unit,
     onEditArgsChanged: (String) -> Unit,
+    onEditBinDirChanged: (String) -> Unit,
+    onEditBinDirBrowse: () -> Unit,
+    onEditBinDirClear: () -> Unit,
     onEditEnabledChanged: (Boolean) -> Unit,
     onSaveEdit: () -> Unit,
     onCancelEdit: () -> Unit,
@@ -459,6 +498,15 @@ private fun AgentCard(
                     label = stringResource(R.string.agents_args_label),
                     placeholder = stringResource(R.string.agents_args_placeholder),
                     modifier = Modifier.testTag("agent_edit_args"),
+                )
+                BinDirEditor(
+                    value = uiState.editBinDir,
+                    version = uiState.editBinDirVersion,
+                    requiredNodeMajor = row.requiredNodeMajor,
+                    onValueChanged = onEditBinDirChanged,
+                    onBrowse = onEditBinDirBrowse,
+                    onClear = onEditBinDirClear,
+                    testTagPrefix = "agent_edit_bin_dir",
                 )
                 HaroldCheckboxRow(
                     checked = uiState.editEnabled,
@@ -566,6 +614,27 @@ private fun AgentCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        row.binDir?.let { dir ->
+                            Text(
+                                text = row.binDirVersion?.let { version ->
+                                    stringResource(R.string.agents_bin_dir_summary, version)
+                                } ?: stringResource(R.string.agents_bin_dir_runtime_missing),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (row.binDirVersion != null) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                            )
+                            Text(
+                                text = dir,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("agent_bin_dir_${row.id}"),
                             )
                         }
                     }
@@ -819,9 +888,14 @@ private fun CustomAgentForm(
     name: String,
     path: String,
     args: String,
+    binDir: String,
+    binDirVersion: String?,
     onNameChanged: (String) -> Unit,
     onPathChanged: (String) -> Unit,
     onArgsChanged: (String) -> Unit,
+    onBinDirChanged: (String) -> Unit,
+    onBinDirBrowse: () -> Unit,
+    onBinDirClear: () -> Unit,
     onCreate: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -850,6 +924,15 @@ private fun CustomAgentForm(
             placeholder = stringResource(R.string.agents_args_placeholder),
             modifier = Modifier.testTag("agent_create_args"),
         )
+        BinDirEditor(
+            value = binDir,
+            version = binDirVersion,
+            requiredNodeMajor = null,
+            onValueChanged = onBinDirChanged,
+            onBrowse = onBinDirBrowse,
+            onClear = onBinDirClear,
+            testTagPrefix = "agent_create_bin_dir",
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -870,6 +953,149 @@ private fun CustomAgentForm(
                     .weight(1f)
                     .testTag("agent_create_submit"),
             )
+        }
+    }
+}
+
+@Composable
+private fun BinDirEditor(
+    value: String,
+    version: String?,
+    requiredNodeMajor: Int?,
+    onValueChanged: (String) -> Unit,
+    onBrowse: () -> Unit,
+    onClear: () -> Unit,
+    testTagPrefix: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        HaroldTextField(
+            value = value,
+            onValueChange = onValueChanged,
+            label = stringResource(R.string.agents_bin_dir_label),
+            placeholder = stringResource(R.string.agents_bin_dir_placeholder),
+            modifier = Modifier.testTag(testTagPrefix),
+        )
+        Text(
+            text = stringResource(R.string.agents_bin_dir_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (version != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.agents_bin_dir_version, version),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("${testTagPrefix}_version"),
+                )
+                val major = version.removePrefix("v").substringBefore('.').toIntOrNull()
+                if (major != null && requiredNodeMajor != null && major < requiredNodeMajor) {
+                    Text(
+                        text = stringResource(R.string.agents_bin_dir_too_old, requiredNodeMajor),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+        ) {
+            HaroldButton(
+                text = stringResource(R.string.agents_bin_dir_browse),
+                onClick = onBrowse,
+                variant = HaroldButtonVariant.Secondary,
+                size = HaroldButtonSize.Small,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.FolderOpen,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                modifier = Modifier.testTag("${testTagPrefix}_browse"),
+            )
+            if (value.isNotBlank()) {
+                HaroldButton(
+                    text = stringResource(R.string.agents_bin_dir_clear),
+                    onClick = onClear,
+                    variant = HaroldButtonVariant.Secondary,
+                    size = HaroldButtonSize.Small,
+                    modifier = Modifier.testTag("${testTagPrefix}_clear"),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BinDirPickerDialog(
+    state: BinDirPickerUiState,
+    onDismiss: () -> Unit,
+    onOpenFolder: (String) -> Unit,
+    onUp: () -> Unit,
+    onQueryChanged: (String) -> Unit,
+    onUseCurrent: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(R.string.agents_bin_dir_picker_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.testTag("agent_bin_dir_picker_close"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.agents_bin_dir_picker_close),
+                        )
+                    }
+                }
+                RemoteFolderBrowser(
+                    path = state.path,
+                    parent = state.parent,
+                    folders = state.folders,
+                    loading = state.loading,
+                    error = state.error,
+                    enabled = true,
+                    query = state.query,
+                    selectedPath = null,
+                    testTagPrefix = "agent_bin_dir",
+                    showNewFolder = false,
+                    onOpenFolder = onOpenFolder,
+                    onUp = onUp,
+                    onQueryChanged = onQueryChanged,
+                    onUseCurrent = onUseCurrent,
+                )
+            }
         }
     }
 }

@@ -26,6 +26,7 @@ data class KnownAgent(
     val binaryName: String?,
     val command: List<String>,
     val popular: Boolean = false,
+    val minimumNodeMajor: Int? = null,
 )
 
 @Serializable
@@ -270,8 +271,17 @@ val KNOWN_AGENTS: List<KnownAgent> = listOf(
         displayName = "pi ACP",
         description = "pi's ACP mode.",
         binaryName = null,
-        command = listOf("npx", "-y", "pi-acp@0.0.33"),
+        command = listOf(
+            "npx",
+            "-y",
+            "-p",
+            "pi-acp@0.0.34",
+            "-p",
+            "@earendil-works/pi-coding-agent@1.5.0",
+            "pi-acp",
+        ),
         popular = true,
+        minimumNodeMajor = 22,
     ),
     KnownAgent(
         id = "poolside",
@@ -464,6 +474,7 @@ fun agentSettingsView(
     authOf: (AgentId) -> AgentAuthSummary = {
         AgentAuthSummary(status = harold.android.contracts.AgentAuthStatus.Unknown, error = null, activeSessionId = null, canLogout = false)
     },
+    nodeVersionOf: (String) -> String? = { null },
 ): List<AgentSettings> {
     val rowsById = rows.associateBy { it.id }
     val knownViews = KNOWN_AGENTS.map { agent ->
@@ -475,8 +486,10 @@ fun agentSettingsView(
             args = row?.args ?: agent.command.drop(1),
             templatePath = agent.binaryName,
             popular = agent.popular,
+            minimumNodeMajor = agent.minimumNodeMajor,
             deletable = false,
             authOf = authOf,
+            nodeVersionOf = nodeVersionOf,
         )
     }
     val customViews = rows
@@ -489,8 +502,10 @@ fun agentSettingsView(
                 args = row.args,
                 templatePath = null,
                 popular = false,
+                minimumNodeMajor = null,
                 deletable = true,
                 authOf = authOf,
+                nodeVersionOf = nodeVersionOf,
             )
         }
     return (customViews + knownViews).sortedWith(
@@ -510,19 +525,26 @@ private fun viewFor(
     args: List<String>,
     templatePath: String?,
     popular: Boolean,
+    minimumNodeMajor: Int?,
     deletable: Boolean,
     authOf: (AgentId) -> AgentAuthSummary,
+    nodeVersionOf: (String) -> String?,
 ): AgentSettings {
     val dismissed = row?.dismissed == true
-    // A detected binary or a user-entered path both mean the agent can launch.
+    // A detected binary, a user-entered path, or a chosen runtime bin
+    // directory all mean the agent can launch.
     val present = row?.present == true || row?.path != null
+    val binDir = row?.binDir?.takeIf { dir -> dir.isNotBlank() }
     return AgentSettings(
         id = id,
         displayName = displayName,
-        available = !dismissed && (present || row?.path != null || templatePath != null),
+        available = !dismissed && (present || binDir != null || templatePath != null),
         enabled = row?.enabled == true && !dismissed,
         path = row?.path,
         args = args,
+        binDir = binDir,
+        binDirVersion = binDir?.let(nodeVersionOf),
+        requiredNodeMajor = minimumNodeMajor,
         present = present,
         popular = popular,
         deletable = deletable,

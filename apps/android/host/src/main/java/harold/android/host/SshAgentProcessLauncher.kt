@@ -26,7 +26,11 @@ class SshAgentProcessLauncher @Inject constructor(
     ): Result<List<LaunchableAgent>> = runCatching {
         connections.useConnection(connectionId) { connection, store ->
             ensureAgentRows(connection, store)
-                .filter { row -> row.enabled && !row.dismissed && (row.present || row.path != null) }
+                .filter { row ->
+                    row.enabled &&
+                        !row.dismissed &&
+                        (row.present || row.path != null || row.binDir != null)
+                }
                 .map { row ->
                     LaunchableAgent(
                         id = row.id,
@@ -127,8 +131,11 @@ class SshAgentProcessLauncher @Inject constructor(
         } else {
             known?.command?.drop(1).orEmpty()
         }
-        val command = "exec " + (listOf(binary) + args)
-            .joinToString(" ") { token -> SshSessionStore.shellQuote(token) }
+        val command = agentLaunchInnerCommand(
+            binary = binary,
+            args = args,
+            binDir = row?.binDir?.takeIf { dir -> dir.isNotBlank() },
+        )
         return AgentLaunch(
             label = label,
             command = "exec bash -lc ${SshSessionStore.shellQuote(command)}",
@@ -186,4 +193,20 @@ class SshAgentProcessLauncher @Inject constructor(
             connection.close()
         }
     }
+}
+
+/**
+ * Builds the shell command that runs inside the login shell. A chosen bin
+ * directory is prepended to PATH after the profile runs, so the agent, its
+ * package runner, and any child processes all use the same runtime.
+ */
+internal fun agentLaunchInnerCommand(
+    binary: String,
+    args: List<String>,
+    binDir: String?,
+): String {
+    val exec = "exec " + (listOf(binary) + args)
+        .joinToString(" ") { token -> SshSessionStore.shellQuote(token) }
+    val dir = binDir?.takeIf { value -> value.isNotBlank() } ?: return exec
+    return "export PATH=${SshSessionStore.shellQuote(dir)}:\"\$PATH\"; $exec"
 }

@@ -16,11 +16,13 @@ class KnownAgentsTest {
         custom: Boolean = false,
         displayName: String? = null,
         args: List<String> = emptyList(),
+        binDir: String? = null,
     ) = HostAgentConfigRow(
         id = id,
         displayName = displayName,
         path = path,
         args = args,
+        binDir = binDir,
         enabled = enabled,
         dismissed = dismissed,
         custom = custom,
@@ -39,6 +41,14 @@ class KnownAgentsTest {
         val opencode = knownAgent("opencode")!!
         assertEquals("opencode", opencode.binaryName)
         assertEquals(listOf("acp"), opencode.command.drop(1))
+    }
+
+    @Test
+    fun piCatalogInstallsTheAdapterAndTheAgent() {
+        val pi = knownAgent("pi-acp")!!
+        assertTrue(pi.command.contains("pi-acp@0.0.34"))
+        assertTrue(pi.command.contains("@earendil-works/pi-coding-agent@1.5.0"))
+        assertEquals(22, pi.minimumNodeMajor)
     }
 
     @Test
@@ -115,6 +125,31 @@ class KnownAgentsTest {
         // agent as present even though the scan did not see it on PATH.
         assertTrue(agentSettingsView(merged).find { it.id == "opencode" }!!.present)
         assertTrue(merged.find { it.id == "cursor" }!!.present)
+    }
+
+    @Test
+    fun viewTreatsABinDirectoryAsALaunchableRuntime() {
+        val rows = listOf(row(id = "pi-acp", binDir = "/home/u/.nvm/versions/node/v22.19.0/bin"))
+        val view = agentSettingsView(rows).find { it.id == "pi-acp" }!!
+        assertTrue(view.available)
+        assertEquals("/home/u/.nvm/versions/node/v22.19.0/bin", view.binDir)
+    }
+
+    @Test
+    fun viewShowsTheNodeVersionFoundInTheBinDirectory() {
+        val rows = listOf(row(id = "pi-acp", binDir = "/home/u/node/bin"))
+        val view = agentSettingsView(rows, nodeVersionOf = { dir ->
+            if (dir == "/home/u/node/bin") "v22.19.0" else null
+        }).find { it.id == "pi-acp" }!!
+        assertEquals("v22.19.0", view.binDirVersion)
+        assertEquals(22, view.requiredNodeMajor)
+    }
+
+    @Test
+    fun scanKeepsTheUserChosenBinDirectory() {
+        val existing = listOf(row(id = "pi-acp", binDir = "/home/u/node/bin"))
+        val merged = mergeScanRows(existing, emptyList())
+        assertEquals("/home/u/node/bin", merged.single().binDir)
     }
 
     @Test

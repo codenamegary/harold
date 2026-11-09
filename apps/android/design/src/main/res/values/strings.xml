@@ -1,3 +1,12 @@
 <resources>
     <string name="harold_cancel">Cancel</string>
+    <string name="harold_remote_browser_path">Folder</string>
+    <string name="harold_remote_browser_up">Up</string>
+    <string name="harold_remote_browser_new_folder">New folder</string>
+    <string name="harold_remote_browser_use_current">Use this folder</string>
+    <string name="harold_remote_browser_filter">Filter folders</string>
+    <string name="harold_remote_browser_empty">No folders here</string>
+    <string name="harold_remote_browser_no_match">No folders match</string>
+    <string name="harold_remote_browser_loading">Loading folders…</string>
+    <string name="harold_remote_browser_clear_search">Clear search</string>
 </resources>

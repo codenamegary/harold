@@ -96,11 +96,21 @@ The per-connection Agents screen manages `agents.json`:
 - A hardcoded catalog of known ACP agents ships with the app. Scanning probes
   the host with `command -v` for every known binary in one round trip.
 - Detection merges into existing rows without touching user-owned fields
-  (`enabled`, `args`). Working custom paths stay untouched. If a saved path
-  no longer runs and the scan finds that agent at a new path, the new path
-  replaces the dead one. Dismissed agents stay dismissed across scans.
-  Custom agents (name, path, args) can be added for anything the catalog does
-  not know and are deleted outright.
+  (`enabled`, `args`, `binDir`). Working custom paths stay untouched. If a
+  saved path no longer runs and the scan finds that agent at a new path, the
+  new path replaces the dead one. Dismissed agents stay dismissed across
+  scans. Custom agents (name, path, args) can be added for anything the
+  catalog does not know and are deleted outright.
+- Each agent row can name a Node bin directory. Harold prepends it to `PATH`
+  when that agent launches, so `node`, `npx`, and globally installed CLIs come
+  from the same runtime. The folder browser is the shared remote folder
+  component. Saving checks that the folder exists and contains runnable
+  `node` and `npx`.
+- Saving a changed executable path, args, or bin directory closes that agent's
+  warm process. The next session starts fresh with the saved settings instead
+  of reusing a process that captured the old environment.
+- `pi-acp` installs both its adapter and the `pi` CLI through `npx`, so the
+  agent does not depend on a separate global install.
 - Auth state is probed from the agent's own CLI (`claude auth status --json`,
   `cursor-agent status --format json`) with a 30 second TTL, and shown as a
   badge. Probing is advisory; sign-in always happens on the host, and

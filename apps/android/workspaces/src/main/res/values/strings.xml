@@ -6,25 +6,17 @@
     <string name="add_workspace_back_content_description">Go back from add workspace</string>
     <string name="add_workspace_mode_open">Open folder</string>
     <string name="add_workspace_mode_clone">Clone repo</string>
-    <string name="add_workspace_browser_path">Folder</string>
-    <string name="add_workspace_browser_up">Up</string>
-    <string name="add_workspace_new_folder">New folder</string>
     <string name="add_workspace_new_folder_title">New folder</string>
     <string name="add_workspace_new_folder_label">Folder name</string>
     <string name="add_workspace_new_folder_create">Create</string>
     <string name="add_workspace_new_folder_cancel">Cancel</string>
-    <string name="add_workspace_use_current">Use this folder</string>
     <string name="add_workspace_selected_folder">Selected folder</string>
     <string name="add_workspace_clone_url_label">Repository URL</string>
     <string name="add_workspace_clone_folder_label">New folder name</string>
     <string name="add_workspace_clone_parent_label">Parent folder</string>
     <string name="add_workspace_final_path_label">Destination</string>
     <string name="add_workspace_name_label">Workspace name</string>
-    <string name="add_workspace_folder_search">Filter folders</string>
-    <string name="add_workspace_folder_search_empty">No folders match</string>
-    <string name="add_workspace_folders_loading">Loading folders…</string>
-    <string name="add_workspace_folders_empty">No folders here</string>
-    <string name="add_workspace_browser_error">Could not load folders</string>
+
     <string name="add_workspace_submit">Add workspace</string>
     <string name="add_workspace_submitting">Working…</string>
 </resources>

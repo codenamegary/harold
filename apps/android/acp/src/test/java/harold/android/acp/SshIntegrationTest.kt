@@ -612,6 +612,41 @@ class SshIntegrationTest {
     }
 
     @Test
+    fun agentBinDirectoryRoundTripAndValidation() = runBlocking {
+        hostAgents.scanAgents(connectionId).getOrThrow()
+
+        val runtimeBin = tempDir.resolve("node-runtime/bin")
+        Files.createDirectories(runtimeBin)
+        val node = runtimeBin.resolve("node")
+        Files.writeString(node, "#!/bin/sh\necho v22.19.0\n")
+        node.toFile().setExecutable(true)
+        val npx = runtimeBin.resolve("npx")
+        Files.writeString(npx, "#!/bin/sh\nexit 0\n")
+        npx.toFile().setExecutable(true)
+
+        hostAgents.updateAgent(
+            connectionId,
+            "opencode",
+            UpdateAgentBody(binDir = runtimeBin.toAbsolutePath().toString()),
+        ).getOrThrow()
+
+        val reloaded = hostAgents.reloadConfig(connectionId).getOrThrow()
+        val row = reloaded.items.first { agent -> agent.id == "opencode" }
+        assertEquals(runtimeBin.toAbsolutePath().toString(), row.binDir)
+        assertEquals("v22.19.0", row.binDirVersion)
+
+        val missingRuntime = tempDir.resolve("missing-runtime/bin")
+        Files.createDirectories(missingRuntime)
+        assertTrue(
+            hostAgents.updateAgent(
+                connectionId,
+                "opencode",
+                UpdateAgentBody(binDir = missingRuntime.toAbsolutePath().toString()),
+            ).isFailure,
+        )
+    }
+
+    @Test
     fun workspaceValidationAndGitBadge() = runBlocking {
         // A path that does not exist is rejected.
         assertTrue(

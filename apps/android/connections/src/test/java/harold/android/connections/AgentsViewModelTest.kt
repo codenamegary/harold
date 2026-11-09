@@ -12,6 +12,8 @@ import harold.android.contracts.CreateCustomAgentBody
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
+import harold.android.contracts.FilesystemDirectory
+import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.UpdateAgentBody
 import harold.android.navigation.Navigator
 import harold.android.user.UserRepository
@@ -115,6 +117,64 @@ class AgentsViewModelTest {
     }
 
     @Test
+    fun editingAnAgentLoadsAndSavesItsBinDirectory() = runTest {
+        val fakeRepo = FakeAgentsUserRepository(
+            agents = listOf(
+                agent(id = "pi-acp", name = "pi ACP").copy(
+                    binDir = "/home/u/.nvm/versions/node/v20.0.0/bin",
+                    binDirVersion = "v20.0.0",
+                    requiredNodeMajor = 22,
+                ),
+            ),
+        )
+        val viewModel = AgentsViewModel(fakeRepo, Navigator())
+        viewModel.start("ssh://gary@laptop:22")
+
+        viewModel.startEdit("pi-acp")
+        assertEquals(
+            "/home/u/.nvm/versions/node/v20.0.0/bin",
+            viewModel.uiState.value.editBinDir,
+        )
+        assertEquals("v20.0.0", viewModel.uiState.value.editBinDirVersion)
+
+        viewModel.onEditBinDirChanged("/home/u/.nvm/versions/node/v22.19.0/bin")
+        viewModel.saveEdit()
+
+        val saved = viewModel.uiState.value.rows.first { row -> row.id == "pi-acp" }
+        assertEquals("/home/u/.nvm/versions/node/v22.19.0/bin", saved.binDir)
+    }
+
+    @Test
+    fun binDirectoryPickerUsesTheCurrentFolder() = runTest {
+        val fakeRepo = FakeAgentsUserRepository(
+            agents = listOf(agent(id = "pi-acp", name = "pi ACP")),
+            folders = mapOf(
+                "/home/u" to listOf(
+                    FilesystemDirectory(name = ".nvm", path = "/home/u/.nvm"),
+                ),
+                "/home/u/.nvm/versions/node/v22.19.0/bin" to emptyList(),
+            ),
+        )
+        val viewModel = AgentsViewModel(fakeRepo, Navigator())
+        viewModel.start("ssh://gary@laptop:22")
+
+        viewModel.startEdit("pi-acp")
+        viewModel.openBinDirPicker(BinDirTarget.Edit)
+
+        assertTrue(viewModel.uiState.value.binDirPicker.open)
+        assertEquals(listOf(".nvm"), viewModel.uiState.value.binDirPicker.folders.map { it.name })
+
+        viewModel.onBinDirOpenFolder("/home/u/.nvm/versions/node/v22.19.0/bin")
+        viewModel.onBinDirUseCurrent()
+
+        assertFalse(viewModel.uiState.value.binDirPicker.open)
+        assertEquals(
+            "/home/u/.nvm/versions/node/v22.19.0/bin",
+            viewModel.uiState.value.editBinDir,
+        )
+    }
+
+    @Test
     fun customAgentCreationAppendsAgent() = runTest {
         val fakeRepo = FakeAgentsUserRepository(
             agents = listOf(
@@ -163,6 +223,7 @@ class AgentsViewModelTest {
 
 private class FakeAgentsUserRepository(
     agents: List<AgentSettings> = emptyList(),
+    private val folders: Map<String, List<FilesystemDirectory>> = emptyMap(),
 ) : UserRepository {
     private val agentList = agents.toMutableList()
 
@@ -184,6 +245,7 @@ private class FakeAgentsUserRepository(
             displayName = body.displayName ?: current.displayName,
             path = body.path ?: current.path,
             args = body.args ?: current.args,
+            binDir = body.binDir?.ifBlank { null } ?: current.binDir,
             enabled = body.enabled ?: current.enabled,
             dismissed = body.dismissed ?: current.dismissed,
         )
@@ -232,7 +294,19 @@ private class FakeAgentsUserRepository(
     override suspend fun getAgentAuth(connectionId: String, agentId: AgentId) = error("unused")
     override suspend fun logoutAgentAuth(connectionId: String, agentId: AgentId) = error("unused")
     override suspend fun listWorkspaces(connectionId: String, limit: Int) = error("unused")
-    override suspend fun listFilesystemDirectories(connectionId: String, root: String?) = error("unused")
+    override suspend fun listFilesystemDirectories(
+        connectionId: String,
+        root: String?,
+    ): Result<FilesystemDirectoryCollection> {
+        val path = root ?: "/home/u"
+        return Result.success(
+            FilesystemDirectoryCollection(
+                path = path,
+                parent = if (path == "/home/u") null else path.substringBeforeLast("/"),
+                items = folders[path].orEmpty(),
+            ),
+        )
+    }
     override suspend fun createFilesystemDirectory(connectionId: String, body: CreateFilesystemDirectoryBody) = error("unused")
     override suspend fun createWorkspace(connectionId: String, body: CreateWorkspaceBody) = error("unused")
     override suspend fun listSessions(connectionId: String, cwd: String?) = error("unused")

@@ -6,8 +6,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.CreateCustomAgentBody
+import harold.android.contracts.FilesystemDirectory
 import harold.android.contracts.UpdateAgentBody
 import harold.android.navigation.Navigator
+import harold.android.network.apiErrorMessage
 import harold.android.user.UserRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,9 @@ data class AgentRow(
     val displayName: String,
     val path: String?,
     val args: List<String>,
+    val binDir: String? = null,
+    val binDirVersion: String? = null,
+    val requiredNodeMajor: Int? = null,
     val enabled: Boolean,
     val present: Boolean,
     val popular: Boolean,
@@ -36,6 +41,22 @@ data class AgentRow(
     val authStatus: AgentAuthStatus,
     val authError: String?,
     val canLogout: Boolean,
+)
+
+enum class BinDirTarget {
+    Edit,
+    Create,
+}
+
+data class BinDirPickerUiState(
+    val open: Boolean = false,
+    val target: BinDirTarget = BinDirTarget.Edit,
+    val path: String = "",
+    val parent: String? = null,
+    val folders: List<FilesystemDirectory> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
+    val query: String = "",
 )
 
 data class AgentsUiState(
@@ -49,11 +70,16 @@ data class AgentsUiState(
     val editDisplayName: String = "",
     val editPath: String = "",
     val editArgs: String = "",
+    val editBinDir: String = "",
+    val editBinDirVersion: String? = null,
     val editEnabled: Boolean = true,
     val showCreateCustom: Boolean = false,
     val createName: String = "",
     val createPath: String = "",
     val createArgs: String = "",
+    val createBinDir: String = "",
+    val createBinDirVersion: String? = null,
+    val binDirPicker: BinDirPickerUiState = BinDirPickerUiState(),
     val searchQuery: String = "",
     val selectedCategory: AgentCategory = AgentCategory.All,
 ) {
@@ -194,6 +220,8 @@ class AgentsViewModel @Inject constructor(
                 editDisplayName = row.displayName,
                 editPath = row.path.orEmpty(),
                 editArgs = row.args.joinToString(" "),
+                editBinDir = row.binDir.orEmpty(),
+                editBinDirVersion = row.binDirVersion,
                 editEnabled = row.enabled,
             )
         }
@@ -211,6 +239,12 @@ class AgentsViewModel @Inject constructor(
         _uiState.update { current -> current.copy(editArgs = value) }
     }
 
+    fun onEditBinDirChanged(value: String) {
+        _uiState.update { current ->
+            current.copy(editBinDir = value, editBinDirVersion = null)
+        }
+    }
+
     fun onEditEnabledChanged(value: Boolean) {
         _uiState.update { current -> current.copy(editEnabled = value) }
     }
@@ -226,6 +260,7 @@ class AgentsViewModel @Inject constructor(
                     displayName = state.editDisplayName.trim().takeIf { it.isNotBlank() },
                     path = state.editPath.trim(),
                     args = state.editArgs.split(' ').filter { it.isNotBlank() },
+                    binDir = state.editBinDir.trim(),
                     enabled = state.editEnabled,
                 ),
             ).fold(
@@ -278,7 +313,14 @@ class AgentsViewModel @Inject constructor(
 
     fun startCreateCustom() {
         _uiState.update { current ->
-            current.copy(showCreateCustom = true, createName = "", createPath = "", createArgs = "")
+            current.copy(
+                showCreateCustom = true,
+                createName = "",
+                createPath = "",
+                createArgs = "",
+                createBinDir = "",
+                createBinDirVersion = null,
+            )
         }
     }
 
@@ -294,6 +336,12 @@ class AgentsViewModel @Inject constructor(
         _uiState.update { current -> current.copy(createArgs = value) }
     }
 
+    fun onCreateBinDirChanged(value: String) {
+        _uiState.update { current ->
+            current.copy(createBinDir = value, createBinDirVersion = null)
+        }
+    }
+
     fun createCustom() {
         val state = _uiState.value
         val path = state.createPath.trim()
@@ -307,6 +355,7 @@ class AgentsViewModel @Inject constructor(
                     displayName = state.createName.trim().ifBlank { "Custom agent" },
                     path = path,
                     args = state.createArgs.split(' ').filter { it.isNotBlank() },
+                    binDir = state.createBinDir.trim().ifBlank { null },
                 ),
             ).fold(
                 onSuccess = { agent ->
@@ -324,7 +373,116 @@ class AgentsViewModel @Inject constructor(
 
     fun cancelCreateCustom() {
         _uiState.update { current ->
-            current.copy(showCreateCustom = false, createName = "", createPath = "", createArgs = "")
+            current.copy(
+                showCreateCustom = false,
+                createName = "",
+                createPath = "",
+                createArgs = "",
+                createBinDir = "",
+                createBinDirVersion = null,
+            )
+        }
+    }
+
+    /** Opens the remote folder browser for one of the bin directory fields. */
+    fun openBinDirPicker(target: BinDirTarget) {
+        val state = _uiState.value
+        val initial = when (target) {
+            BinDirTarget.Edit -> state.editBinDir
+            BinDirTarget.Create -> state.createBinDir
+        }.trim().takeIf { path -> path.isNotEmpty() }
+        _uiState.update { current ->
+            current.copy(
+                binDirPicker = BinDirPickerUiState(
+                    open = true,
+                    target = target,
+                    loading = true,
+                ),
+            )
+        }
+        loadBinDirBrowser(initial)
+    }
+
+    fun onBinDirOpenFolder(path: String) {
+        _uiState.update { current ->
+            current.copy(
+                binDirPicker = current.binDirPicker.copy(
+                    query = "",
+                    loading = true,
+                    error = null,
+                ),
+            )
+        }
+        loadBinDirBrowser(path)
+    }
+
+    fun onBinDirUp() {
+        val parent = _uiState.value.binDirPicker.parent ?: return
+        onBinDirOpenFolder(parent)
+    }
+
+    fun onBinDirQueryChanged(value: String) {
+        _uiState.update { current ->
+            current.copy(binDirPicker = current.binDirPicker.copy(query = value))
+        }
+    }
+
+    /** Chooses the folder the browser is currently showing. */
+    fun onBinDirUseCurrent() {
+        val picker = _uiState.value.binDirPicker
+        val path = picker.path
+        if (path.isEmpty()) {
+            return
+        }
+        _uiState.update { current ->
+            when (picker.target) {
+                BinDirTarget.Edit -> current.copy(
+                    editBinDir = path,
+                    editBinDirVersion = null,
+                    binDirPicker = current.binDirPicker.copy(open = false),
+                )
+                BinDirTarget.Create -> current.copy(
+                    createBinDir = path,
+                    createBinDirVersion = null,
+                    binDirPicker = current.binDirPicker.copy(open = false),
+                )
+            }
+        }
+    }
+
+    fun onBinDirCancel() {
+        _uiState.update { current ->
+            current.copy(binDirPicker = current.binDirPicker.copy(open = false))
+        }
+    }
+
+    private fun loadBinDirBrowser(root: String?) {
+        viewModelScope.launch {
+            userRepository.listFilesystemDirectories(connectionId, root).fold(
+                onSuccess = { collection ->
+                    _uiState.update { current ->
+                        current.copy(
+                            binDirPicker = current.binDirPicker.copy(
+                                path = collection.path,
+                                parent = collection.parent,
+                                folders = collection.items,
+                                loading = false,
+                                error = null,
+                            ),
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            binDirPicker = current.binDirPicker.copy(
+                                loading = false,
+                                error = apiErrorMessage(error),
+                            ),
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -388,6 +546,9 @@ class AgentsViewModel @Inject constructor(
         displayName = agent.displayName,
         path = agent.path,
         args = agent.args,
+        binDir = agent.binDir,
+        binDirVersion = agent.binDirVersion,
+        requiredNodeMajor = agent.requiredNodeMajor,
         enabled = agent.enabled,
         present = agent.present,
         popular = agent.popular,

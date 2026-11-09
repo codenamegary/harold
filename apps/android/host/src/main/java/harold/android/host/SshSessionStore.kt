@@ -27,6 +27,7 @@ data class HostAgentConfigRow(
     val displayName: String? = null,
     val path: String? = null,
     val args: List<String> = emptyList(),
+    val binDir: String? = null,
     val enabled: Boolean = true,
     val dismissed: Boolean = false,
     val custom: Boolean = false,
