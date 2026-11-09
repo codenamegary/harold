@@ -294,8 +294,16 @@ class AgentProcess internal constructor(
             .orEmpty()
     }
 
-    /** Every page of `session/list`, or nothing when the agent cannot list. */
-    suspend fun sessionList(connectionId: String, cwd: String?): List<AcpSessionInfo> {
+    /**
+     * Every page of `session/list`, or nothing when the agent cannot list.
+     * [onPartial] receives each page's cumulative rows so the catalog can show
+     * the first page before the remaining pages finish.
+     */
+    suspend fun sessionList(
+        connectionId: String,
+        cwd: String?,
+        onPartial: suspend (List<AcpSessionInfo>) -> Unit = {},
+    ): List<AcpSessionInfo> {
         ensureAlive()
         if (!canList) {
             return emptyList()
@@ -312,7 +320,11 @@ class AgentProcess internal constructor(
                 timeoutMillis = SESSION_LIST_TIMEOUT_MILLIS,
             )
             val page = parseSessionListPage(agentId, response)
-            found += page.sessions
+            val matching = page.sessions.filter { session -> cwd == null || session.cwd == cwd }
+            if (matching.isNotEmpty()) {
+                found += matching
+                onPartial(found.toList())
+            }
             val next = page.nextCursor ?: break
             if (!seenCursors.add(next)) {
                 break
@@ -320,7 +332,7 @@ class AgentProcess internal constructor(
             cursor = next
         }
         touch()
-        return found.filter { session -> cwd == null || session.cwd == cwd }
+        return found
     }
 
     /** `session/delete`, with ACP's -32002 "already gone" treated as success. */

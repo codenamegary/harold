@@ -184,7 +184,15 @@ class AgentRuntime @Inject constructor(
                     permits.withPermit {
                         runCatching {
                             withProcess(connectionId, row.id) { process ->
-                                process.sessionList(connectionId, cwd)
+                                process.sessionList(connectionId, cwd) { partial ->
+                                    catalog.replaceAgent(
+                                        connectionId = connectionId,
+                                        agentId = row.id,
+                                        sessions = partial,
+                                        cwd = cwd,
+                                        loading = true,
+                                    )
+                                }
                             }
                         }.fold(
                             onSuccess = { sessions ->

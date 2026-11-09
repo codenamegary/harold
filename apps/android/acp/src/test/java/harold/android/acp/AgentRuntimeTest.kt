@@ -305,6 +305,57 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun listPublishesTheFirstPageWhileLaterPagesLoad() = runBlocking {
+        withRuntimeAndCatalog { runtime, launcher, catalog ->
+            runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/first").getOrThrow()
+            val agent = launcher.agents.single()
+            val releaseSecondPage = CompletableDeferred<Unit>()
+            agent.listPages = listOf(
+                FakeListPage(
+                    sessions = listOf("sess_first" to "/tmp/first"),
+                    nextCursor = "1",
+                ),
+                FakeListPage(
+                    sessions = listOf("sess_second" to "/tmp/second"),
+                    nextCursor = null,
+                ),
+            )
+            agent.gatedListPage = 1
+            agent.listPageGate = releaseSecondPage
+
+            val listing = async(Dispatchers.IO) {
+                runtime.listSessions(FIRST_ROW).getOrThrow()
+            }
+
+            withTimeout(10_000) {
+                while (catalog.find(FIRST_ROW, AGENT_ID, "sess_first") == null) {
+                    delay(10)
+                }
+            }
+
+            assertEquals(true, catalog.snapshot(FIRST_ROW, AGENT_ID)?.loading)
+            assertNull(catalog.find(FIRST_ROW, AGENT_ID, "sess_second"))
+            assertFalse(listing.isCompleted)
+
+            releaseSecondPage.complete(Unit)
+            val all = listing.await()
+
+            assertEquals(
+                setOf("sess_first", "sess_second"),
+                all.map { session -> session.sessionId }.toSet(),
+            )
+            withTimeout(10_000) {
+                while (
+                    catalog.snapshot(FIRST_ROW, AGENT_ID)?.loading != false ||
+                    catalog.find(FIRST_ROW, AGENT_ID, "sess_second") == null
+                ) {
+                    delay(10)
+                }
+            }
+        }
+    }
+
+    @Test
     fun listRetriesOnAFreshProcessWhenTheWarmPipeDied() = runBlocking {
         withRuntimeAndCatalog { runtime, launcher, catalog ->
             runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/live").getOrThrow()
@@ -577,6 +628,11 @@ private class FakeChannel : AgentProcessChannel {
     }
 }
 
+private data class FakeListPage(
+    val sessions: List<Pair<String, String>>,
+    val nextCursor: String? = null,
+)
+
 /**
  * The smallest ACP responder that covers prompt turns, permission requests,
  * session load replay, list, and delete. Each incoming line gets its own
@@ -602,6 +658,14 @@ private class FakeAgent(
 
     @Volatile
     var answerPrompts: Boolean = true
+
+    /** When set, `session/list` serves these pages instead of [sessions]. */
+    var listPages: List<FakeListPage> = emptyList()
+
+    /** Zero-based page index that waits on [listPageGate] before answering. */
+    var gatedListPage: Int = -1
+
+    var listPageGate: CompletableDeferred<Unit>? = null
 
     fun start() {
         scope.launch(Dispatchers.IO) {
@@ -664,6 +728,33 @@ private class FakeAgent(
 
             "session/list" -> {
                 sessionLists.incrementAndGet()
+                if (listPages.isNotEmpty()) {
+                    val pageIndex = params.string("cursor")?.toIntOrNull() ?: 0
+                    if (pageIndex == gatedListPage) {
+                        listPageGate?.await()
+                    }
+                    val page = listPages[pageIndex]
+                    respond(
+                        id,
+                        buildJsonObject {
+                            put(
+                                "sessions",
+                                buildJsonArray {
+                                    page.sessions.forEach { (sessionId, cwd) ->
+                                        add(
+                                            buildJsonObject {
+                                                put("sessionId", sessionId)
+                                                put("cwd", cwd)
+                                            },
+                                        )
+                                    }
+                                },
+                            )
+                            page.nextCursor?.let { next -> put("nextCursor", next) }
+                        },
+                    )
+                    return
+                }
                 respond(
                     id,
                     buildJsonObject {

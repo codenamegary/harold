@@ -79,12 +79,16 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
         }
     }
 
-    /** Replaces one agent's snapshot after a successful `session/list`. */
+    /**
+     * Replaces one agent's snapshot after a successful `session/list`.
+     * [loading] stays true while later pages are still arriving.
+     */
     fun replaceAgent(
         connectionId: String,
         agentId: AgentId,
         sessions: List<AcpSessionInfo>,
         cwd: String? = null,
+        loading: Boolean = false,
     ) {
         synchronized(lock) {
             val key = Key(connectionId, agentId)
@@ -100,7 +104,7 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
             }
             byKey[key] = current.copy(
                 sessions = sortSessions(kept + sessions.map { session -> session.toCatalog() }),
-                loading = false,
+                loading = loading,
                 error = null,
             )
             publishLocked()

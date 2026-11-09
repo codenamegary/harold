@@ -129,7 +129,9 @@ The agent owns session history. The app keeps one in-memory session snapshot
 per `(connection, agent)`, fed by the live ACP processes:
 
 - `initialize` starts with no rows.
-- `session/list` replaces that agent's snapshot.
+- `session/list` shows the first page as soon as it arrives, then keeps
+  fetching later pages in the background. The agent stays marked as
+  refreshing until the last page lands.
 - `session/new` adds a row.
 - `session/update` patches its title and timestamp.
 - `session/delete` removes a row.
