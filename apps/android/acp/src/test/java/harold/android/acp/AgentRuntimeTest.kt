@@ -11,6 +11,7 @@ import harold.android.process.LaunchableAgent
 import harold.android.process.SessionFileService
 import harold.android.process.TerminalLaunchSpec
 import harold.android.stream.SessionStatus
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.PipedInputStream
@@ -46,7 +47,9 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -302,6 +305,36 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun listRetriesOnAFreshProcessWhenTheWarmPipeDied() = runBlocking {
+        withRuntimeAndCatalog { runtime, launcher, catalog ->
+            runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/live").getOrThrow()
+            launcher.channels.single().failWrites = true
+
+            runtime.listSessions(FIRST_ROW).getOrThrow()
+
+            assertEquals(2, launcher.launchCount)
+            assertNull(catalog.snapshot(FIRST_ROW, AGENT_ID)?.error)
+        }
+    }
+
+    @Test
+    fun listReportsAFriendlyErrorWhenTheReplacementAlsoFails() = runBlocking {
+        withRuntimeAndCatalog { runtime, launcher, catalog ->
+            runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/broken").getOrThrow()
+            launcher.channels.single().failWrites = true
+            launcher.failNewChannelWrites = true
+
+            runtime.listSessions(FIRST_ROW).getOrThrow()
+
+            assertEquals(2, launcher.launchCount)
+            val error = catalog.snapshot(FIRST_ROW, AGENT_ID)?.error
+            assertNotNull(error)
+            assertFalse(error.orEmpty().contains("Read end dead"))
+            assertTrue(error.orEmpty().contains("failed to start"))
+        }
+    }
+
+    @Test
     fun backgroundCloseLeavesASessionWithAnAttachedStreamAlone() = runBlocking {
         withRuntime { runtime, launcher ->
             val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/idle").getOrThrow()
@@ -396,6 +429,25 @@ class AgentRuntimeTest {
         }
     }
 
+    private suspend fun withRuntimeAndCatalog(
+        block: suspend (AgentRuntime, FakeLauncher, AcpSessionCatalog) -> Unit,
+    ) {
+        val launcher = FakeLauncher()
+        val catalog = AcpSessionCatalog()
+        val runtime = AgentRuntime(
+            launcher = launcher,
+            files = NoopFiles,
+            catalog = catalog,
+        )
+        try {
+            block(runtime, launcher, catalog)
+        } finally {
+            runtime.closeConnection(FIRST_ROW)
+            runtime.closeConnection(SECOND_ROW)
+            launcher.close()
+        }
+    }
+
     private suspend fun awaitStatus(session: AcpSession, status: SessionStatus) {
         withTimeout(10_000) {
             while (session.status.value != status) {
@@ -431,6 +483,9 @@ private class FakeLauncher(
     var launchCount = 0
         private set
 
+    @Volatile
+    var failNewChannelWrites: Boolean = false
+
     override suspend fun launchableAgents(connectionId: String): Result<List<LaunchableAgent>> =
         Result.success(agentIds.map { id -> LaunchableAgent(id = id, displayName = id) })
 
@@ -441,7 +496,7 @@ private class FakeLauncher(
         agentId: String,
     ): Result<AgentProcessChannel> {
         launchCount += 1
-        val channel = FakeChannel()
+        val channel = FakeChannel().also { created -> created.failWrites = failNewChannelWrites }
         channels += channel
         agents += FakeAgent(channel, scope).also { agent -> agent.start() }
         return Result.success(channel)
@@ -465,7 +520,36 @@ private class FakeChannel : AgentProcessChannel {
     private val processOutputWriter = PipedOutputStream(processOutput)
     private val closed = AtomicBoolean(false)
 
-    override val stdin: OutputStream = agentInputWriter
+    @Volatile
+    var failWrites: Boolean = false
+
+    override val stdin: OutputStream = object : OutputStream() {
+        override fun write(value: Int) {
+            checkWritable()
+            agentInputWriter.write(value)
+        }
+
+        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+            checkWritable()
+            agentInputWriter.write(buffer, offset, length)
+        }
+
+        override fun flush() {
+            checkWritable()
+            agentInputWriter.flush()
+        }
+
+        override fun close() {
+            agentInputWriter.close()
+        }
+
+        private fun checkWritable() {
+            if (failWrites) {
+                throw IOException("Read end dead")
+            }
+        }
+    }
+
     override val stdout: InputStream = processOutput
 
     val agentInputSource: InputStream = agentInput

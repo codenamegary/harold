@@ -9,6 +9,7 @@ import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
 import java.io.ByteArrayInputStream
 import java.io.InputStream
+import java.io.OutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -28,10 +29,11 @@ class JschSshConnection private constructor(
         val channel = session.openChannel("exec") as ChannelExec
         channel.setCommand(command)
         // A live pipe keeps remote stdin open for ACP. setInputStream(null)
-        // sends EOF immediately, which makes an ACP agent exit.
-        val stdinPipe = java.io.PipedInputStream(STDIN_PIPE_SIZE)
-        val stdin = java.io.PipedOutputStream(stdinPipe)
-        channel.setInputStream(stdinPipe)
+        // sends EOF immediately, which makes an ACP agent exit. The pipe must
+        // not track the writing thread, because calls arrive on pooled
+        // dispatcher workers that retire while the agent stays warm.
+        val stdinPipe = BlockingPipe()
+        channel.setInputStream(stdinPipe.input)
         channel.setPty(false)
         val stderr = LimitedByteArrayOutputStream(STDERR_LIMIT_BYTES)
         channel.setErrStream(stderr)
@@ -40,7 +42,7 @@ class JschSshConnection private constructor(
         // never reaches EOF.
         val stdout = channel.inputStream
         channel.connect(CONNECT_TIMEOUT_MILLIS)
-        JschExecChannel(channel, stdin, stdout, stderr)
+        JschExecChannel(channel, stdinPipe, stdout, stderr)
     }
 
     override suspend fun readFile(path: String): ByteArray = withContext(Dispatchers.IO) {
@@ -175,10 +177,13 @@ class JschSshConnection private constructor(
 
     private class JschExecChannel(
         private val channel: ChannelExec,
-        override val stdin: java.io.OutputStream,
+        private val stdinPipe: BlockingPipe,
         override val stdout: InputStream,
         private val stderr: LimitedByteArrayOutputStream,
     ) : SshExecChannel {
+
+        override val stdin: OutputStream
+            get() = stdinPipe.output
 
         override fun stderrText(): String = stderr.toString(Charsets.UTF_8.name())
 
@@ -192,7 +197,7 @@ class JschSshConnection private constructor(
         }
 
         override fun close() {
-            runCatching { stdin.close() }
+            runCatching { stdinPipe.close() }
             channel.disconnect()
         }
     }
@@ -217,7 +222,6 @@ class JschSshConnection private constructor(
     companion object {
         private const val CONNECT_TIMEOUT_MILLIS = 20_000
         private const val EXIT_POLL_MILLIS = 40L
-        private const val STDIN_PIPE_SIZE = 64 * 1024
         private const val STDERR_LIMIT_BYTES = 64 * 1024
 
         fun connect(config: SshConfig): JschSshConnection {

@@ -11,6 +11,8 @@ import harold.android.process.AgentProcessChannel
 import harold.android.process.AgentProcessLauncher
 import harold.android.process.SessionFileService
 import java.io.Closeable
+import java.io.IOException
+import java.io.OutputStream
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -46,13 +48,6 @@ class AgentProcess internal constructor(
     private val scope: CoroutineScope,
     private val onClosed: (AgentProcess) -> Unit,
 ) : AcpClientHandler, Closeable {
-    private val acp = AcpClient(
-        input = channel.stdout,
-        output = channel.stdin,
-        scope = scope,
-        handler = this,
-    )
-
     val sessions = ConcurrentHashMap<String, AcpSession>()
 
     /** Completes when the process dies or closes. Null means a clean close. */
@@ -85,6 +80,51 @@ class AgentProcess internal constructor(
     private val closing = AtomicBoolean(false)
     private val started = AtomicBoolean(false)
     private val dead = AtomicBoolean(false)
+
+    /**
+     * Any failed write means the stdio channel is unusable. Mark the process
+     * dead so the runtime launches a replacement instead of writing to a
+     * half-closed pipe again.
+     */
+    private val stdin: OutputStream = object : OutputStream() {
+        override fun write(value: Int) {
+            try {
+                channel.stdin.write(value)
+            } catch (error: IOException) {
+                failWrite(error)
+                throw error
+            }
+        }
+
+        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+            try {
+                channel.stdin.write(buffer, offset, length)
+            } catch (error: IOException) {
+                failWrite(error)
+                throw error
+            }
+        }
+
+        override fun flush() {
+            try {
+                channel.stdin.flush()
+            } catch (error: IOException) {
+                failWrite(error)
+                throw error
+            }
+        }
+
+        override fun close() {
+            runCatching { channel.stdin.close() }
+        }
+    }
+
+    private val acp = AcpClient(
+        input = channel.stdout,
+        output = stdin,
+        scope = scope,
+        handler = this,
+    )
 
     val isDead: Boolean
         get() = dead.get() || closed.isCompleted || channel.isClosed()
@@ -471,6 +511,7 @@ class AgentProcess internal constructor(
         closedReason = reason
         closed.complete(cause)
         sessions.values.toList().forEach { session -> session.onProcessClosed(reason) }
+        runCatching { channel.close() }
         onClosed(this)
     }
 
@@ -493,6 +534,15 @@ class AgentProcess internal constructor(
         }
     }
 
+    private fun failWrite(error: IOException) {
+        if (closing.get()) {
+            return
+        }
+        closedReason = error.message?.takeIf { message -> message.isNotBlank() }
+            ?: "The agent connection closed."
+        close(intentional = false)
+    }
+
     private fun launchFailure(error: Throwable): Throwable {
         if (
             error is AgentLaunchException ||
@@ -505,7 +555,13 @@ class AgentProcess internal constructor(
         if (!channel.isClosed() && stderr.isEmpty()) {
             return error
         }
-        val detail = stderr.ifBlank { error.message ?: "the ACP process closed." }
+        val detail = stderr.ifBlank {
+            if (error is IOException) {
+                "the agent connection closed."
+            } else {
+                error.message ?: "the ACP process closed."
+            }
+        }
         val label = channel.label.ifBlank { "The agent" }
         return AgentLaunchException(
             "$label failed to start: ${detail.take(MAX_LAUNCH_DETAIL)}",

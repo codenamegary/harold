@@ -4,12 +4,16 @@ import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionResponse
 import harold.android.network.CatalogSession
+import harold.android.process.AgentAuthRequiredException
+import harold.android.process.AgentLaunchException
 import harold.android.process.AgentProcessLauncher
 import harold.android.process.SessionFileService
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -102,15 +106,16 @@ class AgentRuntime @Inject constructor(
         sessionId: String,
         cwd: String? = null,
     ): Result<AcpSession> = runCatching {
-        val process = acquire(connectionId, agentId)
-        val key = SessionKey(connectionId, agentId, sessionId)
-        val session = process.openSession(
-            connectionId = connectionId,
-            sessionId = sessionId,
-            cwdHint = cwd ?: sessionCwds[key],
-        )
-        sessionCwds[key] = session.cwd
-        session
+        withProcess(connectionId, agentId) { process ->
+            val key = SessionKey(connectionId, agentId, sessionId)
+            val session = process.openSession(
+                connectionId = connectionId,
+                sessionId = sessionId,
+                cwdHint = cwd ?: sessionCwds[key],
+            )
+            sessionCwds[key] = session.cwd
+            session
+        }
     }
 
     suspend fun createSession(
@@ -118,9 +123,10 @@ class AgentRuntime @Inject constructor(
         agentId: AgentId,
         cwd: String,
     ): Result<CreateSessionResponse> = runCatching {
-        val process = acquire(connectionId, agentId)
-        process.sessionNew(connectionId, cwd).also { created ->
-            sessionCwds[SessionKey(connectionId, agentId, created.sessionId)] = created.cwd
+        withProcess(connectionId, agentId) { process ->
+            process.sessionNew(connectionId, cwd).also { created ->
+                sessionCwds[SessionKey(connectionId, agentId, created.sessionId)] = created.cwd
+            }
         }
     }
 
@@ -177,8 +183,9 @@ class AgentRuntime @Inject constructor(
                 async(Dispatchers.IO) {
                     permits.withPermit {
                         runCatching {
-                            val process = acquire(connectionId, row.id)
-                            process.sessionList(connectionId, cwd)
+                            withProcess(connectionId, row.id) { process ->
+                                process.sessionList(connectionId, cwd)
+                            }
                         }.fold(
                             onSuccess = { sessions ->
                                 catalog.replaceAgent(connectionId, row.id, sessions, cwd)
@@ -187,8 +194,7 @@ class AgentRuntime @Inject constructor(
                                 catalog.markFailed(
                                     connectionId = connectionId,
                                     agentId = row.id,
-                                    message = error.message?.takeIf { message -> message.isNotBlank() }
-                                        ?: "Could not list this agent's sessions.",
+                                    message = listFailureMessage(error),
                                 )
                             },
                         )
@@ -207,9 +213,10 @@ class AgentRuntime @Inject constructor(
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> = runCatching {
-        val process = acquire(connectionId, agentId)
-        process.removeSession(connectionId, sessionId)?.close()
-        process.sessionDelete(sessionId)
+        withProcess(connectionId, agentId) { process ->
+            process.removeSession(connectionId, sessionId)?.close()
+            process.sessionDelete(sessionId)
+        }
         catalog.remove(connectionId, agentId, sessionId)
         val key = SessionKey(connectionId, agentId, sessionId)
         sessionCwds.remove(key)
@@ -328,6 +335,44 @@ class AgentRuntime @Inject constructor(
 
     private fun processKey(poolKey: String, agentId: AgentId): String =
         "$poolKey|agent=$agentId"
+
+    /**
+     * Runs [block] on the warm process. A write failure means the stdio pipe
+     * is gone but the host process may still be alive, so drop it and retry
+     * once on a fresh process.
+     */
+    private suspend fun <T> withProcess(
+        connectionId: String,
+        agentId: AgentId,
+        block: suspend (AgentProcess) -> T,
+    ): T {
+        try {
+            return block(acquire(connectionId, agentId))
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            if (!error.canReplaceProcess()) {
+                throw error
+            }
+        }
+        restart(connectionId, agentId).getOrNull()
+        return block(acquire(connectionId, agentId))
+    }
+
+    private fun Throwable.canReplaceProcess(): Boolean =
+        this is IOException || this is AcpClosedException
+
+    private fun listFailureMessage(error: Throwable): String = when (error) {
+        is AgentAuthRequiredException -> "Sign in on the host to list this agent's sessions."
+        is AgentLaunchException -> error.message
+            ?.takeIf { message -> message.isNotBlank() }
+            ?: "This agent failed to start."
+        is AcpRemoteException -> error.message
+            ?.takeIf { message -> message.isNotBlank() }
+            ?: "The agent rejected the session list request."
+        is AcpClosedException -> "The agent process closed. Try again."
+        else -> "Could not list this agent's sessions. Try again."
+    }
 
     companion object {
         const val DEFAULT_IDLE_MILLIS: Long = 10 * 60 * 1000L
