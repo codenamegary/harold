@@ -158,8 +158,136 @@ class ChatScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("stream_reconnect_banner").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_loading").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("stream_reconnect_banner").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("connection_banner").assertCountEquals(0)
         composeTestRule.onAllNodesWithTag("composer_blocked_message").assertCountEquals(0)
+    }
+
+    @Test
+    fun connectingBannerBecomesTheTranscriptLoadingAnimation() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        connectionBanner = "Connecting…",
+                        connectionInProgress = true,
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/harold",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "harold",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Idle,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                    ),
+                    composerState = TextFieldState(),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_loading").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Opening the session stream…").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("connection_banner").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("chat_welcome").assertCountEquals(0)
+    }
+
+    @Test
+    fun reconnectingWithATranscriptKeepsItAndHidesTheGreenBanner() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        connectionBanner = "Reconnecting (attempt 1)",
+                        connectionInProgress = true,
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/harold",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "harold",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Offline,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                        transcript = AcpTranscriptState(
+                            rows = listOf(
+                                TranscriptUserRow(
+                                    turnId = "turn_01",
+                                    text = "Explain auth",
+                                ),
+                            ),
+                            sessionState = SessionState.Offline,
+                        ),
+                        streamReconnecting = true,
+                    ),
+                    composerState = TextFieldState(),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Explain auth").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("connection_banner").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("session_loading").assertCountEquals(0)
+    }
+
+    @Test
+    fun connectionErrorsKeepTheirBanner() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        connectionBanner = "Auth failed",
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/harold",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "harold",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Offline,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                    ),
+                    composerState = TextFieldState(),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("connection_banner").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("session_loading").assertCountEquals(0)
     }
 
     @Test

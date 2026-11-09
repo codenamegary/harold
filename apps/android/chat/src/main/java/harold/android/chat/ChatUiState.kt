@@ -72,6 +72,8 @@ data class ExtensionUiState(
 
 data class ChatUiState(
     val connectionBanner: String? = null,
+    /** True while the stream is attaching or retrying, not merely stopped. */
+    val connectionInProgress: Boolean = false,
     val selectedSession: SessionRow? = null,
     val sessions: List<SessionRow> = emptyList(),
     /** True once the first live session snapshot (or an empty one) has been read. */
@@ -194,8 +196,25 @@ data class ChatUiState(
     val showProgress: Boolean
         get() = sessionProgressMessage != null
 
+    /**
+     * An empty transcript that is waiting on the stream: the switch is still
+     * attaching, or the server is replaying the session after a reconnect.
+     */
+    val showSessionLoading: Boolean
+        get() = selectedSession != null &&
+            transcript.rows.isEmpty() &&
+            (
+                connectionInProgress ||
+                    streamReconnecting ||
+                    sessionStatus == SessionStatus.Starting ||
+                    effectiveSessionState == SessionState.Starting
+                )
+
     val showEmptyWelcome: Boolean
-        get() = selectedSession != null && transcript.rows.isEmpty() && !showProgress
+        get() = selectedSession != null &&
+            transcript.rows.isEmpty() &&
+            !showProgress &&
+            !showSessionLoading
 
     val showSelectSessionCta: Boolean
         get() = selectedSession == null

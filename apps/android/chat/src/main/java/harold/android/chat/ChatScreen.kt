@@ -756,24 +756,14 @@ fun ChatScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (uiState.connectionBanner != null) {
+            // Attaching and replaying have their own animation in the
+            // transcript area. The banner is reserved for stops and errors.
+            if (uiState.connectionBanner != null && !uiState.connectionInProgress) {
                 Text(
                     text = uiState.connectionBanner,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .testTag("connection_banner")
-                        .semantics {
-                            liveRegion = LiveRegionMode.Polite
-                        },
-                )
-            }
-
-            if (uiState.streamReconnecting) {
-                Text(
-                    text = "Reconnecting session stream…",
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .testTag("stream_reconnect_banner")
                         .semantics {
                             liveRegion = LiveRegionMode.Polite
                         },
@@ -808,7 +798,9 @@ fun ChatScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = if (
-                    uiState.showEmptyWelcome || uiState.showSelectSessionCta
+                    uiState.showSessionLoading ||
+                    uiState.showEmptyWelcome ||
+                    uiState.showSelectSessionCta
                 ) {
                     Alignment.Center
                 } else {
@@ -880,6 +872,13 @@ fun ChatScreen(
                                 },
                             )
                         }
+                    }
+
+                    uiState.showSessionLoading -> {
+                        SessionLoadingIndicator(
+                            reconnecting = uiState.streamReconnecting,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
 
                     else -> {

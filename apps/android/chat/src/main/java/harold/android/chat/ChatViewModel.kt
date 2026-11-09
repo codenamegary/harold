@@ -215,7 +215,8 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             sessionOwner.connectionState.collect { state ->
-                val banner = when (val status = state.status) {
+                val status = state.status
+                val banner = when (status) {
                     StreamStatus.Idle -> null
                     StreamStatus.Connecting -> "Connecting…"
                     StreamStatus.Live -> null
@@ -223,7 +224,14 @@ class ChatViewModel @Inject constructor(
                     is StreamStatus.AuthFailed -> "Auth failed"
                     is StreamStatus.TransportError -> status.message
                 }
-                _uiState.update { current -> current.copy(connectionBanner = banner) }
+                val connectionInProgress =
+                    status is StreamStatus.Connecting || status is StreamStatus.Reconnecting
+                _uiState.update { current ->
+                    current.copy(
+                        connectionBanner = banner,
+                        connectionInProgress = connectionInProgress,
+                    )
+                }
                 if (state.status is StreamStatus.Live) {
                     refreshLiveCapabilities()
                 }

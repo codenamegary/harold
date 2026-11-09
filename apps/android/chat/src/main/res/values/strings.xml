@@ -45,6 +45,10 @@
     <string name="voice_dictation_permission_grant_content_description">Request microphone permission</string>
     <string name="voice_dictation_permission_settings">Open system settings</string>
     <string name="voice_dictation_permission_settings_content_description">Open system settings for microphone permission</string>
+    <string name="chat_session_loading_title">Restoring session</string>
+    <string name="chat_session_loading_attach">Opening the session stream…</string>
+    <string name="chat_session_loading_replay">Replaying the transcript over SSH…</string>
+    <string name="chat_session_loading_content_description">Restoring session. %1$s</string>
     <string name="chat_welcome_title">Chat with an agent</string>
     <string name="chat_welcome_body">Send a prompt directly to an agent without leaving the console.</string>
     <string name="chat_welcome_select_session_body">Start a new session or pick an existing one.</string>
