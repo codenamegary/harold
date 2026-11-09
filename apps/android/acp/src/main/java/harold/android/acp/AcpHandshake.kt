@@ -1,5 +1,6 @@
 package harold.android.acp
 
+import harold.android.contracts.AgentId
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -7,7 +8,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /** The initialize params every Harold ACP process sends. */
-fun acpInitializeParams(): JsonObject = buildJsonObject {
+fun acpInitializeParams(agentId: AgentId? = null): JsonObject = buildJsonObject {
     put("protocolVersion", 1)
     put(
         "clientCapabilities",
@@ -20,6 +21,16 @@ fun acpInitializeParams(): JsonObject = buildJsonObject {
                 },
             )
             put("terminal", true)
+            if (agentId == CURSOR_AGENT_ID) {
+                // Cursor otherwise bakes effort/thinking into model variant
+                // values instead of exposing a thought_level config option.
+                put(
+                    "_meta",
+                    buildJsonObject {
+                        put("parameterizedModelPicker", true)
+                    },
+                )
+            }
         },
     )
     put(
@@ -30,6 +41,8 @@ fun acpInitializeParams(): JsonObject = buildJsonObject {
         },
     )
 }
+
+private const val CURSOR_AGENT_ID: AgentId = "cursor"
 
 /**
  * True when the initialize response advertises a `sessionCapabilities`

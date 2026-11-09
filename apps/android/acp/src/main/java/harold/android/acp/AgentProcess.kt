@@ -97,7 +97,7 @@ class AgentProcess internal constructor(
         val initialize = try {
             acp.request(
                 method = "initialize",
-                params = acpInitializeParams(),
+                params = acpInitializeParams(agentId),
                 timeoutMillis = INITIALIZE_TIMEOUT_MILLIS,
             )
         } catch (error: Throwable) {
