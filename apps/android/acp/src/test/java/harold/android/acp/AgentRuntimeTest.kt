@@ -69,6 +69,22 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun repeatedAttachFailuresRestartTheWarmProcess() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/one").getOrThrow()
+            val firstLaunchCount = launcher.launchCount
+
+            runtime.sessionAttachFailed(FIRST_ROW, AGENT_ID, created.sessionId)
+            assertEquals(firstLaunchCount, launcher.launchCount)
+
+            runtime.sessionAttachFailed(FIRST_ROW, AGENT_ID, created.sessionId)
+            runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+
+            assertEquals(firstLaunchCount + 1, launcher.launchCount)
+        }
+    }
+
+    @Test
     fun promptsAndPermissionsRouteToTheRightSession() = runBlocking {
         withRuntime { runtime, launcher ->
             val createdA = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/a").getOrThrow()

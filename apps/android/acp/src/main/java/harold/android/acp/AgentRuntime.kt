@@ -49,6 +49,9 @@ class AgentRuntime @Inject constructor(
 
     private val processLocks = ConcurrentHashMap<String, Mutex>()
 
+    /** Consecutive attach failures per session, cleared by a successful attach. */
+    private val attachFailures = ConcurrentHashMap<SessionKey, Int>()
+
     suspend fun acquire(connectionId: String, agentId: AgentId): AgentProcess {
         val poolKey = launcher.keyFor(connectionId)
         connections[connectionId] = poolKey
@@ -122,6 +125,37 @@ class AgentRuntime @Inject constructor(
     }
 
     /**
+     * Records a failed stream attach. The in-memory session is discarded so
+     * the next attach builds a fresh one. Repeated failures also restart the
+     * warm agent process, because a process stuck mid-load cannot be fixed by
+     * reusing it.
+     */
+    suspend fun sessionAttachFailed(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ) {
+        val key = SessionKey(connectionId, agentId, sessionId)
+        val failures = attachFailures.merge(key, 1, Int::plus) ?: 1
+        val poolKey = connections[connectionId]
+        val process = poolKey?.let { key -> processes[processKey(key, agentId)] }
+        process?.removeSession(connectionId, sessionId)?.close()
+        if (failures >= ATTACH_FAILURES_BEFORE_PROCESS_RESTART) {
+            attachFailures.remove(key)
+            restart(connectionId, agentId).getOrNull()
+        }
+    }
+
+    /** Clears the attach failure streak once a stream reaches `subscribed`. */
+    fun sessionAttachSucceeded(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ) {
+        attachFailures.remove(SessionKey(connectionId, agentId, sessionId))
+    }
+
+    /**
      * Compiles `session/list` from every enabled agent on the host, reusing
      * warm processes. Each agent's snapshot lands as soon as that agent
      * answers, so one slow or broken agent only holds up its own rows.
@@ -177,7 +211,9 @@ class AgentRuntime @Inject constructor(
         process.removeSession(connectionId, sessionId)?.close()
         process.sessionDelete(sessionId)
         catalog.remove(connectionId, agentId, sessionId)
-        sessionCwds.remove(SessionKey(connectionId, agentId, sessionId))
+        val key = SessionKey(connectionId, agentId, sessionId)
+        sessionCwds.remove(key)
+        attachFailures.remove(key)
     }
 
     /** Detaches every stream from a session without closing its process. */
@@ -189,6 +225,9 @@ class AgentRuntime @Inject constructor(
     suspend fun restart(connectionId: String, agentId: AgentId): Result<Unit> = runCatching {
         val poolKey = launcher.keyFor(connectionId)
         connections[connectionId] = poolKey
+        attachFailures.keys.removeAll { key ->
+            key.connectionId == connectionId && key.agentId == agentId
+        }
         val process = processes.remove(processKey(poolKey, agentId))
         if (process != null) {
             process.close(intentional = true)
@@ -255,6 +294,7 @@ class AgentRuntime @Inject constructor(
             .forEach { process -> process.close(intentional = true) }
         catalog.removeConnection(connectionId)
         sessionCwds.keys.removeAll { key -> key.connectionId == connectionId }
+        attachFailures.keys.removeAll { key -> key.connectionId == connectionId }
     }
 
     /** Closes processes with no attached stream and no running prompt. */
@@ -292,6 +332,7 @@ class AgentRuntime @Inject constructor(
     companion object {
         const val DEFAULT_IDLE_MILLIS: Long = 10 * 60 * 1000L
         private const val MAX_CONCURRENT_AGENT_LISTS = 4
+        private const val ATTACH_FAILURES_BEFORE_PROCESS_RESTART = 2
     }
 }
 

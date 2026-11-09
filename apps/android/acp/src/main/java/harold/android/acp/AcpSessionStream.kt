@@ -2,6 +2,7 @@ package harold.android.acp
 
 import harold.android.contracts.AgentId
 import harold.android.contracts.SessionStreamServerMessage.Error
+import harold.android.contracts.SessionStreamServerMessage.Subscribed
 import harold.android.process.AgentAuthRequiredException
 import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStatus
@@ -56,6 +57,7 @@ private class AcpSessionStream(
     private val subscription = AtomicReference<AcpSessionSubscription?>(null)
     private val lastFrame = AtomicLong(0L)
     private val closed = AtomicBoolean(false)
+    private val opened = AtomicBoolean(false)
     private var job: Job? = null
     private var statusJob: Job? = null
 
@@ -64,7 +66,7 @@ private class AcpSessionStream(
 
     init {
         job = scope.launch {
-            val opened = try {
+            val openedSession = try {
                 val session = runtime.openSession(connectionId, agentId, sessionId).getOrThrow()
                 if (closed.get()) {
                     return@launch
@@ -88,6 +90,7 @@ private class AcpSessionStream(
                 throw error
             } catch (error: Throwable) {
                 if (!closed.get()) {
+                    runtime.sessionAttachFailed(connectionId, agentId, sessionId)
                     _status.value = when {
                         error is AgentAuthRequiredException -> SessionStatus.AuthFailed
                         error is AcpClosedException -> SessionStatus.Offline
@@ -106,10 +109,9 @@ private class AcpSessionStream(
                 return@launch
             }
 
-            val (session, attached) = opened
+            val (session, attached) = openedSession
             subscription.set(attached)
             lastFrame.set(System.nanoTime())
-            handlers.onOpen()
             val heartbeat = launch {
                 while (isActive) {
                     delay(HEARTBEAT_MILLIS)
@@ -119,12 +121,19 @@ private class AcpSessionStream(
             try {
                 attached.events.collect { message ->
                     lastFrame.set(System.nanoTime())
+                    if (message is Subscribed && opened.compareAndSet(false, true)) {
+                        runtime.sessionAttachSucceeded(connectionId, agentId, sessionId)
+                        handlers.onOpen()
+                    }
                     handlers.onMessage(message, null)
                 }
                 val reason = attached.closed.await()
                 if (!closed.get()) {
                     val sessionStatus = session.status.value
                     _status.value = sessionStatus
+                    if (!opened.get()) {
+                        runtime.sessionAttachFailed(connectionId, agentId, sessionId)
+                    }
                     val cause = if (sessionStatus == SessionStatus.AuthFailed) {
                         DisconnectCause.Unauthorized(reason)
                     } else {

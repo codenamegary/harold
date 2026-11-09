@@ -59,6 +59,10 @@ Android app -> SSH connection pool -> `agent acp` (one process per host identity
 - If a process exits, every session it hosted goes offline. The watched session
   reconnects through the one existing retry loop and starts one new process.
   Other sessions stay offline until opened again.
+- A failed session attach discards the in-memory session. Two consecutive
+  failures also restart that agent's warm process. After five failed attaches
+  before the stream opens, the reconnect loop stops and shows the agent's
+  error instead of retrying forever.
 - Removing the last saved connection for a host identity closes its pooled SSH
   session and every agent process on it.
 

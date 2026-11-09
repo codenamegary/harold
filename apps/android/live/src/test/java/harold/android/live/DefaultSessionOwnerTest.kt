@@ -430,6 +430,41 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
+    fun stopsAfterRepeatedPreLiveAttachFailures() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(closedWith(DisconnectCause.Retryable("agent closed"))),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        assertEquals(5, factory.openCount)
+        assertEquals(
+            StreamStatus.TransportError("agent closed"),
+            owner.connectionState.value.status,
+        )
+        assertEquals(SessionStatus.Error, owner.sessionStatus.value)
+    }
+
+    @Test
+    fun keepsRetryingAfterALiveStreamDisconnects() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            List(7) { liveThen(DisconnectCause.Retryable("closed")) } +
+                listOf(liveThen(DisconnectCause.Protocol("stop"))),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        assertEquals(8, factory.openCount)
+        assertEquals(StreamStatus.TransportError("stop"), owner.connectionState.value.status)
+    }
+
+    @Test
     fun stopsAutoRetryOnUnauthorized() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(liveThen(DisconnectCause.Unauthorized("unauthorized"))),

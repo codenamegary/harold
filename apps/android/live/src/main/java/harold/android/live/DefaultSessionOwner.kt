@@ -26,6 +26,8 @@ import harold.android.stream.SessionStream
 import harold.android.stream.SessionStreamFactory
 import harold.android.stream.SessionStreamHandlers
 import harold.android.stream.reduce
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -397,9 +399,15 @@ class DefaultSessionOwner @Inject constructor(
 
     private suspend fun run(connectionId: String) {
         var reconnect = false
+        var lastTarget: WatchTarget? = null
+        val attachFailures = AtomicInteger(0)
 
         while (currentCoroutineContext().isActive) {
             val target = currentWatchTarget()
+            if (target != lastTarget) {
+                lastTarget = target
+                attachFailures.set(0)
+            }
             if (target == null) {
                 // The events URL carries the session, so there is no stream
                 // to open until something is watched. Park idle instead of
@@ -437,6 +445,7 @@ class DefaultSessionOwner @Inject constructor(
             }
 
             val closed = CompletableDeferred<DisconnectCause>()
+            val opened = AtomicBoolean(false)
             val active = streamFactory.open(
                 connectionId = connectionId,
                 agentId = target.agentId,
@@ -446,7 +455,11 @@ class DefaultSessionOwner @Inject constructor(
                     onMessage = { message, cursor ->
                         enqueueFrame(streamInbox, message, cursor)
                     },
-                    onOpen = { applyConnection(ConnectionSignal.Connected) },
+                    onOpen = {
+                        opened.set(true)
+                        attachFailures.set(0)
+                        applyConnection(ConnectionSignal.Connected)
+                    },
                     onDisconnect = { cause -> closed.complete(cause) },
                 ),
             )
@@ -495,10 +508,25 @@ class DefaultSessionOwner @Inject constructor(
 
                 val cause = requireNotNull(disconnectCause)
                 applyConnection(ConnectionSignal.Disconnected(cause))
-                _sessionStatus.value = when (cause) {
-                    is DisconnectCause.Unauthorized -> SessionStatus.AuthFailed
-                    is DisconnectCause.Protocol -> SessionStatus.Error
-                    is DisconnectCause.Retryable -> SessionStatus.Offline
+                val exhaustedAttachRetries = cause is DisconnectCause.Retryable &&
+                    !opened.get() &&
+                    attachFailures.incrementAndGet() >= MAX_PRE_LIVE_ATTEMPTS
+                _sessionStatus.value = when {
+                    exhaustedAttachRetries -> SessionStatus.Error
+                    cause is DisconnectCause.Unauthorized -> SessionStatus.AuthFailed
+                    cause is DisconnectCause.Protocol -> SessionStatus.Error
+                    else -> SessionStatus.Offline
+                }
+                if (exhaustedAttachRetries) {
+                    // Stop the reconnect loop with the actual cause instead of
+                    // retrying a failed attach until the app is killed.
+                    applyConnection(
+                        ConnectionSignal.Disconnected(
+                            DisconnectCause.Protocol(
+                                cause.message.ifBlank { "Could not open the session." },
+                            ),
+                        ),
+                    )
                 }
 
                 val status = _connectionState.value.status
@@ -931,5 +959,10 @@ class DefaultSessionOwner @Inject constructor(
         val lower = message.lowercase()
         return lower.contains("agent authentication required") ||
             lower.contains("auth_required")
+    }
+
+    private companion object {
+        /** Pre-live retries before a failed attach becomes a terminal error. */
+        const val MAX_PRE_LIVE_ATTEMPTS = 5
     }
 }
