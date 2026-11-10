@@ -33,6 +33,7 @@ class WorkspacesScreenTest {
                     uiState = WorkspacesUiState(loadState = WorkspacesLoadState.Empty),
                     onBack = {},
                     onAddClick = {},
+                    onNewSession = {},
                     onDeleteWorkspace = {},
                 )
             }
@@ -50,6 +51,7 @@ class WorkspacesScreenTest {
                     uiState = WorkspacesUiState(loadState = WorkspacesLoadState.Loading),
                     onBack = {},
                     onAddClick = {},
+                    onNewSession = {},
                     onDeleteWorkspace = {},
                 )
             }
@@ -77,6 +79,7 @@ class WorkspacesScreenTest {
                     ),
                     onBack = {},
                     onAddClick = {},
+                    onNewSession = {},
                     onDeleteWorkspace = { deleted -> deletedId = deleted.id },
                 )
             }
@@ -98,5 +101,35 @@ class WorkspacesScreenTest {
         composeTestRule.onNodeWithTag("swipe_delete_confirm_action_ws_01").performClick()
 
         assertEquals("ws_01", deletedId)
+    }
+
+    @Test
+    fun newSessionIconOpensTheWorkspace() {
+        var startedWorkspace: Workspace? = null
+        val workspace = Workspace(
+            id = "ws_01",
+            name = "harold",
+            path = "/tmp/harold",
+            state = WorkspaceState.Available,
+            createdAt = "2026-08-05T00:00:00.000Z",
+            lastUsedAt = "2026-08-05T00:00:00.000Z",
+        )
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                WorkspacesScreen(
+                    uiState = WorkspacesUiState(
+                        loadState = WorkspacesLoadState.Loaded(listOf(workspace)),
+                    ),
+                    onBack = {},
+                    onAddClick = {},
+                    onNewSession = { startedWorkspace = it },
+                    onDeleteWorkspace = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("workspace_new_session_ws_01").performClick()
+
+        assertEquals("ws_01", startedWorkspace?.id)
     }
 }

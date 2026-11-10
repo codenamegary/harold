@@ -2,6 +2,7 @@
     <string name="workspaces_back_content_description">Go back from workspaces</string>
     <string name="workspaces_add">Add</string>
     <string name="workspaces_add_content_description">Add workspace</string>
+    <string name="workspaces_new_session_content_description">New session in %1$s</string>
     <string name="workspaces_delete">Delete</string>
     <string name="workspaces_delete_confirm_title">Delete workspace?</string>
     <string name="workspaces_delete_confirm_body">This removes the workspace from this connection. The folder and its files stay on the host.</string>

@@ -361,6 +361,34 @@ class CreateSessionViewModelTest {
     }
 
     @Test
+    fun preselectsTheWorkspaceOpenedFromTheWorkspaceList() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_notes", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_server", WorkspaceState.Available, name = "server"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = true),
+                ),
+            ),
+        )
+        val navigator = testNavigator()
+        navigator.openCreateSessionForWorkspace(LAPTOP, "/tmp/ws_server")
+
+        val viewModel = viewModel(
+            navigator = navigator,
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        assertEquals("$LAPTOP|ws_server", viewModel.uiState.value.selectedWorkspaceId)
+    }
+
+    @Test
     fun missingRememberedWorkspaceFallsBackToTheFirstWorkspaceAndAgent() = runTest {
         val repository = FakeCreateRepository(
             workspaces = mapOf(

@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +49,7 @@ fun WorkspacesScreen(
     uiState: WorkspacesUiState,
     onBack: () -> Unit,
     onAddClick: () -> Unit,
+    onNewSession: (Workspace) -> Unit,
     onDeleteWorkspace: (Workspace) -> Unit,
 ) {
     val backContentDescription = stringResource(R.string.workspaces_back_content_description)
@@ -171,6 +173,7 @@ fun WorkspacesScreen(
                                 WorkspaceCard(
                                     workspace = workspace,
                                     connection = uiState.connectionByWorkspaceId[workspace.id],
+                                    onNewSession = { onNewSession(workspace) },
                                 )
                             }
                         }
@@ -185,7 +188,12 @@ fun WorkspacesScreen(
 private fun WorkspaceCard(
     workspace: Workspace,
     connection: WorkspaceConnectionBadge? = null,
+    onNewSession: () -> Unit,
 ) {
+    val newSessionDescription = stringResource(
+        R.string.workspaces_new_session_content_description,
+        workspace.name,
+    )
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -229,6 +237,21 @@ private fun WorkspaceCard(
                 Text(
                     text = workspaceStateLabel(workspace.state),
                     style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            IconButton(
+                onClick = onNewSession,
+                enabled = workspace.state == WorkspaceState.Available,
+                modifier = Modifier
+                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                    .testTag("workspace_new_session_${workspace.id}")
+                    .semantics {
+                        contentDescription = newSessionDescription
+                    },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AddComment,
+                    contentDescription = null,
                 )
             }
         }

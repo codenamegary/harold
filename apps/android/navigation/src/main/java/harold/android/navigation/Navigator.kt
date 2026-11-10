@@ -19,6 +19,12 @@ data class CreatedWorkspaceResult(
     val connectionId: String = "",
 )
 
+/** A workspace row the new-session screen should select when it opens. */
+data class PreferredCreateSessionWorkspace(
+    val connectionId: String = "",
+    val path: String,
+)
+
 private const val SAVED_STATE_KEY = "connection.navigation"
 private const val BACK_STACK_KEY = "back_stack"
 private val backStackSerializer = ListSerializer(AppRoute.serializer())
@@ -33,6 +39,7 @@ class Navigator @Inject constructor() {
     val backStack: SnapshotStateList<AppRoute> = mutableStateListOf()
 
     private var preferredAddWorkspaceConnection: String? = null
+    private var preferredCreateSessionWorkspace: PreferredCreateSessionWorkspace? = null
     private val workspaceCreatedChannel = Channel<CreatedWorkspaceResult>(Channel.CONFLATED)
     val workspaceCreated: Flow<CreatedWorkspaceResult> = workspaceCreatedChannel.receiveAsFlow()
 
@@ -94,7 +101,22 @@ class Navigator @Inject constructor() {
     }
 
     fun openCreateSession() {
+        preferredCreateSessionWorkspace = null
         backStack.add(CreateSession)
+    }
+
+    fun openCreateSessionForWorkspace(connectionId: String, path: String) {
+        preferredCreateSessionWorkspace = PreferredCreateSessionWorkspace(
+            connectionId = connectionId,
+            path = path,
+        )
+        backStack.add(CreateSession)
+    }
+
+    fun consumePreferredCreateSessionWorkspace(): PreferredCreateSessionWorkspace? {
+        val preferred = preferredCreateSessionWorkspace
+        preferredCreateSessionWorkspace = null
+        return preferred
     }
 
     fun openWorkspaces() {

@@ -16,6 +16,7 @@ import harold.android.database.workspace.WorkspaceRepository
 import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.LastSessionSelection
 import harold.android.navigation.Navigator
+import harold.android.navigation.PreferredCreateSessionWorkspace
 import harold.android.navigation.SessionPreferences
 import harold.android.network.apiErrorMessage
 import harold.android.session.ActiveConnectionState
@@ -50,6 +51,7 @@ class CreateSessionViewModel @Inject constructor(
     private var activeOrigin: String? = null
     private var pendingCreatedWorkspace: CreatedWorkspaceResult? = null
     private var rememberedSelection: LastSessionSelection? = null
+    private var preferredWorkspace: PreferredCreateSessionWorkspace? = null
 
     init {
         viewModelScope.launch {
@@ -57,6 +59,7 @@ class CreateSessionViewModel @Inject constructor(
             // The first Room emission must already know the remembered connection,
             // otherwise the first workspace wins before the value arrives.
             rememberedSelection = sessionPreferences.loadLastSessionSelection()
+            preferredWorkspace = navigator.consumePreferredCreateSessionWorkspace()
             observeWorkspaces()
             refreshWorkspaces()
         }
@@ -211,6 +214,12 @@ class CreateSessionViewModel @Inject constructor(
         }
         val pendingRow = pendingId?.let { id -> rows.firstOrNull { row -> row.id == id } }
         val explicitRow = rows.firstOrNull { row -> row.id == current.selectedWorkspaceId }
+        val preferredRow = preferredWorkspace?.let { preferred ->
+            rows.firstOrNull { row ->
+                row.path == preferred.path &&
+                    (preferred.connectionId.isEmpty() || row.connectionId == preferred.connectionId)
+            }
+        }
         val rememberedRow = rememberedSelection?.let { remembered ->
             val rememberedId = workspaceId(remembered.connectionId, remembered.workspaceId)
             rows.firstOrNull { row -> row.id == rememberedId }
@@ -219,7 +228,7 @@ class CreateSessionViewModel @Inject constructor(
             row.connectionId == defaultWorkspaceOrigin() &&
                 row.path == defaultWorkspacePath()
         }
-        val selected = pendingRow ?: explicitRow ?: rememberedRow ?: defaultRow ?: rows.firstOrNull()
+        val selected = pendingRow ?: explicitRow ?: preferredRow ?: rememberedRow ?: defaultRow ?: rows.firstOrNull()
         val agentsForSelection = selected != null && selected.connectionId == agentsOrigin
 
         _uiState.update { state ->
@@ -235,6 +244,9 @@ class CreateSessionViewModel @Inject constructor(
         }
         if (selected != null && selected.id == pendingId) {
             pendingCreatedWorkspace = null
+        }
+        if (preferredRow != null) {
+            preferredWorkspace = null
         }
     }
 

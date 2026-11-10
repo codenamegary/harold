@@ -31,6 +31,14 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 uiState = uiState,
                 onBack = { navigator.goBack() },
                 onAddClick = navigator::openAddWorkspace,
+                onNewSession = { workspace ->
+                    navigator.openCreateSessionForWorkspace(
+                        connectionId = uiState.connectionByWorkspaceId[workspace.id]
+                            ?.connectionId
+                            .orEmpty(),
+                        path = workspace.path,
+                    )
+                },
                 onDeleteWorkspace = viewModel::delete,
             )
         }
