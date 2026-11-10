@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.0.0](https://github.com/codenamegary/harold/compare/harold-android-v3.4.0...harold-android-v4.0.0) (2026-11-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* direct SSH only - drop the Harold hub ([#501](https://github.com/codenamegary/harold/issues/501)) (#502)
+
+### Features
+
+* direct SSH only - drop the Harold hub ([#501](https://github.com/codenamegary/harold/issues/501)) ([#502](https://github.com/codenamegary/harold/issues/502)) ([0ccf10d](https://github.com/codenamegary/harold/commit/0ccf10d0cdf57ad4ccce1cbd044e8a00140b40be))
+
 ## [3.4.0](https://github.com/codenamegary/harold/compare/harold-android-v3.3.0...harold-android-v3.4.0) (2026-11-03)
 
 
