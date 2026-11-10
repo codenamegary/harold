@@ -5,10 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-/**
- * A slash command an agent exposes for the current session. Mirror of the
- * server's AvailableCommandSchema in apps/server/src/session/hub/commands.available.ts.
- */
+/** A slash command an agent exposes for the current session. */
 data class AvailableCommand(
     val name: String,
     val description: String,
@@ -18,8 +15,7 @@ data class AvailableCommand(
 
 /**
  * Parses a session_update payload as an ACP available_commands_update.
- * Returns null when the update is a different kind or the shape is invalid,
- * matching the server's safeParse behavior.
+ * Returns null when the update is a different kind or the shape is invalid.
  */
 fun parseAvailableCommands(update: kotlinx.serialization.json.JsonElement): List<AvailableCommand>? {
     val obj = update as? JsonObject ?: return null

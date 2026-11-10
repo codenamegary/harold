@@ -12,27 +12,26 @@ class NavigatorTest {
 
         assertTrue(navigator.backStack.isEmpty())
 
-        navigator.start(paired = true)
-        navigator.start(paired = false)
+        navigator.start(hasConnection = true)
+        navigator.start(hasConnection = false)
         navigator.openSessions()
 
         assertEquals(listOf(Chat, Sessions), navigator.backStack.toList())
     }
 
     @Test
-    fun unpairedStartShowsTheShell() {
+    fun noConnectionStartShowsTheShell() {
         val navigator = Navigator()
 
-        navigator.start(paired = false)
+        navigator.start(hasConnection = false)
 
         assertEquals(listOf(Shell), navigator.backStack.toList())
     }
 
     @Test
-    fun pairingSuccessReplacesTheStackWithChat() {
+    fun savingAConnectionReplacesTheStackWithChat() {
         val navigator = Navigator()
-        navigator.start(paired = false)
-        navigator.openPairing()
+        navigator.start(hasConnection = false)
 
         navigator.showChat()
 
@@ -40,21 +39,20 @@ class NavigatorTest {
     }
 
     @Test
-    fun pairingRequestedBeforeStartSitsOnTopOfTheChosenRoute() {
+    fun addConnectionOpensSshSetup() {
         val navigator = Navigator()
+        navigator.start(hasConnection = true)
+        navigator.openConnections()
 
-        navigator.openPairing()
-        assertTrue(navigator.backStack.isEmpty())
+        navigator.openAddConnection()
 
-        navigator.start(paired = false)
-
-        assertEquals(listOf(Shell, Pairing), navigator.backStack.toList())
+        assertEquals(listOf(Chat, Connections, SshSetup), navigator.backStack.toList())
     }
 
     @Test
     fun backFromTheRootLeavesTheStackInPlace() {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         navigator.openSessions()
 
         assertTrue(navigator.goBack())
@@ -63,19 +61,19 @@ class NavigatorTest {
     }
 
     @Test
-    fun savedHaroldsOpensOnTopOfChat() {
+    fun connectionsOpensOnTopOfChat() {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
 
-        navigator.openSavedHarolds()
+        navigator.openConnections()
 
-        assertEquals(listOf(Chat, SavedHarolds), navigator.backStack.toList())
+        assertEquals(listOf(Chat, Connections), navigator.backStack.toList())
     }
 
     @Test
     fun showShellReplacesWhateverIsShowing() {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         navigator.openWorkspaces()
 
         navigator.showShell()
@@ -86,13 +84,13 @@ class NavigatorTest {
     @Test
     fun restoredStackSurvivesAndSkipsTheStartGate() {
         val before = Navigator()
-        before.start(paired = true)
+        before.start(hasConnection = true)
         before.openSessions()
         before.openCreateSession()
 
         val after = Navigator()
         after.restore(before.encode())
-        after.start(paired = false)
+        after.start(hasConnection = false)
 
         assertEquals(listOf(Chat, Sessions, CreateSession), after.backStack.toList())
     }

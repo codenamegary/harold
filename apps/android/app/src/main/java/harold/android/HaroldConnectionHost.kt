@@ -4,10 +4,12 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import harold.android.acp.AgentRuntime
 import harold.android.live.SessionOwner
-import harold.android.session.HaroldConnections
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.Connections
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
+import harold.android.transport.ssh.SshConnectionPool
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -16,24 +18,30 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * Keeps a connection to every saved Harold while the app is open, and keeps
+ * Keeps a connection to every saved connection while the app is open, and keeps
  * only Harolds with a live session connected while the app is in the background.
  */
 @Singleton
 class HaroldConnectionHost(
-    private val connections: HaroldConnections,
-    private val sessionGateway: SessionGateway,
+    private val connections: Connections,
+    private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
+    private val connectionPool: SshConnectionPool,
+    private val agentRuntime: AgentRuntime,
     private val scope: CoroutineScope,
 ) : DefaultLifecycleObserver {
     @Inject constructor(
-        connections: HaroldConnections,
-        sessionGateway: SessionGateway,
+        connections: Connections,
+        connectionGateway: ConnectionGateway,
         sessionOwner: SessionOwner,
+        connectionPool: SshConnectionPool,
+        agentRuntime: AgentRuntime,
     ) : this(
         connections = connections,
-        sessionGateway = sessionGateway,
+        connectionGateway = connectionGateway,
         sessionOwner = sessionOwner,
+        connectionPool = connectionPool,
+        agentRuntime = agentRuntime,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
 
@@ -55,11 +63,12 @@ class HaroldConnectionHost(
 
     fun onAppForeground() {
         connections.onForeground()
+        agentRuntime.trimIdle()
         scope.launch {
-            sessionGateway.refresh()
-            val paired = sessionGateway.pairedState.value as? PairedState.Paired
-            if (paired != null && connections.shouldStayConnected(paired.serverOrigin)) {
-                sessionOwner.connect(paired.serverOrigin)
+            connectionGateway.refresh()
+            val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+            if (active != null && connections.shouldStayConnected(active.connectionId)) {
+                sessionOwner.connect(active.connectionId)
                 sessionOwner.onForeground()
             } else {
                 sessionOwner.closeForBackground()
@@ -69,11 +78,18 @@ class HaroldConnectionHost(
 
     fun onAppBackground() {
         connections.onBackground()
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        if (paired != null && connections.shouldStayConnected(paired.serverOrigin)) {
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+        val staysConnected = active != null && connections.shouldStayConnected(active.connectionId)
+        if (staysConnected) {
             sessionOwner.onBackground()
         } else {
             sessionOwner.closeForBackground()
+        }
+        // Close idle ACP processes before the SSH entries they ride on. The
+        // runtime leaves any process with an attached stream alone.
+        agentRuntime.onBackground()
+        if (!staysConnected) {
+            connectionPool.closeAll()
         }
     }
 }

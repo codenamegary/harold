@@ -8,7 +8,7 @@ class ConnectionStateTest {
     fun coldStartsIdle() {
         val state = ConnectionState()
 
-        assertEquals(ConnectionStatus.Idle, state.status)
+        assertEquals(StreamStatus.Idle, state.status)
         assertEquals(0, state.attempt)
     }
 
@@ -17,8 +17,8 @@ class ConnectionStateTest {
         val connecting = reduce(ConnectionState(), ConnectionSignal.ConnectRequested)
         val live = reduce(connecting, ConnectionSignal.Connected)
 
-        assertEquals(ConnectionStatus.Connecting, connecting.status)
-        assertEquals(ConnectionStatus.Live, live.status)
+        assertEquals(StreamStatus.Connecting, connecting.status)
+        assertEquals(StreamStatus.Live, live.status)
     }
 
     @Test
@@ -26,8 +26,8 @@ class ConnectionStateTest {
         val first = reduce(live(), ConnectionSignal.Disconnected(DisconnectCause.Retryable("closed")))
         val second = reduce(first, ConnectionSignal.Disconnected(DisconnectCause.Retryable("closed")))
 
-        assertEquals(ConnectionStatus.Reconnecting(attempt = 1), first.status)
-        assertEquals(ConnectionStatus.Reconnecting(attempt = 2), second.status)
+        assertEquals(StreamStatus.Reconnecting(attempt = 1), first.status)
+        assertEquals(StreamStatus.Reconnecting(attempt = 2), second.status)
     }
 
     @Test
@@ -37,8 +37,8 @@ class ConnectionStateTest {
         val droppedAgain =
             reduce(retrying, ConnectionSignal.Disconnected(DisconnectCause.Retryable("closed")))
 
-        assertEquals(ConnectionStatus.Connecting, retrying.status)
-        assertEquals(ConnectionStatus.Reconnecting(attempt = 2), droppedAgain.status)
+        assertEquals(StreamStatus.Connecting, retrying.status)
+        assertEquals(StreamStatus.Reconnecting(attempt = 2), droppedAgain.status)
     }
 
     @Test
@@ -48,15 +48,15 @@ class ConnectionStateTest {
         val droppedAgain =
             reduce(recovered, ConnectionSignal.Disconnected(DisconnectCause.Retryable("closed")))
 
-        assertEquals(ConnectionStatus.Live, recovered.status)
-        assertEquals(ConnectionStatus.Reconnecting(attempt = 1), droppedAgain.status)
+        assertEquals(StreamStatus.Live, recovered.status)
+        assertEquals(StreamStatus.Reconnecting(attempt = 1), droppedAgain.status)
     }
 
     @Test
     fun parksIdleWhenAsked() {
         val state = reduce(live(), ConnectionSignal.Idle)
 
-        assertEquals(ConnectionStatus.Idle, state.status)
+        assertEquals(StreamStatus.Idle, state.status)
     }
 
     @Test
@@ -66,7 +66,7 @@ class ConnectionStateTest {
             ConnectionSignal.Disconnected(DisconnectCause.Unauthorized("device revoked")),
         )
 
-        assertEquals(ConnectionStatus.AuthFailed(detail = "device revoked"), state.status)
+        assertEquals(StreamStatus.AuthFailed(detail = "device revoked"), state.status)
     }
 
     @Test
@@ -76,7 +76,7 @@ class ConnectionStateTest {
             ConnectionSignal.Disconnected(DisconnectCause.Protocol("unknown event type")),
         )
 
-        assertEquals(ConnectionStatus.TransportError("unknown event type"), state.status)
+        assertEquals(StreamStatus.TransportError("unknown event type"), state.status)
     }
 
     @Test
@@ -86,7 +86,7 @@ class ConnectionStateTest {
             ConnectionSignal.Disconnected(DisconnectCause.Retryable("slow consumer")),
         )
 
-        assertEquals(ConnectionStatus.Reconnecting(attempt = 1), state.status)
+        assertEquals(StreamStatus.Reconnecting(attempt = 1), state.status)
     }
 
     private fun live(): ConnectionState =

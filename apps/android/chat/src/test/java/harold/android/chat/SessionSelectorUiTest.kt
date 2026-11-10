@@ -175,20 +175,20 @@ class SessionSelectorUiTest {
         val laptop = sampleSession.copy(
             sessionId = "sess_laptop",
             name = "Alpha",
-            serverOrigin = "http://laptop.local:3847",
-            haroldName = "laptop",
-            haroldColorId = "tide",
-            haroldIconId = "bolt",
-            haroldReachable = false,
+            connectionId = "http://laptop.local:3847",
+            connectionName = "laptop",
+            connectionColorId = "tide",
+            connectionIconId = "bolt",
+            connectionReachable = false,
         )
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 SessionsScreen(
                     uiState = SessionsUiState(
                         sessions = listOf(laptop),
-                        harolds = listOf(
-                            HaroldFilterChoice(
-                                serverOrigin = laptop.serverOrigin,
+                        connections = listOf(
+                            ConnectionFilterChoice(
+                                connectionId = laptop.connectionId,
                                 name = "laptop",
                                 colorId = "tide",
                                 iconId = "bolt",
@@ -205,7 +205,7 @@ class SessionSelectorUiTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("session_harold_${laptop.id}", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_connection_${laptop.id}", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Unreachable").assertIsDisplayed()
         composeTestRule.onNodeWithTag("session_filter_all").assertIsDisplayed()
     }
@@ -213,9 +213,9 @@ class SessionSelectorUiTest {
     @Test
     fun chatShowsTheHaroldBadgeAndSessionName() {
         val session = sampleSession.copy(
-            haroldName = "laptop",
-            haroldColorId = "tide",
-            haroldIconId = "bolt",
+            connectionName = "laptop",
+            connectionColorId = "tide",
+            connectionIconId = "bolt",
         )
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
@@ -226,11 +226,11 @@ class SessionSelectorUiTest {
         }
 
         composeTestRule.onNodeWithText("Alpha").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("chat_session_harold_badge", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_session_connection_badge", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_overflow").performClick()
-        composeTestRule.onNodeWithText("Connected Servers").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Pair").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Disconnect laptop").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connections").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Add connection").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Remove laptop").assertIsDisplayed()
         composeTestRule.onNodeWithTag("disconnect_menu_badge", useUnmergedTree = true).assertIsDisplayed()
     }
 }

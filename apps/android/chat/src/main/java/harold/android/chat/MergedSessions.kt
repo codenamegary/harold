@@ -1,8 +1,8 @@
 package harold.android.chat
 
 data class HaroldSessionGroup(
-    val serverOrigin: String,
-    val haroldName: String,
+    val connectionId: String,
+    val connectionName: String,
     val colorId: String,
     val iconId: String,
     val reachable: Boolean,
@@ -13,11 +13,11 @@ fun mergedSessionRows(groups: List<HaroldSessionGroup>): List<SessionRow> =
     groups.flatMap { group ->
         group.sessions.map { row ->
             row.copy(
-                serverOrigin = group.serverOrigin,
-                haroldName = group.haroldName,
-                haroldColorId = group.colorId,
-                haroldIconId = group.iconId,
-                haroldReachable = group.reachable,
+                connectionId = group.connectionId,
+                connectionName = group.connectionName,
+                connectionColorId = group.colorId,
+                connectionIconId = group.iconId,
+                connectionReachable = group.reachable,
             )
         }
     }.sortedByDescending { row -> row.updatedAt }
@@ -26,5 +26,5 @@ fun visibleSessionRows(rows: List<SessionRow>, haroldOrigin: String?): List<Sess
     if (haroldOrigin == null) {
         rows
     } else {
-        rows.filter { row -> row.serverOrigin == haroldOrigin }
+        rows.filter { row -> row.connectionId == haroldOrigin }
     }

@@ -1,87 +1,109 @@
 package harold.android.user
 
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthSummary
+import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
+import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
+import harold.android.contracts.CreateCustomAgentBody
+import harold.android.contracts.UpdateAgentBody
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 
 interface UserRepository {
     suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int = 100,
     ): Result<WorkspaceCollection>
 
-    suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView>
-
     suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String? = null,
     ): Result<FilesystemDirectoryCollection>
 
     suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
     ): Result<FilesystemDirectoryCreated>
 
     suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace>
 
     suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String? = null,
     ): Result<SessionCollection>
 
-    suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection>
+    suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection>
+
+    suspend fun scanAgents(
+        connectionId: String,
+    ): Result<AgentSettingsCollection> = Result.failure(unsupported("agent scans are not supported"))
+
+    suspend fun updateAgent(
+        connectionId: String,
+        agentId: AgentId,
+        body: UpdateAgentBody,
+    ): Result<AgentSettings> = Result.failure(unsupported("agent updates are not supported"))
+
+    suspend fun createCustomAgent(
+        connectionId: String,
+        body: CreateCustomAgentBody,
+    ): Result<AgentSettings> = Result.failure(unsupported("custom agents are not supported"))
+
+    suspend fun deleteAgent(
+        connectionId: String,
+        agentId: AgentId,
+    ): Result<Unit> = Result.failure(unsupported("agent removal is not supported"))
+
+    suspend fun reloadConfig(
+        connectionId: String,
+    ): Result<AgentSettingsCollection> = Result.failure(unsupported("config reloads are not supported"))
+
+    suspend fun restartAgent(
+        connectionId: String,
+        agentId: AgentId,
+    ): Result<Unit> = Result.failure(unsupported("agent restarts are not supported"))
+
+    suspend fun getAgentCapabilities(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ): Result<AgentCapabilityInventory?> = Result.failure(
+        unsupported("capability lookups are not supported"),
+    )
 
     suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse>
 
     suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit>
 
     suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth>
 
-    suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ): Result<AgentAuthSession>
-
-    suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ): Result<AgentAuthSession>
-
     suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary>
-
-    suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit>
 }
+
+private fun unsupported(what: String): UnsupportedOperationException =
+    UnsupportedOperationException(what)

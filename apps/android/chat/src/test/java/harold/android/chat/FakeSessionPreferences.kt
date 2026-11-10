@@ -13,12 +13,12 @@ class FakeSessionPreferences(
     val savedModels = mutableListOf<Triple<String, String, String>>()
     var loadModelGate: CompletableDeferred<Unit>? = null
 
-    fun seedModel(serverOrigin: String, agentId: AgentId, model: String) {
-        models[modelKey(serverOrigin, agentId)] = model
+    fun seedModel(connectionId: String, agentId: AgentId, model: String) {
+        models[modelKey(connectionId, agentId)] = model
     }
 
-    fun model(serverOrigin: String, agentId: AgentId): String? =
-        models[modelKey(serverOrigin, agentId)]
+    fun model(connectionId: String, agentId: AgentId): String? =
+        models[modelKey(connectionId, agentId)]
 
     override suspend fun loadLastSessionSelection(): LastSessionSelection? = selection
 
@@ -27,16 +27,16 @@ class FakeSessionPreferences(
         savedSelections += selection
     }
 
-    override suspend fun loadLastModel(serverOrigin: String, agentId: AgentId): String? {
+    override suspend fun loadLastModel(connectionId: String, agentId: AgentId): String? {
         loadModelGate?.await()
-        return models[modelKey(serverOrigin, agentId)]
+        return models[modelKey(connectionId, agentId)]
     }
 
-    override suspend fun saveLastModel(serverOrigin: String, agentId: AgentId, model: String) {
-        models[modelKey(serverOrigin, agentId)] = model
-        savedModels += Triple(serverOrigin, agentId, model)
+    override suspend fun saveLastModel(connectionId: String, agentId: AgentId, model: String) {
+        models[modelKey(connectionId, agentId)] = model
+        savedModels += Triple(connectionId, agentId, model)
     }
 
-    private fun modelKey(serverOrigin: String, agentId: AgentId): String =
-        "$serverOrigin|$agentId"
+    private fun modelKey(connectionId: String, agentId: AgentId): String =
+        "$connectionId|$agentId"
 }

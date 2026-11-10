@@ -7,21 +7,22 @@ import harold.android.contracts.PageInfo
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.CredentialHolder
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SshAuth
+import harold.android.credentials.SshConfig
+import harold.android.credentials.SavedConnection
 import harold.android.live.SessionOwner
-import harold.android.session.DefaultSessionGateway
-import harold.android.testing.FakeCredentialStore
+import harold.android.session.DefaultConnectionGateway
+import harold.android.testing.FakeConnectionStore
 import harold.android.live.SessionSnapshot
-import harold.android.network.AgentApi
+import harold.android.network.WorkspaceApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
-import harold.android.testing.FakeSessionGateway
+import harold.android.stream.StreamStatus
+import harold.android.testing.FakeConnectionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -54,10 +55,10 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun connectsTheStreamAndProbesWorkspacesOncePaired() = runTest {
+    fun connectsTheStreamAndProbesWorkspacesOnceActive() = runTest {
         val connection = FakeSessionOwner()
         val api = FakeAgentApi(Result.success(collectionOf(count = 3)))
-        val viewModel = viewModel(paired(), connection, api)
+        val viewModel = viewModel(active(), connection, api)
 
         assertEquals(listOf(ORIGIN), connection.connects)
         assertEquals(listOf(ORIGIN to 1), api.calls)
@@ -67,7 +68,7 @@ class ShellViewModelTest {
     @Test
     fun reportsAnEmptyServer() = runTest {
         val api = FakeAgentApi(Result.success(collectionOf(count = 0)))
-        val viewModel = viewModel(paired(), FakeSessionOwner(), api)
+        val viewModel = viewModel(active(), FakeSessionOwner(), api)
 
         assertEquals("No workspaces", viewModel.uiState.value.workspacesSummary)
     }
@@ -77,7 +78,7 @@ class ShellViewModelTest {
         val api = FakeAgentApi(
             Result.failure(AgentApiException(AgentApiError.Transport(RuntimeException("boom")))),
         )
-        val viewModel = viewModel(paired(), FakeSessionOwner(), api)
+        val viewModel = viewModel(active(), FakeSessionOwner(), api)
 
         assertEquals(
             "Workspaces unavailable. Could not reach Harold",
@@ -86,65 +87,28 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun clearsLocalAccessWhenTheHttpProbeIsUnauthorized() = runTest {
-        val session = paired()
-        val api = FakeAgentApi(
-            Result.failure(AgentApiException(AgentApiError.Unauthorized("Authentication required"))),
-        )
-        val navigator = harold.android.navigation.Navigator()
-        val viewModel = viewModel(session, FakeSessionOwner(), api, navigator)
-
-        assertEquals(1, session.clearLocalAccessCount)
-        assertEquals(PairedState.NotPaired, session.pairedState.value)
-        assertEquals("Not paired", viewModel.uiState.value.status)
-        assertEquals(listOf(harold.android.navigation.Shell), navigator.backStack.toList())
-    }
-
-    @Test
     fun mirrorsTheStreamConnectionStatus() = runTest {
         val connection = FakeSessionOwner()
-        val viewModel = viewModel(paired(), connection, FakeAgentApi(Result.success(collectionOf(1))))
+        val viewModel = viewModel(active(), connection, FakeAgentApi(Result.success(collectionOf(1))))
 
-        connection.emit(ConnectionStatus.Live)
+        connection.emit(StreamStatus.Live)
         assertEquals("Live", viewModel.uiState.value.connectionStatus)
 
-        connection.emit(ConnectionStatus.Reconnecting(attempt = 2))
+        connection.emit(StreamStatus.Reconnecting(attempt = 2))
         assertEquals("Reconnecting (attempt 2)", viewModel.uiState.value.connectionStatus)
 
-        connection.emit(ConnectionStatus.TransportError("boom"))
+        connection.emit(StreamStatus.TransportError("boom"))
         assertEquals("Transport error. boom", viewModel.uiState.value.connectionStatus)
         assertTrue(viewModel.uiState.value.retryVisible)
-    }
-
-    @Test
-    fun clearsLocalAccessWhenTheStreamRejectsTheCredential() = runTest {
-        val session = paired()
-        val connection = FakeSessionOwner()
-        val navigator = harold.android.navigation.Navigator()
-        val viewModel = viewModel(
-            session,
-            connection,
-            FakeAgentApi(Result.success(collectionOf(1))),
-            navigator,
-        )
-        navigator.openSessions()
-
-        connection.emit(ConnectionStatus.AuthFailed(detail = "Device revoked"))
-
-        assertEquals(1, session.clearLocalAccessCount)
-        assertEquals(PairedState.NotPaired, session.pairedState.value)
-        assertEquals("Not paired", viewModel.uiState.value.status)
-        assertEquals(1, connection.disconnects)
-        assertEquals(listOf(harold.android.navigation.Shell), navigator.backStack.toList())
     }
 
     @Test
     fun retryReconnectsAndReprobes() = runTest {
         val connection = FakeSessionOwner()
         val api = FakeAgentApi(Result.success(collectionOf(count = 1)))
-        val viewModel = viewModel(paired(), connection, api)
+        val viewModel = viewModel(active(), connection, api)
 
-        connection.emit(ConnectionStatus.TransportError("timeout"))
+        connection.emit(StreamStatus.TransportError("timeout"))
         viewModel.onRetryClick()
 
         assertEquals(1, connection.retries)
@@ -155,7 +119,7 @@ class ShellViewModelTest {
     fun forwardsLifecycleForegroundAndBackgroundSignals() = runTest {
         val connection = FakeSessionOwner()
         val viewModel = viewModel(
-            paired(),
+            active(),
             connection,
             FakeAgentApi(Result.success(collectionOf(1))),
         )
@@ -168,24 +132,24 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun stopsTheStreamWhenTheDeviceIsNotPaired() = runTest {
+    fun stopsTheStreamWhenThereIsNoConnection() = runTest {
         val connection = FakeSessionOwner()
         val viewModel = viewModel(
-            FakeSessionGateway(PairedState.NotPaired),
+            FakeConnectionGateway(ActiveConnectionState.NoConnection),
             connection,
             FakeAgentApi(Result.success(collectionOf(1))),
         )
 
         assertEquals(1, connection.disconnects)
         assertTrue(connection.connects.isEmpty())
-        assertEquals("Not paired", viewModel.uiState.value.status)
+        assertEquals("No connections yet", viewModel.uiState.value.status)
     }
 
     @Test
-    fun pairedColdStartChoosesChatOnce() = runTest {
+    fun activeColdStartChoosesChatOnce() = runTest {
         val navigator = harold.android.navigation.Navigator()
         viewModel(
-            paired(),
+            active(),
             FakeSessionOwner(),
             FakeAgentApi(Result.success(collectionOf(1))),
             navigator,
@@ -195,10 +159,10 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun unpairedColdStartChoosesShell() = runTest {
+    fun noConnectionColdStartChoosesShell() = runTest {
         val navigator = harold.android.navigation.Navigator()
         viewModel(
-            FakeSessionGateway(PairedState.NotPaired),
+            FakeConnectionGateway(ActiveConnectionState.NoConnection),
             FakeSessionOwner(),
             FakeAgentApi(Result.success(collectionOf(1))),
             navigator,
@@ -214,9 +178,9 @@ class ShellViewModelTest {
         val release = kotlinx.coroutines.CompletableDeferred<Unit>()
         val navigator = harold.android.navigation.Navigator()
         viewModel(
-            GatedSessionGateway(
+            GatedConnectionGateway(
                 release = release,
-                resolved = PairedState.Paired(ORIGIN, "device_01", "Pixel"),
+                resolved = ActiveConnectionState.Active(ORIGIN, "Pixel"),
             ),
             FakeSessionOwner(),
             FakeAgentApi(Result.success(collectionOf(1))),
@@ -232,48 +196,44 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun authFailureOnOneHaroldLeavesTheOtherConnected() = runTest {
-        val store = FakeCredentialStore()
-        store.save(savedHarold("http://laptop.local:3847", "devcred_laptop", "device_laptop"))
-        store.save(savedHarold("http://desktop.local:3847", "devcred_desktop", "device_desktop"))
-        val gateway = DefaultSessionGateway(
-            credentialStore = store,
-            credentialHolder = CredentialHolder(),
-        )
+    fun removingOneHaroldKeepsTheOtherSaved() = runTest {
+        val store = FakeConnectionStore()
+        store.save(savedConnection("ssh://gary@laptop.local:22", "laptop"))
+        store.save(savedConnection("ssh://gary@desktop.local:22", "desktop"))
+        val gateway = DefaultConnectionGateway(credentialStore = store)
         val connection = FakeSessionOwner()
         viewModel(
             gateway,
             connection,
             FakeAgentApi(Result.success(collectionOf(1))),
-            savedHarolds = SavedHaroldRepository(store),
+            savedConnections = ConnectionRepository(store),
         )
 
-        connection.emit(ConnectionStatus.AuthFailed(detail = "Device revoked"))
-
-        assertEquals(listOf("http://desktop.local:3847"), store.list().map { harold -> harold.serverOrigin })
         assertEquals(
-            listOf("http://laptop.local:3847", "http://desktop.local:3847"),
-            connection.connects,
+            listOf("ssh://gary@laptop.local:22", "ssh://gary@desktop.local:22"),
+            store.list().map { connection -> connection.connectionId },
         )
-        assertEquals(PairedState.Paired("http://desktop.local:3847", "device_desktop", "Pixel"), gateway.pairedState.value)
+        assertEquals(
+            ActiveConnectionState.Active("ssh://gary@laptop.local:22", "Pixel"),
+            gateway.activeConnection.value,
+        )
     }
 
     private fun viewModel(
-        session: SessionGateway,
+        session: ConnectionGateway,
         connection: SessionOwner,
-        api: AgentApi,
+        api: WorkspaceApi,
         navigator: harold.android.navigation.Navigator = harold.android.navigation.Navigator(),
-        savedHarolds: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
+        savedConnections: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
     ): ShellViewModel = ShellViewModel(
-        sessionGateway = session,
+        connectionGateway = session,
         sessionOwner = connection,
         agentApi = api,
         navigator = navigator,
-        savedHaroldRepository = savedHarolds,
     )
 
-    private fun paired(): FakeSessionGateway =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+    private fun active(): FakeConnectionGateway =
+        FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
 
     private fun collectionOf(count: Int): WorkspaceCollection =
         ItemCollection(
@@ -295,35 +255,40 @@ class ShellViewModelTest {
         )
 
     private companion object {
-        const val ORIGIN = "http://127.0.0.1:8787"
+        const val ORIGIN = "ssh://gary@127.0.0.1:22"
     }
 }
 
-private fun savedHarold(serverOrigin: String, credential: String, deviceId: String) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
-    serverOrigin = serverOrigin,
+private fun savedConnection(connectionId: String, name: String) = SavedConnection(
+    formatVersion = 3,
+    connectionId = connectionId,
     deviceName = "Pixel",
-    credential = credential,
-    name = "harold",
+    name = name,
     colorId = "ink",
     iconId = "mark",
+    ssh = SshConfig(
+        host = connectionId,
+        port = 22,
+        user = "gary",
+        auth = SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )
 
-private class GatedSessionGateway(
+private class GatedConnectionGateway(
     private val release: kotlinx.coroutines.CompletableDeferred<Unit>,
-    private val resolved: PairedState,
-) : SessionGateway {
-    private val _pairedState = MutableStateFlow<PairedState>(PairedState.NotPaired)
-    override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
+    private val resolved: ActiveConnectionState,
+) : ConnectionGateway {
+    private val _activeConnection = MutableStateFlow<ActiveConnectionState>(ActiveConnectionState.NoConnection)
+    override val activeConnection: StateFlow<ActiveConnectionState> = _activeConnection.asStateFlow()
 
     override suspend fun refresh() {
         release.await()
-        _pairedState.value = resolved
+        _activeConnection.value = resolved
     }
 
     override suspend fun clearLocalAccess() {
-        _pairedState.value = PairedState.NotPaired
+        _activeConnection.value = ActiveConnectionState.NoConnection
     }
 }
 
@@ -349,12 +314,12 @@ private class FakeSessionOwner : SessionOwner {
     var backgroundMarks = 0
         private set
 
-    fun emit(status: ConnectionStatus) {
+    fun emit(status: StreamStatus) {
         _connectionState.value = _connectionState.value.copy(status = status)
     }
 
-    override fun connect(serverOrigin: String) {
-        connects += serverOrigin
+    override fun connect(connectionId: String) {
+        connects += connectionId
     }
 
     override fun retry() {
@@ -397,91 +362,33 @@ private class FakeSessionOwner : SessionOwner {
 
 private class FakeAgentApi(
     private val result: Result<WorkspaceCollection>,
-) : AgentApi {
+) : harold.android.network.WorkspaceApi {
     val calls = mutableListOf<Pair<String, Int>>()
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> {
-        calls += serverOrigin to limit
+        calls += connectionId to limit
 
         return result
     }
 
-
-    override suspend fun getRuntimeSettings(
-        serverOrigin: String,
-    ): Result<harold.android.contracts.RuntimeSettingsView> =
-        Result.failure(UnsupportedOperationException())
-
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ): Result<harold.android.contracts.FilesystemDirectoryCollection> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun listSessions(
-        serverOrigin: String,
-        cwd: String?,
-    ): Result<harold.android.contracts.SessionCollection> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun listAgents(serverOrigin: String): Result<harold.android.contracts.AgentSettingsCollection> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun createSession(
-        serverOrigin: String,
-        body: harold.android.contracts.CreateSessionBody,
-    ): Result<harold.android.contracts.CreateSessionResponse> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun deleteSession(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-        sessionId: String,
-    ): Result<Unit> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun getAgentAuth(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuth> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuthSession> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-        sessionId: String,
-        action: harold.android.contracts.AuthSessionAction,
-    ): Result<harold.android.contracts.AgentAuthSession> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun logoutAgentAuth(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuthSummary> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit> = Result.success(Unit)
 }

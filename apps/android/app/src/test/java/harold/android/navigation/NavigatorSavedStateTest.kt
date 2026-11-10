@@ -25,7 +25,7 @@ class NavigatorSavedStateTest {
     fun backStackComesBackInANewActivityAfterProcessDeath() {
         val first = Robolectric.buildActivity(MainActivity::class.java).create()
         val before = first.get().navigator
-        before.start(paired = true)
+        before.start(hasConnection = true)
         before.openSessions()
         val saved = Bundle()
         first.saveInstanceState(saved)

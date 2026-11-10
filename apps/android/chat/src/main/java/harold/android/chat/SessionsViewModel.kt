@@ -3,16 +3,16 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
-import harold.android.database.session.CachedSession
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
+import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionRepository
 import harold.android.foreground.SessionAttentionMarks
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,48 +20,74 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class HaroldFilterChoice(
-    val serverOrigin: String,
+data class ConnectionFilterChoice(
+    val connectionId: String,
     val name: String,
     val colorId: String,
     val iconId: String,
 )
 
+data class AgentSessionsState(
+    val connectionId: String,
+    val connectionName: String,
+    val agentId: String,
+    val loading: Boolean,
+    val error: String?,
+)
+
 data class SessionsUiState(
     val sessions: List<SessionRow> = emptyList(),
-    val harolds: List<HaroldFilterChoice> = emptyList(),
-    val haroldFilter: String? = null,
+    val connections: List<ConnectionFilterChoice> = emptyList(),
+    val connectionFilter: String? = null,
     val search: String = "",
     val loading: Boolean = true,
     val error: String? = null,
+    val agents: List<AgentSessionsState> = emptyList(),
 )
 
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionRepository: SessionRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
     private val sessionOwner: SessionOwner,
-    private val savedHaroldRepository: SavedHaroldRepository,
+    private val connectionRepository: ConnectionRepository,
     private val sessionAttention: SessionAttentionMarks? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionsUiState())
     val uiState: StateFlow<SessionsUiState> = _uiState.asStateFlow()
 
-    private var cached: List<CachedSession> = emptyList()
+    private var liveSessions: List<SessionListItem> = emptyList()
     private var catalog: List<SessionRow> = emptyList()
-    private var savedHarolds: List<HaroldFilterChoice> = emptyList()
-    private var savedByOrigin: Map<String, StoredCredential> = emptyMap()
+    private var savedConnections: List<ConnectionFilterChoice> = emptyList()
+    private var savedByOrigin: Map<String, SavedConnection> = emptyMap()
     private val unreachableOrigins = mutableSetOf<String>()
+    private val refreshingOrigins = mutableSetOf<String>()
     private var pushedTitles: Map<String, String> = emptyMap()
-    private var haroldFilter: String? = null
+    private var connectionFilter: String? = null
+    private var agentSnapshots: List<AgentSessionsState> = emptyList()
 
     init {
         viewModelScope.launch {
             sessionRepository.observeSessions().collect { sessions ->
-                cached = sessions
+                liveSessions = sessions
                 rebuildCatalog()
+            }
+        }
+        viewModelScope.launch {
+            sessionRepository.observeSnapshots().collect { snapshots ->
+                agentSnapshots = snapshots.map { snapshot ->
+                    AgentSessionsState(
+                        connectionId = snapshot.connectionId,
+                        connectionName = savedByOrigin[snapshot.connectionId]?.name.orEmpty(),
+                        agentId = snapshot.agentId,
+                        loading = snapshot.loading,
+                        error = snapshot.error,
+                    )
+                }
+                publishLoading()
+                publish()
             }
         }
         viewModelScope.launch {
@@ -85,8 +111,8 @@ class SessionsViewModel @Inject constructor(
         publish()
     }
 
-    fun onHaroldFilter(serverOrigin: String?) {
-        haroldFilter = serverOrigin
+    fun onConnectionFilter(connectionId: String?) {
+        connectionFilter = connectionId
         publish()
     }
 
@@ -102,18 +128,18 @@ class SessionsViewModel @Inject constructor(
     }
 
     fun delete(row: SessionRow) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        val origin = row.serverOrigin.ifEmpty { paired?.serverOrigin } ?: return
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+        val origin = row.connectionId.ifEmpty { active?.connectionId } ?: return
 
         viewModelScope.launch {
             sessionRepository.deleteSession(
-                serverOrigin = origin,
+                connectionId = origin,
                 agentId = row.agentId,
                 sessionId = row.sessionId,
             ).fold(
                 onSuccess = {
-                    cached = cached.filterNot { session ->
-                        session.serverOrigin == origin &&
+                    liveSessions = liveSessions.filterNot { session ->
+                        session.connectionId == origin &&
                             session.session.agentId == row.agentId &&
                             session.session.sessionId == row.sessionId
                     }
@@ -130,58 +156,72 @@ class SessionsViewModel @Inject constructor(
     private suspend fun load() {
         _uiState.update { current -> current.copy(loading = true, error = null) }
 
-        val saved = savedHaroldRepository.list()
-        savedByOrigin = saved.associateBy { harold -> harold.serverOrigin }
-        savedHarolds = saved.map { harold ->
-            HaroldFilterChoice(
-                serverOrigin = harold.serverOrigin,
-                name = harold.name,
-                colorId = harold.colorId,
-                iconId = harold.iconId,
+        val saved = connectionRepository.list()
+        savedByOrigin = saved.associateBy { connection -> connection.connectionId }
+        savedConnections = saved.map { connection ->
+            ConnectionFilterChoice(
+                connectionId = connection.connectionId,
+                name = connection.name,
+                colorId = connection.colorId,
+                iconId = connection.iconId,
             )
         }
 
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        val origins = saved.map { harold -> harold.serverOrigin }
-            .ifEmpty { listOfNotNull(paired?.serverOrigin) }
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+        val origins = saved.map { connection -> connection.connectionId }
+            .ifEmpty { listOfNotNull(active?.connectionId) }
+
+        refreshingOrigins.clear()
+        refreshingOrigins.addAll(origins)
+        publishLoading()
 
         var anySuccess = false
         var lastError: Throwable? = null
-        origins.forEach { serverOrigin ->
-            sessionRepository.refresh(serverOrigin).fold(
+        origins.forEach { connectionId ->
+            sessionRepository.refresh(connectionId).fold(
                 onSuccess = {
                     anySuccess = true
-                    unreachableOrigins.remove(serverOrigin)
+                    unreachableOrigins.remove(connectionId)
                 },
                 onFailure = { error ->
                     lastError = error
-                    unreachableOrigins.add(serverOrigin)
+                    unreachableOrigins.add(connectionId)
                 },
             )
+            refreshingOrigins.remove(connectionId)
+            publishLoading()
         }
 
-        val hasCache = origins.isNotEmpty() && cached.any { session -> session.serverOrigin in origins }
-        val error = if (!anySuccess && !hasCache) lastError else null
+        val hasLiveRows = origins.isNotEmpty() && liveSessions.any { session -> session.connectionId in origins }
+        val error = if (!anySuccess && !hasLiveRows) lastError else null
 
         _uiState.update { current ->
             current.copy(
-                loading = false,
                 error = error?.let(::apiErrorMessage),
             )
         }
+        publishLoading()
         rebuildCatalog()
+    }
+
+    private fun publishLoading() {
+        _uiState.update { current ->
+            current.copy(
+                loading = refreshingOrigins.isNotEmpty() || agentSnapshots.any { agent -> agent.loading },
+            )
+        }
     }
 
     private fun rebuildCatalog() {
         val scopedToHarold = savedByOrigin.isNotEmpty()
-        catalog = cached.map { session ->
-            val harold = savedByOrigin[session.serverOrigin]
+        catalog = liveSessions.map { session ->
+            val connection = savedByOrigin[session.connectionId]
             val row = session.toSessionRow().copy(
-                serverOrigin = if (scopedToHarold) session.serverOrigin else "",
-                haroldName = harold?.name.orEmpty(),
-                haroldColorId = harold?.colorId.orEmpty(),
-                haroldIconId = harold?.iconId.orEmpty(),
-                haroldReachable = session.serverOrigin !in unreachableOrigins,
+                connectionId = if (scopedToHarold) session.connectionId else "",
+                connectionName = connection?.name.orEmpty(),
+                connectionColorId = connection?.colorId.orEmpty(),
+                connectionIconId = connection?.iconId.orEmpty(),
+                connectionReachable = session.connectionId !in unreachableOrigins,
             )
             pushedTitles[row.id]?.let { title -> row.copy(name = title) } ?: row
         }
@@ -190,27 +230,28 @@ class SessionsViewModel @Inject constructor(
 
     private fun publish() {
         val search = _uiState.value.search.trim()
-        val harolds = savedHarolds.ifEmpty {
+        val connections = savedConnections.ifEmpty {
             catalog
-                .distinctBy { row -> row.serverOrigin }
-                .filter { row -> row.serverOrigin.isNotEmpty() }
+                .distinctBy { row -> row.connectionId }
+                .filter { row -> row.connectionId.isNotEmpty() }
                 .map { row ->
-                    HaroldFilterChoice(
-                        serverOrigin = row.serverOrigin,
-                        name = row.haroldName,
-                        colorId = row.haroldColorId,
-                        iconId = row.haroldIconId,
+                    ConnectionFilterChoice(
+                        connectionId = row.connectionId,
+                        name = row.connectionName,
+                        colorId = row.connectionColorId,
+                        iconId = row.connectionIconId,
                     )
                 }
         }
-        val sessions = visibleSessionRows(catalog, haroldFilter)
+        val sessions = visibleSessionRows(catalog, connectionFilter)
             .filter { row -> search.isEmpty() || row.name.contains(search, ignoreCase = true) }
             .sortedByDescending { row -> row.updatedAt }
         _uiState.update { current ->
             current.copy(
                 sessions = sessions,
-                harolds = harolds,
-                haroldFilter = haroldFilter,
+                connections = connections,
+                connectionFilter = connectionFilter,
+                agents = agentSnapshots,
             )
         }
     }

@@ -6,6 +6,12 @@ import harold.android.contracts.AvailableCommand
 import harold.android.contracts.ConfigOption
 import harold.android.contracts.PermissionRequest
 
+/** The session the stream is pointed at. */
+data class WatchTarget(
+    val agentId: AgentId,
+    val sessionId: String,
+)
+
 data class SessionSnapshot(
     val agentId: AgentId? = null,
     val sessionId: String? = null,

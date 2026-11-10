@@ -36,7 +36,7 @@ class SessionConfigWriterTest {
         assertEquals(
             listOf(
                 FakeSessionConfigApi.Call(
-                    serverOrigin = ORIGIN,
+                    connectionId = ORIGIN,
                     agentId = "cursor",
                     sessionId = "sess_01",
                     configId = "model",
@@ -83,6 +83,44 @@ class SessionConfigWriterTest {
         assertEquals("m1", writer.state.value.model?.selectValue())
         assertFalse(writer.state.value.saving)
         assertEquals("Agent is disabled", writer.state.value.error)
+    }
+
+    @Test
+    fun aWriteThatFailsBeforeTheSessionIsLiveDoesNotSurfaceAnError() = runTest {
+        val api = FakeSessionConfigApi()
+        api.result = Result.failure(
+            AgentApiException(
+                AgentApiError.Problem(
+                    status = 409,
+                    title = "Session not connected",
+                    detail = "Open this session again to start its agent process.",
+                ),
+            ),
+        )
+        val writer = SessionConfigWriter(api, this)
+        writer.onSnapshot(
+            ORIGIN,
+            "cursor",
+            "sess_01",
+            listOf(selectOption("model", "m1")),
+            live = false,
+        )
+
+        writer.set("model", ConfigValue.Text("m2"))
+        advanceUntilIdle()
+
+        assertEquals("m1", writer.state.value.model?.selectValue())
+        assertNull(writer.state.value.error)
+
+        writer.onSnapshot(
+            ORIGIN,
+            "cursor",
+            "sess_01",
+            listOf(selectOption("model", "m1")),
+            live = true,
+        )
+
+        assertNull(writer.state.value.error)
     }
 
     @Test
@@ -160,7 +198,7 @@ class SessionConfigWriterTest {
             writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m2")))
 
             val settled = awaitItem()
-            assertEquals(ORIGIN, settled.serverOrigin)
+            assertEquals(ORIGIN, settled.connectionId)
             assertEquals("cursor", settled.agentId)
             assertEquals("sess_01", settled.sessionId)
             assertEquals("model", settled.configId)
@@ -238,7 +276,7 @@ class SessionConfigWriterTest {
 
 private class FakeSessionConfigApi : SessionConfigApi {
     data class Call(
-        val serverOrigin: String,
+        val connectionId: String,
         val agentId: String,
         val sessionId: String,
         val configId: String,
@@ -250,13 +288,13 @@ private class FakeSessionConfigApi : SessionConfigApi {
     var handler: (suspend (Call) -> Result<Unit>)? = null
 
     override suspend fun setConfigOption(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         configId: String,
         value: ConfigValue,
     ): Result<Unit> {
-        val call = Call(serverOrigin, agentId, sessionId, configId, value)
+        val call = Call(connectionId, agentId, sessionId, configId, value)
         calls += call
         return handler?.invoke(call) ?: result
     }

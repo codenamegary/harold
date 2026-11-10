@@ -15,12 +15,11 @@ class AgentAuthUiStateTest {
     private fun summary(
         status: AgentAuthStatus,
         error: String? = null,
-        canLogout: Boolean = false,
     ) = AgentAuthSummary(
         status = status,
         error = error,
         activeSessionId = null,
-        canLogout = canLogout,
+        canLogout = false,
     )
 
     private fun auth(
@@ -31,14 +30,6 @@ class AgentAuthUiStateTest {
         status = status,
         error = null,
         session = session,
-    )
-
-    private fun inFlightSession() = AgentAuthSession(
-        sessionId = "auth-1",
-        agentId = "cursor",
-        status = AuthSessionStatus.InProgress,
-        steps = emptyList(),
-        error = null,
     )
 
     @Test
@@ -82,15 +73,6 @@ class AgentAuthUiStateTest {
     }
 
     @Test
-    fun inFlightSessionShowsAuthPanelEvenWhenStatusIsUnknown() {
-        assertTrue(
-            AgentAuthUiState(
-                agentAuth = auth(AgentAuthStatus.Unknown, session = inFlightSession()),
-            ).showAuthPanel,
-        )
-    }
-
-    @Test
     fun resolvedSummaryWinsOverTheDerivedOne() {
         val state = AgentAuthUiState(
             agentAuth = auth(AgentAuthStatus.Unknown),
@@ -101,57 +83,17 @@ class AgentAuthUiStateTest {
     }
 
     @Test
-    fun derivedSummaryReportsTheInFlightSessionAndOffersNoLogout() {
+    fun derivedSummaryReportsTheAgentAuthStatus() {
         val state = AgentAuthUiState(
-            agentAuth = auth(AgentAuthStatus.NeedsAuth, session = inFlightSession()),
+            agentAuth = auth(AgentAuthStatus.NeedsAuth),
         )
 
         assertEquals(AgentAuthStatus.NeedsAuth, state.authSummary?.status)
-        assertEquals("auth-1", state.authSummary?.activeSessionId)
         assertFalse(state.authSummary?.canLogout == true)
     }
 
     @Test
     fun noAuthStateHasNoSummary() {
         assertNull(AgentAuthUiState().authSummary)
-    }
-
-    @Test
-    fun canLogoutActionRequiresASummaryThatAllowsLogout() {
-        assertFalse(AgentAuthUiState().canLogoutAction)
-        assertFalse(
-            AgentAuthUiState(summary = summary(AgentAuthStatus.Authenticated)).canLogoutAction,
-        )
-    }
-
-    @Test
-    fun canLogoutActionAllowsAnIdleLoggableAgent() {
-        assertTrue(
-            AgentAuthUiState(
-                summary = summary(AgentAuthStatus.Authenticated, canLogout = true),
-            ).canLogoutAction,
-        )
-    }
-
-    @Test
-    fun canLogoutActionBlocksWhileThePanelIsBusy() {
-        val summary = summary(AgentAuthStatus.Authenticated, canLogout = true)
-
-        assertFalse(
-            AgentAuthUiState(summary = summary, panelSubmitting = true).canLogoutAction,
-        )
-        assertFalse(
-            AgentAuthUiState(summary = summary, actionBusy = true).canLogoutAction,
-        )
-    }
-
-    @Test
-    fun canLogoutActionBlocksWhileAnAuthSessionIsInFlight() {
-        assertFalse(
-            AgentAuthUiState(
-                summary = summary(AgentAuthStatus.Authenticated, canLogout = true),
-                agentAuth = auth(AgentAuthStatus.NeedsAuth, session = inFlightSession()),
-            ).canLogoutAction,
-        )
     }
 }

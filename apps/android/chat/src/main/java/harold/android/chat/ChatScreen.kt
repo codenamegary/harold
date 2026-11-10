@@ -16,14 +16,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
@@ -36,23 +42,22 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +65,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -88,8 +94,31 @@ import harold.android.ui.promptinput.PromptEdit
 import harold.android.voice.VoiceDictationPresentation
 
 private val MIN_TOUCH_TARGET = 48.dp
+private val HeaderHeight = 64.dp
+private val HeaderActionSize = 40.dp
+private val HeaderGap = 8.dp
 private val SessionMenuItemPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
 private val SessionMenuMinWidth = 280.dp
+
+@Composable
+private fun HeaderIconAction(
+    onClick: () -> Unit,
+    contentDescription: String,
+    testTag: String,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides HeaderActionSize) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier
+                .width(HeaderActionSize)
+                .height(MIN_TOUCH_TARGET)
+                .testTag(testTag)
+                .semantics { this.contentDescription = contentDescription },
+            content = content,
+        )
+    }
+}
 
 @Composable
 private fun SessionMenuRow(
@@ -137,12 +166,10 @@ private fun ChangesAction(
     } else {
         stringResource(R.string.chat_changes_content_description)
     }
-    IconButton(
+    HeaderIconAction(
         onClick = onClick,
-        modifier = Modifier
-            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-            .testTag("chat_changes")
-            .semantics { this.contentDescription = contentDescription },
+        contentDescription = contentDescription,
+        testTag = "chat_changes",
     ) {
         BadgedBox(
             badge = {
@@ -201,9 +228,9 @@ private fun SessionDropdownItem(
     onClick: () -> Unit,
 ) {
     val hasHaroldIdentity =
-        session.haroldColorId.isNotEmpty() ||
-            session.haroldIconId.isNotEmpty() ||
-            session.haroldName.isNotEmpty()
+        session.connectionColorId.isNotEmpty() ||
+            session.connectionIconId.isNotEmpty() ||
+            session.connectionName.isNotEmpty()
 
     Row(
         modifier = Modifier
@@ -217,8 +244,8 @@ private fun SessionDropdownItem(
     ) {
         if (hasHaroldIdentity) {
             HaroldBadge(
-                colorId = session.haroldColorId,
-                iconId = session.haroldIconId,
+                colorId = session.connectionColorId,
+                iconId = session.connectionIconId,
                 size = 22.dp,
                 modifier = Modifier.testTag("session_menu_badge_${session.id}"),
             )
@@ -261,7 +288,6 @@ private fun SessionDropdownItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     uiState: ChatUiState,
@@ -301,13 +327,10 @@ fun ChatScreen(
     onVoiceCommandDismiss: () -> Unit = {},
     onVoiceCommandPick: (String) -> Unit = {},
     onComposerCommandPick: (String) -> Unit = {},
-    onAuthSignIn: () -> Unit = {},
-    onAuthConfirm: (String) -> Unit = {},
-    onAuthCancel: () -> Unit = {},
-    onAuthLogout: () -> Unit = {},
     onDisconnectFromServer: () -> Unit = {},
-    onPairAnotherHarold: () -> Unit = {},
-    onSavedHarolds: () -> Unit = {},
+    onConnections: () -> Unit = {},
+    onAgentAuthRestart: () -> Unit = {},
+    onAgentAuthLogout: () -> Unit = {},
     agentLabel: String = "",
     onElicitationOpen: () -> Unit = {},
     onElicitationClose: () -> Unit = {},
@@ -486,17 +509,17 @@ fun ChatScreen(
         )
     }
 
-    val disconnectName = uiState.disconnectHaroldName
-    val disconnectColorId = uiState.disconnectHaroldColorId
-    val disconnectIconId = uiState.disconnectHaroldIconId
+    val disconnectName = uiState.disconnectConnectionName
+    val disconnectColorId = uiState.disconnectConnectionColorId
+    val disconnectIconId = uiState.disconnectConnectionIconId
     val hasDisconnectBadge =
         disconnectColorId.isNotEmpty() ||
             disconnectIconId.isNotEmpty() ||
             disconnectName.isNotEmpty()
     val disconnectLabel = if (disconnectName.isNotEmpty()) {
-        stringResource(R.string.chat_disconnect_server_named, disconnectName)
+        stringResource(R.string.chat_remove_named, disconnectName)
     } else {
-        stringResource(R.string.chat_disconnect_from_server)
+        stringResource(R.string.chat_remove)
     }
 
     if (disconnectConfirmVisible) {
@@ -505,13 +528,15 @@ fun ChatScreen(
             title = {
                 Text(
                     text = if (disconnectName.isNotEmpty()) {
-                        stringResource(R.string.chat_disconnect_confirm_title_named, disconnectName)
+                        stringResource(R.string.chat_remove_confirm_title_named, disconnectName)
                     } else {
-                        stringResource(R.string.chat_disconnect_confirm_title)
+                        stringResource(R.string.chat_remove_confirm_title)
                     },
                 )
             },
-            text = { Text(text = stringResource(R.string.chat_disconnect_confirm_body)) },
+            text = {
+                Text(text = stringResource(R.string.chat_remove_confirm_body))
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -522,7 +547,7 @@ fun ChatScreen(
                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                         .testTag("disconnect_confirm"),
                 ) {
-                    Text(text = stringResource(R.string.chat_disconnect_confirm))
+                    Text(text = stringResource(R.string.chat_remove_confirm))
                 }
             },
             dismissButton = {
@@ -532,7 +557,7 @@ fun ChatScreen(
                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                         .testTag("disconnect_cancel"),
                 ) {
-                    Text(text = stringResource(R.string.chat_disconnect_cancel))
+                    Text(text = stringResource(R.string.chat_remove_cancel))
                 }
             },
             modifier = Modifier.testTag("disconnect_confirm_dialog"),
@@ -545,56 +570,58 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
-                    title = {
-                        Box {
-                            TextButton(
-                                onClick = onSessionSelectorClick,
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                ),
+                Surface(color = MaterialTheme.colorScheme.surface) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .height(HeaderHeight)
+                            .padding(start = 12.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            Row(
                                 modifier = Modifier
-                                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                    .fillMaxWidth()
+                                    .height(MIN_TOUCH_TARGET)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(onClick = onSessionSelectorClick)
                                     .testTag("session_selector")
                                     .semantics {
                                         contentDescription = sessionSelectorContentDescription
                                     },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    if (
-                                        selected != null &&
-                                        (
-                                            selected.haroldColorId.isNotEmpty() ||
-                                                selected.haroldIconId.isNotEmpty() ||
-                                                selected.haroldName.isNotEmpty()
-                                            )
-                                    ) {
-                                        HaroldBadge(
-                                            colorId = selected.haroldColorId,
-                                            iconId = selected.haroldIconId,
-                                            size = 24.dp,
-                                            modifier = Modifier.testTag("chat_session_harold_badge"),
+                                if (
+                                    selected != null &&
+                                    (
+                                        selected.connectionColorId.isNotEmpty() ||
+                                            selected.connectionIconId.isNotEmpty() ||
+                                            selected.connectionName.isNotEmpty()
                                         )
-                                    }
-                                    Text(
-                                        text = sessionLabel,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("chat_session_label"),
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Filled.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.requiredSize(28.dp),
+                                ) {
+                                    HaroldBadge(
+                                        colorId = selected.connectionColorId,
+                                        iconId = selected.connectionIconId,
+                                        size = 24.dp,
+                                        modifier = Modifier.testTag("chat_session_connection_badge"),
                                     )
                                 }
+                                Text(
+                                    text = sessionLabel,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("chat_session_label"),
+                                )
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowDropDown,
+                                    contentDescription = null,
+                                    modifier = Modifier.requiredSize(28.dp),
+                                )
                             }
 
                             DropdownMenu(
@@ -671,101 +698,74 @@ fun ChatScreen(
                                 )
                             }
                         }
-                    },
-                    actions = {
+
+                        Spacer(modifier = Modifier.width(HeaderGap))
+
                         if (changesAvailable) {
                             ChangesAction(
                                 count = changesBadgeCount,
                                 onClick = onChangesClick,
                             )
                         }
-                        IconButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier
-                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                .testTag("chat_overflow")
-                                .semantics {
-                                    contentDescription = overflowContentDescription
-                                },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = null,
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(text = "Workspaces") },
-                                onClick = {
-                                    menuExpanded = false
-                                    onWorkspacesClick()
-                                },
-                                modifier = Modifier.testTag("workspaces_menu_item"),
-                            )
-                            if (uiState.agentAuth.authSummary?.canLogout == true) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = if (uiState.agentAuth.actionBusy) {
-                                                stringResource(R.string.agent_auth_signing_out)
-                                            } else {
-                                                stringResource(R.string.agent_auth_sign_out)
-                                            },
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onAuthLogout()
-                                    },
-                                    enabled = uiState.agentAuth.canLogoutAction,
-                                    modifier = Modifier.testTag("auth_sign_out_menu_item"),
+                        Box {
+                            HeaderIconAction(
+                                onClick = { menuExpanded = true },
+                                contentDescription = overflowContentDescription,
+                                testTag = "chat_overflow",
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.MoreVert,
+                                    contentDescription = null,
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.chat_saved_harolds)) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onSavedHarolds()
-                                },
-                                modifier = Modifier.testTag("saved_harolds_menu_item"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.chat_pair_another_harold)) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onPairAnotherHarold()
-                                },
-                                modifier = Modifier.testTag("pair_another_menu_item"),
-                            )
-                            DropdownMenuItem(
-                                leadingIcon = if (hasDisconnectBadge) {
-                                    {
-                                        HaroldBadge(
-                                            colorId = disconnectColorId,
-                                            iconId = disconnectIconId,
-                                            size = 20.dp,
-                                            modifier = Modifier.testTag("disconnect_menu_badge"),
-                                        )
-                                    }
-                                } else {
-                                    null
-                                },
-                                text = {
-                                    Text(text = disconnectLabel)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    disconnectConfirmVisible = true
-                                },
-                                modifier = Modifier.testTag("disconnect_menu_item"),
-                            )
+
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                modifier = Modifier
+                                    .widthIn(min = SessionMenuMinWidth, max = 340.dp)
+                                    .testTag("chat_overflow_menu"),
+                            ) {
+                                SessionMenuRow(
+                                    text = "Workspaces",
+                                    onClick = {
+                                        menuExpanded = false
+                                        onWorkspacesClick()
+                                    },
+                                    testTag = "workspaces_menu_item",
+                                )
+                                SessionMenuRow(
+                                    text = stringResource(R.string.chat_connections),
+                                    onClick = {
+                                        menuExpanded = false
+                                        onConnections()
+                                    },
+                                    testTag = "connections_menu_item",
+                                )
+                                SessionMenuRow(
+                                    text = disconnectLabel,
+                                    onClick = {
+                                        menuExpanded = false
+                                        disconnectConfirmVisible = true
+                                    },
+                                    testTag = "disconnect_menu_item",
+                                    leadingContent = if (hasDisconnectBadge) {
+                                        {
+                                            HaroldBadge(
+                                                colorId = disconnectColorId,
+                                                iconId = disconnectIconId,
+                                                size = 20.dp,
+                                                modifier = Modifier.testTag("disconnect_menu_badge"),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            }
                         }
-                    },
-                )
+                    }
+                }
                 ContextUsageLine(contextUsageText)
             }
         },
@@ -784,24 +784,14 @@ fun ChatScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (uiState.connectionBanner != null) {
+            // Attaching and replaying have their own animation in the
+            // transcript area. The banner is reserved for stops and errors.
+            if (uiState.connectionBanner != null && !uiState.connectionInProgress) {
                 Text(
                     text = uiState.connectionBanner,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .testTag("connection_banner")
-                        .semantics {
-                            liveRegion = LiveRegionMode.Polite
-                        },
-                )
-            }
-
-            if (uiState.streamReconnecting) {
-                Text(
-                    text = "Reconnecting session stream…",
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .testTag("stream_reconnect_banner")
                         .semantics {
                             liveRegion = LiveRegionMode.Polite
                         },
@@ -815,13 +805,9 @@ fun ChatScreen(
                     AgentAuthPanel(
                         agentName = selected.agentLabel.ifBlank { selected.agentId },
                         summary = summary,
-                        auth = uiState.agentAuth.agentAuth,
-                        submitting = uiState.agentAuth.panelSubmitting,
-                        actionBusy = uiState.agentAuth.actionBusy,
                         error = uiState.agentAuth.error,
-                        onSignIn = onAuthSignIn,
-                        onConfirm = onAuthConfirm,
-                        onCancel = onAuthCancel,
+                        onRestart = onAgentAuthRestart,
+                        onLogout = onAgentAuthLogout,
                     )
                 }
             }
@@ -840,7 +826,9 @@ fun ChatScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = if (
-                    uiState.showEmptyWelcome || uiState.showSelectSessionCta
+                    uiState.showSessionLoading ||
+                    uiState.showEmptyWelcome ||
+                    uiState.showSelectSessionCta
                 ) {
                     Alignment.Center
                 } else {
@@ -912,6 +900,13 @@ fun ChatScreen(
                                 },
                             )
                         }
+                    }
+
+                    uiState.showSessionLoading -> {
+                        SessionLoadingIndicator(
+                            reconnecting = uiState.streamReconnecting,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
 
                     else -> {

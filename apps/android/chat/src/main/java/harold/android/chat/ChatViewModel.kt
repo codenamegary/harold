@@ -14,7 +14,6 @@ import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
 import harold.android.chat.composer.supportsFileAttachments
 import harold.android.chat.composer.supportsImageAttachments
-import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
@@ -30,10 +29,10 @@ import harold.android.contracts.SessionState
 import harold.android.contracts.Workspace
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseConfigOptions
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.forgetSavedHarold
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.forgetConnection
 import harold.android.credentials.settleAfterForget
-import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionRepository
 import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
@@ -50,6 +49,7 @@ import harold.android.live.AcpTranscriptState
 import harold.android.live.Elicitation
 import harold.android.live.ElicitationDraft
 import harold.android.live.SessionOwner
+import harold.android.live.WatchTarget
 import harold.android.live.SessionSnapshot
 import harold.android.live.emptyAcpTranscript
 import harold.android.live.toContent
@@ -61,13 +61,13 @@ import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.apiErrorMessage
-import harold.android.credentials.StoredCredential
-import harold.android.session.HaroldConnection
-import harold.android.session.HaroldConnectionStatus
-import harold.android.session.HaroldConnections
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
-import harold.android.stream.ConnectionStatus
+import harold.android.credentials.SavedConnection
+import harold.android.session.ConnectionHealth
+import harold.android.session.ConnectionStatus
+import harold.android.session.Connections
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
+import harold.android.stream.StreamStatus
 import harold.android.ui.promptinput.PromptEdit
 import harold.android.ui.promptinput.applyEdit
 import harold.android.user.UserRepository
@@ -81,22 +81,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
     private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
-    private val savedHaroldRepository: SavedHaroldRepository,
+    private val connectionRepository: ConnectionRepository,
     private val attachmentApi: AttachmentApi,
     private val configApi: SessionConfigApi,
     private val gitApi: GitApi,
@@ -110,7 +112,7 @@ class ChatViewModel @Inject constructor(
     @PreviewDispatcher private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val navigator: Navigator,
     private val sessionCommands: SessionCommands,
-    private val haroldConnections: HaroldConnections? = null,
+    private val connections: Connections? = null,
     private val sessionAttention: SessionAttentionMarks? = null,
     private val permissionNotifier: PermissionAttentionNotifier? = null,
 ) : ViewModel() {
@@ -127,21 +129,20 @@ class ChatViewModel @Inject constructor(
     private val agentAuth = AgentAuthController(
         userRepository = userRepository,
         scope = viewModelScope,
-        origin = ::selectedOrPairedOrigin,
+        origin = ::selectedOrActiveOrigin,
         selectedAgent = { _uiState.value.selectedSession?.agentId },
-        onAuthenticated = ::createPendingSessionAfterLogin,
     )
 
     /**
      * Session-scoped actions must follow the selected session's Harold. The
-     * paired state is only the active fallback for legacy single-Harold flows.
+     * active connection is only the fallback for legacy single-Harold flows.
      */
     private fun selectedSessionOrigin(): String? =
-        _uiState.value.selectedSession?.serverOrigin?.takeIf { origin -> origin.isNotEmpty() }
+        _uiState.value.selectedSession?.connectionId?.takeIf { origin -> origin.isNotEmpty() }
 
-    private fun selectedOrPairedOrigin(): String? =
+    private fun selectedOrActiveOrigin(): String? =
         selectedSessionOrigin()
-            ?: (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+            ?: (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
 
     /**
      * The composer's text and caret. The prompt input paints its tokens from
@@ -152,10 +153,11 @@ class ChatViewModel @Inject constructor(
 
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
-    private var agentCapabilities: Map<AgentId, AgentCapabilityInventory?> = emptyMap()
-    private var cachedSessions: List<CachedSession> = emptyList()
-    private var savedHarolds: List<StoredCredential> = emptyList()
-    private var pairedOrigin: String? = null
+    /** Live handshake results, keyed by the session that produced them. */
+    private var agentCapabilities: Map<String, AgentCapabilityInventory?> = emptyMap()
+    private var liveSessions: List<SessionListItem> = emptyList()
+    private var savedConnections: List<SavedConnection> = emptyList()
+    private var activeOrigin: String? = null
     private var metadataLoaded = false
     private val unreachableOrigins = mutableSetOf<String>()
     private val refreshMutex = Mutex()
@@ -170,7 +172,6 @@ class ChatViewModel @Inject constructor(
     private val titlePulledSessionIds = mutableSetOf<String>()
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
-    private var pendingCreateInFlight = false
     private var changesBadgeJob: Job? = null
     private var changesBadgeKey: String? = null
     private var pendingModelApply: PendingModelApply? = null
@@ -205,24 +206,41 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             sessionRepository.observeSessions().collect { sessions ->
-                cachedSessions = sessions
+                liveSessions = sessions
                 if (metadataLoaded) {
-                    publishCachedSessions()
+                    publishLiveSessions()
                 }
             }
         }
 
         viewModelScope.launch {
             sessionOwner.connectionState.collect { state ->
-                val banner = when (val status = state.status) {
-                    ConnectionStatus.Idle -> null
-                    ConnectionStatus.Connecting -> "Connecting…"
-                    ConnectionStatus.Live -> null
-                    is ConnectionStatus.Reconnecting -> "Reconnecting (attempt ${status.attempt})"
-                    is ConnectionStatus.AuthFailed -> "Auth failed"
-                    is ConnectionStatus.TransportError -> status.message
+                val status = state.status
+                val banner = when (status) {
+                    StreamStatus.Idle -> null
+                    StreamStatus.Connecting -> "Connecting…"
+                    StreamStatus.Live -> null
+                    is StreamStatus.Reconnecting -> "Reconnecting (attempt ${status.attempt})"
+                    is StreamStatus.AuthFailed -> "Auth failed"
+                    is StreamStatus.TransportError -> status.message
                 }
-                _uiState.update { current -> current.copy(connectionBanner = banner) }
+                val connectionInProgress =
+                    status is StreamStatus.Connecting || status is StreamStatus.Reconnecting
+                _uiState.update { current ->
+                    current.copy(
+                        connectionBanner = banner,
+                        connectionInProgress = connectionInProgress,
+                    )
+                }
+                if (state.status is StreamStatus.Live) {
+                    refreshLiveCapabilities()
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            sessionOwner.sessionStatus.collect { status ->
+                _uiState.update { current -> current.copy(sessionStatus = status) }
             }
         }
 
@@ -249,12 +267,12 @@ class ChatViewModel @Inject constructor(
                 if (!settled.isModel) return@collect
                 val model = (settled.value as? ConfigValue.Text)?.value ?: return@collect
                 sessionPreferences.saveLastModel(
-                    serverOrigin = settled.serverOrigin,
+                    connectionId = settled.connectionId,
                     agentId = settled.agentId,
                     model = model,
                 )
                 finishModelSync(
-                    modelSyncKey(settled.serverOrigin, settled.agentId, settled.sessionId),
+                    modelSyncKey(settled.connectionId, settled.agentId, settled.sessionId),
                 )
             }
         }
@@ -266,17 +284,17 @@ class ChatViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            sessionGateway.pairedState.collect { paired ->
-                if (paired is PairedState.Paired) {
-                    sessionForegroundCoordinator?.setServerOrigin(
-                        selectedSessionOrigin() ?: paired.serverOrigin,
+            connectionGateway.activeConnection.collect { active ->
+                if (active is ActiveConnectionState.Active) {
+                    sessionForegroundCoordinator?.setConnectionId(
+                        selectedSessionOrigin() ?: active.connectionId,
                     )
                     _uiState.value.selectedSession?.let { selected ->
                         sessionOwner.watch(selected.agentId, selected.sessionId)
                     }
                     refreshCatalog()
                 } else {
-                    sessionForegroundCoordinator?.setServerOrigin(null)
+                    sessionForegroundCoordinator?.setConnectionId(null)
                     sessionOwner.watch(null, null)
                     _uiState.update { current ->
                         current.copy(
@@ -306,7 +324,7 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        haroldConnections?.let { connections ->
+        connections?.let { connections ->
             viewModelScope.launch {
                 connections.connections.collect(::onHaroldLinks)
             }
@@ -330,8 +348,8 @@ class ChatViewModel @Inject constructor(
     fun onResume() {
         sessionOwner.onForeground()
         refreshChangesBadge()
-        val origin = selectedOrPairedOrigin() ?: return
-        sessionForegroundCoordinator?.setServerOrigin(origin)
+        val origin = selectedOrActiveOrigin() ?: return
+        sessionForegroundCoordinator?.setConnectionId(origin)
         viewModelScope.launch {
             refreshCatalog()
         }
@@ -343,7 +361,7 @@ class ChatViewModel @Inject constructor(
 
     private fun refreshChangesBadge() {
         val selected = _uiState.value.selectedSession
-        val origin = selectedOrPairedOrigin()
+        val origin = selectedOrActiveOrigin()
         val path = selected?.worktreePath ?: selected?.cwd.orEmpty()
         if (
             selected == null ||
@@ -362,7 +380,7 @@ class ChatViewModel @Inject constructor(
         changesBadgeKey = key
         changesBadgeJob?.cancel()
         changesBadgeJob = viewModelScope.launch {
-            val result = gitApi.getSummary(serverOrigin = origin, path = path)
+            val result = gitApi.getSummary(connectionId = origin, path = path)
             if (changesBadgeKey != key) {
                 return@launch
             }
@@ -590,10 +608,10 @@ class ChatViewModel @Inject constructor(
     private suspend fun openCreatedSession(created: SessionCommand.Created) {
         rememberCreatedConfig(created.response)
         val row = created.response.toSession().toSessionRow(workspaceByPath, agentLabels).copy(
-            serverOrigin = created.serverOrigin,
-            haroldName = created.haroldName,
-            haroldColorId = created.haroldColorId,
-            haroldIconId = created.haroldIconId,
+            connectionId = created.connectionId,
+            connectionName = created.connectionName,
+            connectionColorId = created.connectionColorId,
+            connectionIconId = created.connectionIconId,
         )
         markModelApplyPending(row)
         activateSession(row)
@@ -623,48 +641,6 @@ class ChatViewModel @Inject constructor(
         syncActiveSessionsFromUiState()
         agentAuth.hydrate(agentId)
         clearChangesBadge()
-    }
-
-    private fun createPendingSessionAfterLogin(agentId: AgentId, status: AgentAuthStatus) {
-        val pending = _uiState.value.selectedSession ?: return
-        if (
-            status != AgentAuthStatus.Authenticated ||
-            pending.sessionId.isNotEmpty() ||
-            pending.agentId != agentId ||
-            pendingCreateInFlight
-        ) {
-            return
-        }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        val origin = pending.serverOrigin.ifEmpty { paired?.serverOrigin } ?: return
-
-        pendingCreateInFlight = true
-        viewModelScope.launch {
-            sessionRepository.createSession(
-                serverOrigin = origin,
-                body = CreateSessionBody(agentId = agentId, cwd = pending.cwd),
-            ).fold(
-                onSuccess = { created ->
-                    if (_uiState.value.selectedSession == pending) {
-                        openCreatedSession(
-                            SessionCommand.Created(
-                                response = created,
-                                serverOrigin = origin,
-                                haroldName = pending.haroldName,
-                                haroldColorId = pending.haroldColorId,
-                                haroldIconId = pending.haroldIconId,
-                            ),
-                        )
-                    } else {
-                        refreshCatalog()
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update { current -> current.copy(composerError = apiErrorMessage(error)) }
-                },
-            )
-            pendingCreateInFlight = false
-        }
     }
 
     fun submitComposerPrompt() {
@@ -713,7 +689,7 @@ class ChatViewModel @Inject constructor(
 
     /** Picker intake: bytes are read by the screen, previews decode off-main. */
     fun onAttachmentsPicked(files: List<AttachmentPick>) {
-        val origin = selectedOrPairedOrigin() ?: return
+        val origin = selectedOrActiveOrigin() ?: return
         if (files.isEmpty()) {
             return
         }
@@ -765,10 +741,10 @@ class ChatViewModel @Inject constructor(
         }
         if (attachment.status == AttachmentUploadStatus.Ready && attachment.uploadedId != null) {
             viewModelScope.launch {
-                val origin = selectedOrPairedOrigin() ?: return@launch
+                val origin = selectedOrActiveOrigin() ?: return@launch
                 val session = _uiState.value.selectedSession ?: return@launch
                 attachmentApi.deleteAttachment(
-                    serverOrigin = origin,
+                    connectionId = origin,
                     agentId = session.agentId,
                     sessionId = session.sessionId,
                     attachmentId = attachment.uploadedId,
@@ -782,7 +758,7 @@ class ChatViewModel @Inject constructor(
         if (attachment.status != AttachmentUploadStatus.Failed) {
             return
         }
-        val origin = selectedOrPairedOrigin() ?: return
+        val origin = selectedOrActiveOrigin() ?: return
         _uiState.update { current ->
             current.copy(
                 pendingAttachments = current.pendingAttachments.map { existing ->
@@ -797,14 +773,14 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { uploadAttachment(origin, attachment) }
     }
 
-    private suspend fun uploadAttachment(serverOrigin: String, attachment: PendingAttachmentUi) {
+    private suspend fun uploadAttachment(connectionId: String, attachment: PendingAttachmentUi) {
         val session = _uiState.value.selectedSession?.takeIf { it.sessionId.isNotEmpty() }
         if (session == null) {
             failAttachment(attachment.localId, "No session selected")
             return
         }
         val result = attachmentApi.uploadAttachment(
-            serverOrigin = serverOrigin,
+            connectionId = connectionId,
             request = AttachmentUploadRequest(
                 agentId = session.agentId,
                 sessionId = session.sessionId,
@@ -852,12 +828,51 @@ class ChatViewModel @Inject constructor(
 
     private fun syncAttachmentGating() {
         val session = _uiState.value.selectedSession
-        val inventory = session?.agentId?.let { agentId -> agentCapabilities[agentId] }
+        val inventory = session?.let { current ->
+            agentCapabilities[catalogSessionKey(current.agentId, current.sessionId)]
+        }
         _uiState.update { current ->
             current.copy(
                 supportsImageAttachments = supportsImageAttachments(inventory),
                 supportsFileAttachments = supportsFileAttachments(inventory),
             )
+        }
+    }
+
+    /**
+     * Reads the live handshake of the selected session. Null until the agent
+     * answered `initialize`, so the composer stays text-only until then, and
+     * nothing about capabilities is persisted.
+     */
+    private fun refreshLiveCapabilities() {
+        val selected = _uiState.value.selectedSession ?: return
+        val connectionId = selected.connectionId.takeIf { it.isNotEmpty() } ?: return
+        viewModelScope.launch {
+            userRepository.getAgentCapabilities(
+                connectionId = connectionId,
+                agentId = selected.agentId,
+                sessionId = selected.sessionId,
+            ).onSuccess { inventory ->
+                val key = catalogSessionKey(selected.agentId, selected.sessionId)
+                agentCapabilities = agentCapabilities + (key to inventory)
+                syncAttachmentGating()
+            }
+        }
+    }
+
+    fun restartAgentAuth() {
+        selectedOrActiveOrigin()?.let { origin ->
+            _uiState.value.selectedSession?.agentId?.let { agentId ->
+                agentAuth.restart(agentId)
+            }
+        }
+    }
+
+    fun logoutAgentAuth() {
+        selectedOrActiveOrigin()?.let { origin ->
+            _uiState.value.selectedSession?.agentId?.let { agentId ->
+                agentAuth.logout(agentId)
+            }
         }
     }
 
@@ -1207,61 +1222,38 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun onAuthSignIn() {
-        val session = _uiState.value.selectedSession ?: return
-        agentAuth.signIn(session.agentId)
-    }
-
-    fun onAuthConfirm(stepId: String) {
-        val selected = _uiState.value.selectedSession ?: return
-        agentAuth.confirm(selected.agentId, stepId)
-    }
-
-    fun onAuthCancel() {
-        val selected = _uiState.value.selectedSession ?: return
-        agentAuth.cancel(selected.agentId)
-    }
-
-    fun onAuthLogout() {
-        val selected = _uiState.value.selectedSession ?: return
-        agentAuth.logout(selected.agentId)
-    }
-
     fun disconnectFromServer() {
         viewModelScope.launch {
-            val selectedOrigin = _uiState.value.selectedSession?.serverOrigin?.takeIf { it.isNotEmpty() }
-            val saved = savedHaroldRepository.list()
+            val selectedOrigin = _uiState.value.selectedSession?.connectionId?.takeIf { it.isNotEmpty() }
+            val saved = connectionRepository.list()
             val targetSaved = if (selectedOrigin != null) {
-                saved.find { harold -> harold.serverOrigin == selectedOrigin }
+                saved.find { connection -> connection.connectionId == selectedOrigin }
             } else {
                 null
             }
-            val paired = sessionGateway.pairedState.value as? PairedState.Paired
-            val originToRemove = targetSaved?.serverOrigin ?: paired?.serverOrigin
-            val deviceIdToRemove = targetSaved?.deviceId ?: paired?.deviceId
+            val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+            val originToRemove = targetSaved?.connectionId ?: active?.connectionId
 
-            if (originToRemove != null && deviceIdToRemove != null) {
-                val remains = forgetSavedHarold(
-                    serverOrigin = originToRemove,
-                    deviceId = deviceIdToRemove,
-                    revoke = userRepository::revokeDevice,
-                    repository = savedHaroldRepository,
+            if (originToRemove != null) {
+                val remains = forgetConnection(
+                    connectionId = originToRemove,
+                    repository = connectionRepository,
                 )
                 settleAfterForget(
-                    removedOrigin = originToRemove,
+                    removedConnectionId = originToRemove,
                     remains = remains,
-                    gateway = sessionGateway,
+                    gateway = connectionGateway,
                     disconnect = sessionOwner::disconnect,
                     connect = sessionOwner::connect,
-                    showPairing = {
+                    showConnectionSetup = {
                         navigator.showShell()
-                        navigator.openPairing()
+                        navigator.openAddConnection()
                     },
                 )
                 clearPersistedSession()
                 _uiState.update { current ->
                     current.copy(
-                        selectedSession = if (current.selectedSession?.serverOrigin == originToRemove) {
+                        selectedSession = if (current.selectedSession?.connectionId == originToRemove) {
                             null
                         } else {
                             current.selectedSession
@@ -1278,7 +1270,7 @@ class ChatViewModel @Inject constructor(
                 }
             } else {
                 navigator.showShell()
-                navigator.openPairing()
+                navigator.openAddConnection()
                 clearPersistedSession()
                 _uiState.update { current ->
                     current.copy(
@@ -1313,7 +1305,7 @@ class ChatViewModel @Inject constructor(
                 rowId = current.id,
                 sessionId = current.sessionId,
                 sessionName = current.name,
-                haroldIconId = current.haroldIconId,
+                connectionIconId = current.connectionIconId,
                 request = request,
                 elicitation = elicitation,
             ),
@@ -1322,8 +1314,8 @@ class ChatViewModel @Inject constructor(
             userInputNotification(
                 sessionId = current.id,
                 sessionName = current.name,
-                haroldName = current.haroldName,
-                haroldIconId = current.haroldIconId,
+                connectionName = current.connectionName,
+                connectionIconId = current.connectionIconId,
                 kind = kind,
             ),
         )
@@ -1360,10 +1352,18 @@ class ChatViewModel @Inject constructor(
                 if (item.id == row.id) item.copy(needsAttention = false) else item
             }
         }
-        val remembered = if (row.haroldReachable) {
-            emptyAcpTranscript
-        } else {
-            transcriptMemory[row.id] ?: emptyAcpTranscript
+        val remembered = when {
+            // The owner still holds this session's live stream and its
+            // transcript; wiping here would blank the chat with no replay to
+            // refill it, because watch() keeps the stream for the same
+            // target.
+            row.connectionReachable &&
+                watchedOrigin == row.connectionId &&
+                sessionOwner.watchTarget == WatchTarget(row.agentId, row.sessionId) ->
+                _uiState.value.transcript
+
+            !row.connectionReachable -> transcriptMemory[row.id] ?: emptyAcpTranscript
+            else -> emptyAcpTranscript
         }
         _uiState.update { current ->
             current.resetSessionScopedState(
@@ -1391,7 +1391,7 @@ class ChatViewModel @Inject constructor(
         val previousState = _uiState.value.effectiveSessionState
         if (
             selected != null &&
-            !selected.haroldReachable &&
+            !selected.connectionReachable &&
             snapshot.sessionId != selected.sessionId
         ) {
             return
@@ -1408,13 +1408,16 @@ class ChatViewModel @Inject constructor(
         agentAuth.absorbStream(snapshot.agentId, snapshot.agentAuth)
 
         configWriter.onSnapshot(
-            serverOrigin = selectedSessionOrigin()
-                ?: (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin,
+            connectionId = selectedSessionOrigin()
+                ?: (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId,
             agentId = snapshot.agentId,
             sessionId = snapshot.sessionId,
             configOptions = snapshot.configOptions,
+            live = snapshot.transcript.live,
         )
-        applyRememberedModelIfPossible()
+        if (snapshot.transcript.live) {
+            applyRememberedModelIfPossible()
+        }
 
         _uiState.update { current ->
             val extension = snapshot.extension
@@ -1500,7 +1503,7 @@ class ChatViewModel @Inject constructor(
             val agentId = snapshot.agentId
             if (agentId != null) {
                 viewModelScope.launch {
-                    agentAuth.hydrate(agentId, autoStartLogin = true)
+                    agentAuth.hydrate(agentId)
                 }
             }
         }
@@ -1527,7 +1530,7 @@ class ChatViewModel @Inject constructor(
         ) {
             return
         }
-        val origin = open.serverOrigin.ifEmpty { pairedOrigin.orEmpty() }
+        val origin = open.connectionId.ifEmpty { activeOrigin.orEmpty() }
         if (origin.isEmpty() || open.sessionId.isEmpty()) {
             return
         }
@@ -1542,7 +1545,7 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch {
             sessionRepository.updateWorktreePath(
-                serverOrigin = origin,
+                connectionId = origin,
                 agentId = open.agentId,
                 sessionId = open.sessionId,
                 worktreePath = snapshot.worktreePath,
@@ -1570,17 +1573,20 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Session/list is the only title source for agents that never push
-     * session_info_update. Pull it once per session when a turn completes and
-     * the header still shows the raw ACP session id.
+     * `session/list` is the only title source for agents that never push
+     * `session_info_update`. Pull it once per session when a turn completes
+     * and the header still shows a placeholder.
      */
     private suspend fun pullSelectedSessionTitle() {
         val selected = _uiState.value.selectedSession ?: return
-        if (selected.sessionId.isEmpty() || selected.name != selected.sessionId) {
+        val placeholderName = selected.name.isBlank() ||
+            selected.name == selected.sessionId ||
+            selected.name == NEW_SESSION_NAME
+        if (selected.sessionId.isEmpty() || !placeholderName) {
             return
         }
-        val origin = selected.serverOrigin.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        val origin = selected.connectionId.ifEmpty {
+            (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
         }
         if (origin.isEmpty()) {
             return
@@ -1625,7 +1631,7 @@ class ChatViewModel @Inject constructor(
     private fun titleFor(row: SessionRow, titles: Map<String, String>): String? {
         titles[row.id]?.let { title -> return title }
         val key = catalogSessionKey(row.agentId, row.sessionId)
-        if (row.serverOrigin.isNotEmpty() && watchedOrigin != null && row.serverOrigin != watchedOrigin) {
+        if (row.connectionId.isNotEmpty() && watchedOrigin != null && row.connectionId != watchedOrigin) {
             return null
         }
         return titles[key]
@@ -1642,35 +1648,36 @@ class ChatViewModel @Inject constructor(
             sessionOwner.watch(null, null)
             return
         }
-        if (selected.serverOrigin.isNotEmpty()) {
-            watchedOrigin = selected.serverOrigin
-            sessionOwner.connect(selected.serverOrigin)
+        if (selected.connectionId.isNotEmpty()) {
+            watchedOrigin = selected.connectionId
+            sessionOwner.connect(selected.connectionId)
         }
         sessionOwner.watch(selected.agentId, selected.sessionId)
+        refreshLiveCapabilities()
     }
 
-    private fun onHaroldLinks(links: List<HaroldConnection>) {
-        val byOrigin = links.associateBy { link -> link.serverOrigin }
+    private fun onHaroldLinks(links: List<ConnectionHealth>) {
+        val byOrigin = links.associateBy { link -> link.connectionId }
         fun reachableFor(row: SessionRow): Boolean {
-            val link = byOrigin[row.serverOrigin] ?: return row.haroldReachable
+            val link = byOrigin[row.connectionId] ?: return row.connectionReachable
             return when (link.status) {
-                HaroldConnectionStatus.Connected -> true
-                HaroldConnectionStatus.Unreachable -> false
+                ConnectionStatus.Connected -> true
+                ConnectionStatus.Unreachable -> false
                 // Closed means the link was parked, for example while the
                 // photo picker had the app in the background. It is not a
                 // reachability failure. Keep the last state until the link
                 // reconnects, so a selected session stays watched.
-                HaroldConnectionStatus.Closed,
-                HaroldConnectionStatus.Connecting,
-                -> row.haroldReachable
+                ConnectionStatus.Closed,
+                ConnectionStatus.Connecting,
+                -> row.connectionReachable
             }
         }
         catalog = catalog.map { row ->
             val reachable = reachableFor(row)
-            if (reachable == row.haroldReachable) row else row.copy(haroldReachable = reachable)
+            if (reachable == row.connectionReachable) row else row.copy(connectionReachable = reachable)
         }
         val selected = _uiState.value.selectedSession
-        val updatedSelected = selected?.copy(haroldReachable = reachableFor(selected))
+        val updatedSelected = selected?.copy(connectionReachable = reachableFor(selected))
         _uiState.update { current ->
             current.copy(sessions = catalog, selectedSession = updatedSelected ?: current.selectedSession)
         }
@@ -1679,17 +1686,17 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun refreshCatalog() = refreshMutex.withLock {
-        loadHaroldMetadata()
-        publishCachedSessions()
+        loadConnectionMetadata()
+        publishLiveSessions()
 
         val origins = targetOrigins()
         _uiState.update { current ->
             current.copy(
                 isRefreshing = origins.isNotEmpty(),
                 sessionsError = null,
-                activeHaroldName = activeHarold()?.name.orEmpty(),
-                activeHaroldColorId = activeHarold()?.colorId.orEmpty(),
-                activeHaroldIconId = activeHarold()?.iconId.orEmpty(),
+                activeConnectionName = activeHarold()?.name.orEmpty(),
+                activeConnectionColorId = activeHarold()?.colorId.orEmpty(),
+                activeConnectionIconId = activeHarold()?.iconId.orEmpty(),
             )
         }
         if (origins.isEmpty()) {
@@ -1699,23 +1706,23 @@ class ChatViewModel @Inject constructor(
 
         var anySuccess = false
         var lastError: Throwable? = null
-        origins.forEach { serverOrigin ->
-            val refreshResult = sessionRepository.refresh(serverOrigin)
+        origins.forEach { connectionId ->
+            val refreshResult = sessionRepository.refresh(connectionId)
             refreshResult.fold(
                 onSuccess = { catalog ->
                     applyWorkspaces(catalog.workspaces)
                     applyAgents(catalog.agents)
                     anySuccess = true
-                    unreachableOrigins.remove(serverOrigin)
+                    unreachableOrigins.remove(connectionId)
                 },
                 onFailure = { error ->
                     lastError = error
-                    unreachableOrigins.add(serverOrigin)
+                    unreachableOrigins.add(connectionId)
                 },
             )
         }
 
-        publishCachedSessions()
+        publishLiveSessions()
         _uiState.update { current ->
             current.copy(
                 hasLoaded = true,
@@ -1733,23 +1740,23 @@ class ChatViewModel @Inject constructor(
         maybeRestoreLastSession()
     }
 
-    private suspend fun loadHaroldMetadata() {
-        savedHarolds = savedHaroldRepository.list()
-        pairedOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+    private suspend fun loadConnectionMetadata() {
+        savedConnections = connectionRepository.list()
+        activeOrigin = (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
         metadataLoaded = true
         unreachableOrigins.retainAll(targetOrigins().toSet())
     }
 
     private fun targetOrigins(): List<String> =
-        if (savedHarolds.isNotEmpty()) {
-            savedHarolds.map { harold -> harold.serverOrigin }.distinct()
+        if (savedConnections.isNotEmpty()) {
+            savedConnections.map { connection -> connection.connectionId }.distinct()
         } else {
-            listOfNotNull(pairedOrigin)
+            listOfNotNull(activeOrigin)
         }
 
-    private fun activeHarold(): StoredCredential? =
-        savedHarolds.firstOrNull { harold -> harold.serverOrigin == pairedOrigin }
-            ?: savedHarolds.firstOrNull()
+    private fun activeHarold(): SavedConnection? =
+        savedConnections.firstOrNull { connection -> connection.connectionId == activeOrigin }
+            ?: savedConnections.firstOrNull()
 
     private fun applyWorkspaces(workspaces: List<Workspace>?) {
         val rows = workspaces.orEmpty().map { workspace -> workspace.toWorkspaceRow() }
@@ -1764,32 +1771,30 @@ class ChatViewModel @Inject constructor(
         }
         agentLabels = agentLabels + agents.associate { agent -> agent.id to agent.displayName }
         agentAuth.mergeSummaries(agents.associate { agent -> agent.id to agent.authSummary })
-        agentCapabilities = agentCapabilities + agents.associate { agent -> agent.id to agent.capabilities }
-        syncAttachmentGating()
     }
 
     /**
-     * Paints the Room snapshot before the network refresh starts. The refresh
-     * writes to Room, and the flow collector calls this again with fresh rows.
+     * Paints the live ACP session catalog. Each agent's rows arrive as its
+     * `session/list` answer lands, so a slow agent does not hide the rest.
      */
-    private fun publishCachedSessions() {
+    private fun publishLiveSessions() {
         if (!metadataLoaded) {
             return
         }
         val origins = targetOrigins()
-        val scopedToHarold = savedHarolds.isNotEmpty()
-        val haroldByOrigin = savedHarolds.associateBy { harold -> harold.serverOrigin }
+        val scopedToHarold = savedConnections.isNotEmpty()
+        val haroldByOrigin = savedConnections.associateBy { connection -> connection.connectionId }
         val pushedTitles = sessionOwner.sessionTitles.value
-        val rows = cachedSessions
-            .filter { cached -> cached.serverOrigin in origins }
-            .map { cached ->
-                val harold = haroldByOrigin[cached.serverOrigin]
-                val row = cached.toSessionRow().copy(
-                    serverOrigin = if (scopedToHarold) cached.serverOrigin else "",
-                    haroldName = harold?.name.orEmpty(),
-                    haroldColorId = harold?.colorId.orEmpty(),
-                    haroldIconId = harold?.iconId.orEmpty(),
-                    haroldReachable = cached.serverOrigin !in unreachableOrigins,
+        val rows = liveSessions
+            .filter { listed -> listed.connectionId in origins }
+            .map { listed ->
+                val connection = haroldByOrigin[listed.connectionId]
+                val row = listed.toSessionRow().copy(
+                    connectionId = if (scopedToHarold) listed.connectionId else "",
+                    connectionName = connection?.name.orEmpty(),
+                    connectionColorId = connection?.colorId.orEmpty(),
+                    connectionIconId = connection?.iconId.orEmpty(),
+                    connectionReachable = listed.connectionId !in unreachableOrigins,
                 )
                 titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row
             }
@@ -1849,10 +1854,10 @@ class ChatViewModel @Inject constructor(
             ?: return
         if (_uiState.value.selectedSession?.id == row.id) {
             _uiState.update { current -> current.copy(selectedSession = row) }
-            if (row.haroldReachable) {
-                if (row.serverOrigin.isNotEmpty()) {
-                    watchedOrigin = row.serverOrigin
-                    sessionOwner.connect(row.serverOrigin)
+            if (row.connectionReachable) {
+                if (row.connectionId.isNotEmpty()) {
+                    watchedOrigin = row.connectionId
+                    sessionOwner.connect(row.connectionId)
                 }
                 sessionOwner.watch(row.agentId, row.sessionId)
             }
@@ -1923,18 +1928,18 @@ class ChatViewModel @Inject constructor(
                 id = row.id,
                 name = row.name,
                 state = row.state,
-                haroldIconId = row.haroldIconId.ifEmpty { null },
+                connectionIconId = row.connectionIconId.ifEmpty { null },
             )
         }
         activeSessionTracker?.let { tracker ->
             tracker.replaceAll(snapshots)
             sessionForegroundCoordinator?.onSessionsChanged()
         }
-        val fallback = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
-        catalog.groupBy { row -> row.serverOrigin.ifEmpty { fallback.orEmpty() } }
+        val fallback = (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
+        catalog.groupBy { row -> row.connectionId.ifEmpty { fallback.orEmpty() } }
             .forEach { (origin, rows) ->
                 if (origin.isNotEmpty()) {
-                    haroldConnections?.setSessionStates(origin, rows.map { row -> row.state })
+                    connections?.setSessionStates(origin, rows.map { row -> row.state })
                 }
             }
     }
@@ -1943,15 +1948,15 @@ class ChatViewModel @Inject constructor(
         if (row.workspaceId.isEmpty() || row.agentId.isEmpty()) {
             return
         }
-        val origin = row.serverOrigin.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        val origin = row.connectionId.ifEmpty {
+            (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
         }
         if (origin.isEmpty()) {
             return
         }
         sessionPreferences.saveLastSessionSelection(
             LastSessionSelection(
-                serverOrigin = origin,
+                connectionId = origin,
                 workspaceId = row.workspaceId,
                 agentId = row.agentId,
             ),
@@ -1968,8 +1973,8 @@ class ChatViewModel @Inject constructor(
             return
         }
         val pending = PendingModelApply(
-            serverOrigin = row.serverOrigin.ifEmpty {
-                (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+            connectionId = row.connectionId.ifEmpty {
+                (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
             },
             agentId = row.agentId,
             sessionId = row.sessionId,
@@ -1984,8 +1989,26 @@ class ChatViewModel @Inject constructor(
         val pending = pendingModelApply ?: return
         modelSyncTimeoutJob?.cancel()
         modelSyncTimeoutJob = viewModelScope.launch {
+            // The registry only has a session after session/load completes,
+            // and the stream cannot deliver Subscribed before that. Waiting
+            // for live closes the window where a config write hits an empty
+            // registry and shows "Open this session again".
+            val live = withTimeoutOrNull(MODEL_SYNC_LIVE_TIMEOUT_MS) {
+                sessionOwner.snapshot.first { snapshot ->
+                    snapshot.transcript.live &&
+                        snapshot.agentId == pending.agentId &&
+                        snapshot.sessionId == pending.sessionId
+                }
+            }
+            if (pendingModelApply != pending) {
+                return@launch
+            }
+            if (live == null) {
+                finishModelSync(pending.key)
+                return@launch
+            }
             val remembered = sessionPreferences.loadLastModel(
-                serverOrigin = pending.serverOrigin,
+                connectionId = pending.connectionId,
                 agentId = pending.agentId,
             )
             if (pendingModelApply != pending) {
@@ -2005,6 +2028,13 @@ class ChatViewModel @Inject constructor(
 
     private fun applyRememberedModelIfPossible() {
         val pending = pendingModelApply ?: return
+        val liveSnapshot = sessionOwner.snapshot.value
+        if (!liveSnapshot.transcript.live ||
+            liveSnapshot.agentId != pending.agentId ||
+            liveSnapshot.sessionId != pending.sessionId
+        ) {
+            return
+        }
         val selected = _uiState.value.selectedSession ?: return
         if (sessionModelKey(selected) != pending.key) {
             return
@@ -2056,8 +2086,8 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun sessionModelKey(row: SessionRow): String {
-        val origin = row.serverOrigin.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        val origin = row.connectionId.ifEmpty {
+            (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
         }
         if (origin.isEmpty() || row.sessionId.isEmpty()) {
             return ""
@@ -2076,10 +2106,10 @@ class ChatViewModel @Inject constructor(
             agentLabel = agentLabels[agentId] ?: agentId,
             state = SessionState.Idle,
             updatedAt = "",
-            serverOrigin = workspace.serverOrigin,
-            haroldName = workspace.haroldName,
-            haroldColorId = workspace.haroldColorId,
-            haroldIconId = workspace.haroldIconId,
+            connectionId = workspace.connectionId,
+            connectionName = workspace.connectionName,
+            connectionColorId = workspace.connectionColorId,
+            connectionIconId = workspace.connectionIconId,
         )
 
     /**
@@ -2106,17 +2136,18 @@ class ChatViewModel @Inject constructor(
         const val RECENT_SESSIONS_LIMIT = 5
         const val NEW_SESSION_NAME = "New session"
         const val MODEL_SYNC_TIMEOUT_MS = 3_000L
+        const val MODEL_SYNC_LIVE_TIMEOUT_MS = 30_000L
 
-        fun modelSyncKey(serverOrigin: String, agentId: AgentId, sessionId: String): String =
-            "$serverOrigin|$agentId|$sessionId"
+        fun modelSyncKey(connectionId: String, agentId: AgentId, sessionId: String): String =
+            "$connectionId|$agentId|$sessionId"
     }
 
     private data class PendingModelApply(
-        val serverOrigin: String,
+        val connectionId: String,
         val agentId: AgentId,
         val sessionId: String,
     ) {
         val key: String
-            get() = modelSyncKey(serverOrigin, agentId, sessionId)
+            get() = modelSyncKey(connectionId, agentId, sessionId)
     }
 }

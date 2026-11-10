@@ -7,29 +7,27 @@ import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.Session
 import harold.android.contracts.Workspace
 import harold.android.database.workspace.WorkspaceRepository
-import harold.android.network.AgentApi
+import harold.android.network.AcpAgentApi
+import harold.android.network.AgentSessionSnapshot
+import harold.android.network.CatalogSession
+import harold.android.network.SessionCatalogReader
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-data class CachedSession(
-    val serverOrigin: String,
+data class SessionListItem(
+    val connectionId: String,
     val session: Session,
     val workspaceId: String,
     val workspaceName: String,
     val agentLabel: String,
 )
 
-data class CachedAgent(
-    val serverOrigin: String,
-    val agentId: AgentId,
-    val displayName: String,
-    val enabled: Boolean,
-)
-
 /**
- * The live lists that a refresh read from the server. Chat uses them for
+ * The live lists that a refresh read from the network. Chat uses them for
  * transient UI state that is not part of the Room cache, such as agent auth
  * summaries and attachment capabilities.
  */
@@ -38,98 +36,123 @@ data class SessionCatalog(
     val workspaces: List<Workspace> = emptyList(),
 )
 
+/**
+ * Session rows composed from the live ACP catalog, the agent and workspace
+ * caches, and the phone-local worktree choice. Nothing here persists session
+ * history; the agent owns it.
+ */
 interface SessionRepository {
-    fun observeSessions(): Flow<List<CachedSession>>
+    fun observeSessions(): Flow<List<SessionListItem>>
 
-    fun observeSessions(serverOrigin: String): Flow<List<CachedSession>>
+    fun observeSessions(connectionId: String): Flow<List<SessionListItem>>
 
-    fun observeAgents(serverOrigin: String): Flow<List<CachedAgent>>
+    /** Per-agent snapshots, including each agent's loading and error state. */
+    fun observeSnapshots(): Flow<List<AgentSessionSnapshot>>
 
-    suspend fun refresh(serverOrigin: String): Result<SessionCatalog>
-
-    suspend fun refreshAgents(serverOrigin: String): Result<Unit>
+    suspend fun refresh(connectionId: String): Result<SessionCatalog>
 
     suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse>
 
     suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit>
 
     suspend fun updateWorktreePath(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         worktreePath: String?,
     )
 }
 
-class DefaultSessionRepository @Inject constructor(
-    private val agentApi: AgentApi,
-    private val workspaceRepository: WorkspaceRepository,
-    private val sessionDao: SessionDao,
-    private val agentDao: AgentDao,
-) : SessionRepository {
-    override fun observeSessions(): Flow<List<CachedSession>> =
-        sessionDao.observeAll().map(::cachedSessions)
+data class StoredWorktreePath(
+    val connectionId: String,
+    val agentId: AgentId,
+    val sessionId: String,
+    val worktreePath: String,
+)
 
-    override fun observeSessions(serverOrigin: String): Flow<List<CachedSession>> =
-        sessionDao.observeByOrigin(serverOrigin).map(::cachedSessions)
+/**
+ * App-local memory of the worktree a session is reviewed in. ACP knows
+ * nothing about worktrees, so this never leaves the phone.
+ */
+interface SessionWorktreePathStore {
+    fun observeWorktreePaths(): Flow<List<StoredWorktreePath>> = emptyFlow()
 
-    override fun observeAgents(serverOrigin: String): Flow<List<CachedAgent>> =
-        agentDao.observeByOrigin(serverOrigin).map { agents ->
-            agents.map { agent ->
-                CachedAgent(
-                    serverOrigin = agent.serverOrigin,
-                    agentId = agent.agentId,
-                    displayName = agent.displayName,
-                    enabled = agent.enabled,
-                )
-            }
+    fun observeWorktreePaths(connectionId: String): Flow<List<StoredWorktreePath>> = emptyFlow()
+
+    suspend fun saveWorktreePath(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ): Result<Unit>
+}
+
+class DefaultSessionWorktreePathStore @Inject constructor(
+    private val dao: SessionWorktreePathDao,
+) : SessionWorktreePathStore {
+    override fun observeWorktreePaths(): Flow<List<StoredWorktreePath>> =
+        dao.observeAll().map { rows -> rows.map(SessionWorktreePathEntity::toStored) }
+
+    override fun observeWorktreePaths(connectionId: String): Flow<List<StoredWorktreePath>> =
+        dao.observeAll().map { rows ->
+            rows.filter { row -> row.connectionId == connectionId }.map(SessionWorktreePathEntity::toStored)
         }
 
-    override suspend fun refresh(serverOrigin: String): Result<SessionCatalog> {
-        val sessionsResult = agentApi.listSessions(serverOrigin)
+    override suspend fun saveWorktreePath(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ): Result<Unit> = runCatching {
+        if (worktreePath == null) {
+            dao.delete(connectionId, agentId, sessionId)
+        } else {
+            dao.upsert(
+                SessionWorktreePathEntity(
+                    connectionId = connectionId,
+                    agentId = agentId,
+                    sessionId = sessionId,
+                    worktreePath = worktreePath,
+                ),
+            )
+        }
+    }
+}
+
+class DefaultSessionRepository @Inject constructor(
+    private val agentApi: AcpAgentApi,
+    private val agentRepository: AgentRepository,
+    private val workspaceRepository: WorkspaceRepository,
+    private val catalog: SessionCatalogReader,
+    private val worktreePaths: SessionWorktreePathStore,
+) : SessionRepository {
+    override fun observeSessions(): Flow<List<SessionListItem>> = sessionsFlow()
+
+    override fun observeSessions(connectionId: String): Flow<List<SessionListItem>> =
+        sessionsFlow().map { sessions ->
+            sessions.filter { session -> session.connectionId == connectionId }
+        }
+
+    override fun observeSnapshots(): Flow<List<AgentSessionSnapshot>> =
+        catalog.observeSnapshots()
+
+    override suspend fun refresh(connectionId: String): Result<SessionCatalog> {
+        val sessionsResult = agentApi.listSessions(connectionId)
         if (sessionsResult.isFailure) {
             return Result.failure(checkNotNull(sessionsResult.exceptionOrNull()))
         }
 
-        val agents = fetchAgents(serverOrigin).getOrNull().orEmpty()
-
-        // Workspace labels feed the session rows. Refresh the shared workspace
-        // cache when the server answers, and label from cache when it does not.
-        workspaceRepository.refresh(serverOrigin)
-        val workspaces = workspaceRepository.observe(serverOrigin).first()
+        val agents = agentRepository.refreshAgents(connectionId).getOrNull().orEmpty()
+        workspaceRepository.refresh(connectionId)
+        val workspaces = workspaceRepository.observe(connectionId).first()
             .map { cached -> cached.workspace }
-
-        val agentLabels = agentDao.agents(serverOrigin)
-            .associate { agent -> agent.agentId to agent.displayName }
-
-        val workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
-        val cachedWorkspaceByPath = sessionDao.sessions(serverOrigin).associate { session ->
-            session.cwd to WorkspaceLabels(
-                id = session.workspaceId,
-                name = session.workspaceName,
-            )
-        }
-
-        sessionDao.replaceByOrigin(
-            serverOrigin = serverOrigin,
-            sessions = sessionsResult.getOrThrow().items.map { session ->
-                val workspace = workspaceByPath[session.cwd]
-                val cachedWorkspace = cachedWorkspaceByPath[session.cwd]
-                session.toEntity(
-                    serverOrigin = serverOrigin,
-                    workspaceId = workspace?.id ?: cachedWorkspace?.id.orEmpty(),
-                    workspaceName = workspace?.name ?: cachedWorkspace?.name ?: session.cwd,
-                    agentLabel = agentLabels[session.agentId] ?: session.agentId,
-                )
-            },
-        )
         return Result.success(
             SessionCatalog(
                 agents = agents,
@@ -138,119 +161,79 @@ class DefaultSessionRepository @Inject constructor(
         )
     }
 
-    override suspend fun refreshAgents(serverOrigin: String): Result<Unit> =
-        fetchAgents(serverOrigin).map { }
-
-    private suspend fun fetchAgents(serverOrigin: String): Result<List<AgentSettings>> {
-        val result = agentApi.listAgents(serverOrigin)
-        if (result.isFailure) {
-            return Result.failure(checkNotNull(result.exceptionOrNull()))
-        }
-        val agents = result.getOrThrow().items
-        cacheAgents(serverOrigin, agents)
-        return Result.success(agents)
-    }
-
-    private suspend fun cacheAgents(
-        serverOrigin: String,
-        agents: List<AgentSettings>,
-    ) {
-        agentDao.replaceByOrigin(
-            serverOrigin = serverOrigin,
-            agents = agents.mapIndexed { position, agent ->
-                agent.toEntity(serverOrigin, position)
-            },
-        )
-    }
-
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
-    ): Result<CreateSessionResponse> =
-        agentApi.createSession(serverOrigin, body).onSuccess { created ->
-            val cachedAgent = agentDao.agents(serverOrigin)
-                .firstOrNull { agent -> agent.agentId == created.agentId }
-            val cachedWorkspace = workspaceRepository.observe(serverOrigin).first()
-                .map { workspace -> workspace.workspace }
-                .firstOrNull { workspace -> workspace.path == created.cwd }
-            val cachedSession = sessionDao.sessions(serverOrigin)
-                .firstOrNull { session -> session.cwd == created.cwd }
-            sessionDao.upsertAll(
-                listOf(
-                    created.toSession().toEntity(
-                        serverOrigin = serverOrigin,
-                        workspaceId = cachedWorkspace?.id ?: cachedSession?.workspaceId.orEmpty(),
-                        workspaceName = cachedWorkspace?.name
-                            ?: cachedSession?.workspaceName
-                            ?: created.cwd,
-                        agentLabel = cachedAgent?.displayName ?: created.agentId,
-                    ),
-                ),
-            )
-        }
+    ): Result<CreateSessionResponse> = agentApi.createSession(connectionId, body)
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
-    ): Result<Unit> = agentApi.deleteSession(serverOrigin, agentId, sessionId).onSuccess {
-        sessionDao.delete(serverOrigin, agentId, sessionId)
-    }
+    ): Result<Unit> = agentApi.deleteSession(connectionId, agentId, sessionId)
 
     override suspend fun updateWorktreePath(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         worktreePath: String?,
     ) {
-        sessionDao.updateWorktreePath(serverOrigin, agentId, sessionId, worktreePath)
+        worktreePaths.saveWorktreePath(
+            connectionId = connectionId,
+            agentId = agentId,
+            sessionId = sessionId,
+            worktreePath = worktreePath,
+        )
     }
 
-    private fun cachedSessions(entities: List<SessionEntity>): List<CachedSession> =
-        entities.map { entity ->
-            CachedSession(
-                serverOrigin = entity.serverOrigin,
-                session = entity.toSession(),
-                workspaceId = entity.workspaceId,
-                workspaceName = entity.workspaceName,
-                agentLabel = entity.agentLabel,
-            )
+    private fun sessionsFlow(): Flow<List<SessionListItem>> = combine(
+        catalog.observeSnapshots(),
+        worktreePaths.observeWorktreePaths(),
+        workspaceRepository.observe(),
+        agentRepository.observeAllAgents(),
+    ) { snapshots, worktrees, workspaces, agents ->
+        val workspaceByPath = workspaces.associate { cached ->
+            (cached.connectionId to cached.workspace.path) to cached.workspace
+        }
+        val agentByKey = agents.associate { agent ->
+            (agent.connectionId to agent.agentId) to agent
+        }
+        val worktreeByKey = worktrees.associate { path ->
+            Triple(path.connectionId, path.agentId, path.sessionId) to path.worktreePath
         }
 
-    private data class WorkspaceLabels(
-        val id: String,
-        val name: String,
-    )
+        snapshots.flatMap { snapshot ->
+            snapshot.sessions.map { session ->
+                val workspace = workspaceByPath[snapshot.connectionId to session.cwd]
+                val agent = agentByKey[snapshot.connectionId to session.agentId]
+                SessionListItem(
+                    connectionId = snapshot.connectionId,
+                    session = session.toContract(
+                        worktreePath = worktreeByKey[
+                            Triple(snapshot.connectionId, session.agentId, session.sessionId)
+                        ],
+                    ),
+                    workspaceId = workspace?.id.orEmpty(),
+                    workspaceName = workspace?.name ?: session.cwd,
+                    agentLabel = agent?.displayName ?: session.agentId,
+                )
+            }
+        }.sortedByDescending { cached -> cached.session.updatedAt }
+    }
 }
 
-private fun AgentSettings.toEntity(
-    serverOrigin: String,
-    position: Int,
-): AgentEntity = AgentEntity(
-    serverOrigin = serverOrigin,
-    agentId = id,
-    displayName = displayName,
-    available = available,
-    enabled = enabled,
-    path = path,
-    position = position,
+private fun SessionWorktreePathEntity.toStored(): StoredWorktreePath = StoredWorktreePath(
+    connectionId = connectionId,
+    agentId = agentId,
+    sessionId = sessionId,
+    worktreePath = worktreePath,
 )
 
-private fun Session.toEntity(
-    serverOrigin: String,
-    workspaceId: String,
-    workspaceName: String,
-    agentLabel: String,
-): SessionEntity = SessionEntity(
-    serverOrigin = serverOrigin,
+private fun CatalogSession.toContract(worktreePath: String?): Session = Session(
     agentId = agentId,
     sessionId = sessionId,
     cwd = cwd,
     title = title,
     updatedAt = updatedAt,
-    workspaceId = workspaceId,
-    workspaceName = workspaceName,
-    agentLabel = agentLabel,
     worktreePath = worktreePath,
 )
-

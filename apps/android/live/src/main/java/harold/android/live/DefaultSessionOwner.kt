@@ -12,16 +12,22 @@ import harold.android.contracts.parseConfigOptions
 import harold.android.di.ApplicationScope
 import harold.android.live.composer.AvailableCommandsCatalog
 import harold.android.live.composer.SessionConfigCatalog
+import harold.android.network.AgentApiError
+import harold.android.network.AgentApiException
+import harold.android.network.PromptResult
 import harold.android.network.SessionCommandApi
 import harold.android.stream.ConnectionSignal
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 import harold.android.stream.DisconnectCause
 import harold.android.stream.ReconnectPolicy
+import harold.android.stream.SessionStatus
 import harold.android.stream.SessionStream
 import harold.android.stream.SessionStreamFactory
 import harold.android.stream.SessionStreamHandlers
 import harold.android.stream.reduce
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +70,9 @@ class DefaultSessionOwner @Inject constructor(
     private val _snapshot = MutableStateFlow(SessionSnapshot())
     override val snapshot: StateFlow<SessionSnapshot> = _snapshot.asStateFlow()
 
+    private val _sessionStatus = MutableStateFlow(SessionStatus.Ready)
+    override val sessionStatus: StateFlow<SessionStatus> = _sessionStatus.asStateFlow()
+
     private val _sessionTitles = MutableStateFlow<Map<String, String>>(emptyMap())
     override val sessionTitles: StateFlow<Map<String, String>> = _sessionTitles.asStateFlow()
 
@@ -78,12 +87,19 @@ class DefaultSessionOwner @Inject constructor(
     private var pump: Job? = null
 
     private var loop: Job? = null
-    private var serverOrigin: String? = null
+    private var connectionId: String? = null
 
     @Volatile
     private var stream: SessionStream? = null
     private var watchAgentId: AgentId? = null
     private var watchSessionId: String? = null
+
+    override val watchTarget: WatchTarget?
+        get() = synchronized(lock) {
+            val sessionId = watchSessionId ?: return null
+            val agentId = watchAgentId ?: return null
+            WatchTarget(agentId = agentId, sessionId = sessionId)
+        }
     private var pendingPrompt: String? = null
     private var turnSerial: Int = 0
 
@@ -124,8 +140,6 @@ class DefaultSessionOwner @Inject constructor(
         data object ResumeProbe : LoopWake
     }
 
-    private data class WatchTarget(val agentId: AgentId, val sessionId: String)
-
     private fun currentWatchTarget(): WatchTarget? {
         synchronized(lock) {
             val agentId = watchAgentId ?: return null
@@ -134,8 +148,8 @@ class DefaultSessionOwner @Inject constructor(
         }
     }
 
-    override fun connect(serverOrigin: String) {
-        if (this.serverOrigin == serverOrigin && loop?.isActive == true) {
+    override fun connect(connectionId: String) {
+        if (this.connectionId == connectionId && loop?.isActive == true) {
             // Already connecting/live/reconnecting toward this server: tearing
             // the loop down would kill a healthy stream. `retry()` only lands
             // here when the loop has stopped (AuthFailed/TransportError).
@@ -145,9 +159,9 @@ class DefaultSessionOwner @Inject constructor(
             return
         }
 
-        val movedServer = this.serverOrigin?.let { it != serverOrigin } ?: false
+        val movedServer = this.connectionId?.let { it != connectionId } ?: false
 
-        this.serverOrigin = serverOrigin
+        this.connectionId = connectionId
         loop?.cancel()
         stream?.close()
         stream = null
@@ -164,11 +178,11 @@ class DefaultSessionOwner @Inject constructor(
         synchronized(lock) {
             ensurePumpLocked()
         }
-        loop = scope.launch { run(serverOrigin) }
+        loop = scope.launch { run(connectionId) }
     }
 
     override fun retry() {
-        val origin = serverOrigin ?: return
+        val origin = connectionId ?: return
 
         connect(origin)
     }
@@ -194,7 +208,8 @@ class DefaultSessionOwner @Inject constructor(
             _sessionTitles.value = emptyMap()
             _snapshot.value = SessionSnapshot()
         }
-        _connectionState.update { current -> current.copy(status = ConnectionStatus.Idle) }
+        _connectionState.update { current -> current.copy(status = StreamStatus.Idle) }
+        _sessionStatus.value = SessionStatus.Offline
     }
 
     override fun watch(agentId: AgentId?, sessionId: String?) {
@@ -223,7 +238,8 @@ class DefaultSessionOwner @Inject constructor(
         stream?.close()
         stream = null
         backgroundFrameMark = null
-        _connectionState.update { current -> current.copy(status = ConnectionStatus.Idle) }
+        _connectionState.update { current -> current.copy(status = StreamStatus.Idle) }
+        _sessionStatus.value = SessionStatus.Offline
     }
 
     override fun onBackground() {
@@ -251,7 +267,7 @@ class DefaultSessionOwner @Inject constructor(
             }
         }
 
-        if (_connectionState.value.status is ConnectionStatus.Reconnecting) {
+        if (_connectionState.value.status is StreamStatus.Reconnecting) {
             // The stream already died and the loop is backing off. Skip the
             // remaining delay: the phone is in the user's hands.
             streamProbes.trySend(Unit)
@@ -268,7 +284,7 @@ class DefaultSessionOwner @Inject constructor(
                 ?: return Result.failure(IllegalStateException("No session is being watched"))
             val targetSession = watchSessionId
                 ?: return Result.failure(IllegalStateException("No session is being watched"))
-            val targetOrigin = serverOrigin
+            val targetOrigin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             agentId = targetAgent
             sessionId = targetSession
@@ -294,7 +310,9 @@ class DefaultSessionOwner @Inject constructor(
             // Held until `subscribed`; the flush posts it on the command API.
             return Result.success(Unit)
         }
-        return commandApi.prompt(origin, agentId, sessionId, PromptRequestBody(text, attachments))
+        return promptOutcome(
+            commandApi.prompt(origin, agentId, sessionId, PromptRequestBody(text, attachments)),
+        )
     }
 
     override suspend fun cancel(): Result<Unit> {
@@ -302,7 +320,7 @@ class DefaultSessionOwner @Inject constructor(
         val sessionId: String
         val origin: String
         synchronized(lock) {
-            origin = serverOrigin
+            origin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             agentId = watchAgentId
                 ?: return Result.failure(IllegalStateException("No session is being watched"))
@@ -315,7 +333,7 @@ class DefaultSessionOwner @Inject constructor(
     override suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> {
         val origin: String
         synchronized(lock) {
-            origin = serverOrigin
+            origin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             _snapshot.update { current ->
                 current.copy(
@@ -330,7 +348,7 @@ class DefaultSessionOwner @Inject constructor(
     override suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit> {
         val origin: String
         synchronized(lock) {
-            origin = serverOrigin
+            origin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             _snapshot.update { current ->
                 current.copy(extension = null)
@@ -341,7 +359,7 @@ class DefaultSessionOwner @Inject constructor(
 
     override suspend fun replyElicitation(requestId: String, result: JsonElement): Result<Unit> {
         val origin = synchronized(lock) {
-            serverOrigin ?: return Result.failure(
+            connectionId ?: return Result.failure(
                 IllegalStateException("Not connected to a server"),
             )
         }
@@ -379,21 +397,29 @@ class DefaultSessionOwner @Inject constructor(
         }
     }
 
-    private suspend fun run(serverOrigin: String) {
+    private suspend fun run(connectionId: String) {
         var reconnect = false
+        var lastTarget: WatchTarget? = null
+        val attachFailures = AtomicInteger(0)
 
         while (currentCoroutineContext().isActive) {
             val target = currentWatchTarget()
+            if (target != lastTarget) {
+                lastTarget = target
+                attachFailures.set(0)
+            }
             if (target == null) {
                 // The events URL carries the session, so there is no stream
                 // to open until something is watched. Park idle instead of
                 // claiming a connection attempt that cannot start.
                 applyConnection(ConnectionSignal.Idle)
+                _sessionStatus.value = SessionStatus.Offline
                 watchChanges.receive()
                 continue
             }
 
             applyConnection(ConnectionSignal.ConnectRequested)
+            _sessionStatus.value = SessionStatus.Starting
 
             val (resumeFrom, streamInbox) = synchronized(lock) {
                 // Drop frames from the previous stream that the pump has not
@@ -419,8 +445,9 @@ class DefaultSessionOwner @Inject constructor(
             }
 
             val closed = CompletableDeferred<DisconnectCause>()
+            val opened = AtomicBoolean(false)
             val active = streamFactory.open(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 agentId = target.agentId,
                 sessionId = target.sessionId,
                 lastEventId = resumeFrom,
@@ -428,11 +455,28 @@ class DefaultSessionOwner @Inject constructor(
                     onMessage = { message, cursor ->
                         enqueueFrame(streamInbox, message, cursor)
                     },
-                    onOpen = { applyConnection(ConnectionSignal.Connected) },
+                    onOpen = {
+                        opened.set(true)
+                        attachFailures.set(0)
+                        applyConnection(ConnectionSignal.Connected)
+                    },
                     onDisconnect = { cause -> closed.complete(cause) },
                 ),
             )
+            if (!currentCoroutineContext().isActive) {
+                // closeForBackground/connect cancelled the loop while the
+                // stream was opening. It must not outlive this iteration.
+                active.close()
+                return
+            }
             stream = active
+            val statusJob = scope.launch {
+                active.status.collect { next ->
+                    if (stream === active) {
+                        _sessionStatus.value = next
+                    }
+                }
+            }
 
             // Wait for a disconnect, a watch change, or a resume probe; a
             // stale watch notification (the loop already reopened for the new
@@ -462,10 +506,31 @@ class DefaultSessionOwner @Inject constructor(
                     continue
                 }
 
-                applyConnection(ConnectionSignal.Disconnected(requireNotNull(disconnectCause)))
+                val cause = requireNotNull(disconnectCause)
+                applyConnection(ConnectionSignal.Disconnected(cause))
+                val exhaustedAttachRetries = cause is DisconnectCause.Retryable &&
+                    !opened.get() &&
+                    attachFailures.incrementAndGet() >= MAX_PRE_LIVE_ATTEMPTS
+                _sessionStatus.value = when {
+                    exhaustedAttachRetries -> SessionStatus.Error
+                    cause is DisconnectCause.Unauthorized -> SessionStatus.AuthFailed
+                    cause is DisconnectCause.Protocol -> SessionStatus.Error
+                    else -> SessionStatus.Offline
+                }
+                if (exhaustedAttachRetries) {
+                    // Stop the reconnect loop with the actual cause instead of
+                    // retrying a failed attach until the app is killed.
+                    applyConnection(
+                        ConnectionSignal.Disconnected(
+                            DisconnectCause.Protocol(
+                                cause.message.ifBlank { "Could not open the session." },
+                            ),
+                        ),
+                    )
+                }
 
                 val status = _connectionState.value.status
-                if (status !is ConnectionStatus.Reconnecting) {
+                if (status !is StreamStatus.Reconnecting) {
                     synchronized(lock) {
                         pump?.cancel()
                         pump = null
@@ -481,8 +546,9 @@ class DefaultSessionOwner @Inject constructor(
             } finally {
                 // Runs on every exit: watch change, disconnect, terminal
                 // status, or loop cancellation mid-wait. Without it a
-                // cancelled iteration leaks the open stream (and its server
-                // side hub subscriber) until the socket dies on its own.
+                // cancelled iteration leaks the open stream (and its remote
+                // agent process) until the connection dies on its own.
+                statusJob.cancel()
                 active.close()
                 if (stream === active) {
                     stream = null
@@ -586,14 +652,16 @@ class DefaultSessionOwner @Inject constructor(
                 val queued = pendingPrompt
                 pendingPrompt = null
                 if (queued != null) {
-                    val origin = serverOrigin
+                    val origin = connectionId
                     if (origin != null) {
                         scope.launch {
-                            commandApi.prompt(
-                                origin,
-                                message.agentId,
-                                message.sessionId,
-                                PromptRequestBody(queued),
+                            promptOutcome(
+                                commandApi.prompt(
+                                    origin,
+                                    message.agentId,
+                                    message.sessionId,
+                                    PromptRequestBody(queued),
+                                ),
                             )
                         }
                     }
@@ -845,9 +913,56 @@ class DefaultSessionOwner @Inject constructor(
         _connectionState.update { current -> reduce(current, signal) }
     }
 
+    /**
+     * Turns the transport-level result into the owner's all-or-nothing
+     * contract. Interrupted is deliberately a failure: the caller must check
+     * the transcript before resending.
+     */
+    private fun promptOutcome(result: Result<PromptResult>): Result<Unit> =
+        result.fold(
+            onSuccess = { outcome ->
+                when (outcome) {
+                    PromptResult.Accepted -> Result.success(Unit)
+
+                    PromptResult.Retryable -> Result.failure(
+                        AgentApiException(
+                            AgentApiError.Unavailable("The agent is not available. Try again."),
+                        ),
+                    )
+
+                    PromptResult.Interrupted -> Result.failure(
+                        AgentApiException(
+                            AgentApiError.Problem(
+                                status = 409,
+                                title = "Turn interrupted",
+                                detail = "The agent may have received this prompt. " +
+                                    "Check the transcript before resending.",
+                            ),
+                        ),
+                    )
+
+                    is PromptResult.Failed -> Result.failure(
+                        AgentApiException(
+                            AgentApiError.Problem(
+                                status = 502,
+                                title = "Prompt failed",
+                                detail = outcome.message,
+                            ),
+                        ),
+                    )
+                }
+            },
+            onFailure = { error -> Result.failure(error) },
+        )
+
     private fun isAuthRequiredError(message: String): Boolean {
         val lower = message.lowercase()
         return lower.contains("agent authentication required") ||
             lower.contains("auth_required")
+    }
+
+    private companion object {
+        /** Pre-live retries before a failed attach becomes a terminal error. */
+        const val MAX_PRE_LIVE_ATTEMPTS = 5
     }
 }

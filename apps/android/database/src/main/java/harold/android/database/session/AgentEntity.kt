@@ -5,10 +5,10 @@ import harold.android.contracts.AgentId
 
 @Entity(
     tableName = "agents",
-    primaryKeys = ["serverOrigin", "agentId"],
+    primaryKeys = ["connectionId", "agentId"],
 )
 data class AgentEntity(
-    val serverOrigin: String,
+    val connectionId: String,
     val agentId: AgentId,
     val displayName: String,
     val available: Boolean,

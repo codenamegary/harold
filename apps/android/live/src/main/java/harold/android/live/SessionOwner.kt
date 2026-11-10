@@ -1,12 +1,15 @@
 package harold.android.live
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonElement
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
 import harold.android.stream.ConnectionState
+import harold.android.stream.SessionStatus
 
 /**
  * Process-scoped owner of the session stream. Chat reads [snapshot] and
@@ -18,6 +21,13 @@ interface SessionOwner {
     val snapshot: StateFlow<SessionSnapshot>
 
     /**
+     * Live ACP state for the watched session. Fakes that do not model status
+     * can leave the default, which keeps the composer usable.
+     */
+    val sessionStatus: StateFlow<SessionStatus>
+        get() = defaultSessionStatus
+
+    /**
      * Latest agent-pushed titles keyed by [harold.android.contracts.catalogSessionKey],
      * covering every session the stream reported a rename for. Survives watch
      * changes so session lists can follow renames.
@@ -27,11 +37,20 @@ interface SessionOwner {
     /** Emits after each prompt_complete frame for the watched session. */
     val promptCompletions: Flow<Unit>
 
-    fun connect(serverOrigin: String)
+    fun connect(connectionId: String)
 
     fun retry()
 
     fun disconnect()
+
+    /**
+     * The session the stream is pointed at, or null when nothing is watched.
+     * Same-target [watch] calls keep the live stream running, so callers can
+     * use this to tell "reselecting the open session" from "switching
+     * sessions" without duplicating the replay.
+     */
+    val watchTarget: WatchTarget?
+        get() = null
 
     /**
      * Marks the start of a background period. The next [onForeground] can
@@ -93,3 +112,6 @@ interface SessionOwner {
 
     fun forget(agentId: AgentId, sessionId: String)
 }
+
+private val defaultSessionStatus: StateFlow<SessionStatus> =
+    MutableStateFlow(SessionStatus.Ready).asStateFlow()

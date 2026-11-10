@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,7 @@ import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.LoadingSkeletonList
+import harold.android.ui.components.SwipeToDeleteListItem
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -47,9 +49,12 @@ fun WorkspacesScreen(
     uiState: WorkspacesUiState,
     onBack: () -> Unit,
     onAddClick: () -> Unit,
+    onNewSession: (Workspace) -> Unit,
+    onDeleteWorkspace: (Workspace) -> Unit,
 ) {
     val backContentDescription = stringResource(R.string.workspaces_back_content_description)
     val addContentDescription = stringResource(R.string.workspaces_add_content_description)
+    val deleteLabel = stringResource(R.string.workspaces_delete)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -97,6 +102,18 @@ fun WorkspacesScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            uiState.actionError?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .testTag("workspaces_action_error")
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                )
+            }
+
             when (val state = uiState.loadState) {
                 WorkspacesLoadState.Loading -> {
                     LoadingSkeletonList(
@@ -141,10 +158,24 @@ fun WorkspacesScreen(
                         modifier = Modifier.testTag("workspaces_list"),
                     ) {
                         items(state.workspaces, key = { workspace -> workspace.id }) { workspace ->
-                            WorkspaceCard(
-                                workspace = workspace,
-                                harold = uiState.haroldByWorkspaceId[workspace.id],
-                            )
+                            SwipeToDeleteListItem(
+                                rowTag = workspace.id,
+                                deleteLabel = deleteLabel,
+                                onDelete = { onDeleteWorkspace(workspace) },
+                                deleteActionTag = "workspace_delete_${workspace.id}",
+                                confirmationTitle = stringResource(
+                                    R.string.workspaces_delete_confirm_title,
+                                ),
+                                confirmationText = stringResource(
+                                    R.string.workspaces_delete_confirm_body,
+                                ),
+                            ) {
+                                WorkspaceCard(
+                                    workspace = workspace,
+                                    connection = uiState.connectionByWorkspaceId[workspace.id],
+                                    onNewSession = { onNewSession(workspace) },
+                                )
+                            }
                         }
                     }
                 }
@@ -156,8 +187,13 @@ fun WorkspacesScreen(
 @Composable
 private fun WorkspaceCard(
     workspace: Workspace,
-    harold: WorkspaceHaroldBadge? = null,
+    connection: WorkspaceConnectionBadge? = null,
+    onNewSession: () -> Unit,
 ) {
+    val newSessionDescription = stringResource(
+        R.string.workspaces_new_session_content_description,
+        workspace.name,
+    )
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -174,10 +210,10 @@ private fun WorkspaceCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (harold != null) {
+            if (connection != null) {
                 HaroldBadge(
-                    colorId = harold.colorId,
-                    iconId = harold.iconId,
+                    colorId = connection.colorId,
+                    iconId = connection.iconId,
                     size = 28.dp,
                 )
             }
@@ -201,6 +237,21 @@ private fun WorkspaceCard(
                 Text(
                     text = workspaceStateLabel(workspace.state),
                     style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            IconButton(
+                onClick = onNewSession,
+                enabled = workspace.state == WorkspaceState.Available,
+                modifier = Modifier
+                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                    .testTag("workspace_new_session_${workspace.id}")
+                    .semantics {
+                        contentDescription = newSessionDescription
+                    },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AddComment,
+                    contentDescription = null,
                 )
             }
         }

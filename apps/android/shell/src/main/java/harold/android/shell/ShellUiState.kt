@@ -1,19 +1,14 @@
 package harold.android.shell
 
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
-import harold.android.session.PairedState
+import harold.android.stream.StreamStatus
+import harold.android.session.ActiveConnectionState
 
 sealed interface WorkspaceProbe {
     data object Loading : WorkspaceProbe
 
     data class Loaded(
         val count: Int,
-    ) : WorkspaceProbe
-
-    /** The credential was rejected on HTTP. Same user choice as a rejected socket. */
-    data class Unauthorized(
-        val detail: String?,
     ) : WorkspaceProbe
 
     data class Failed(
@@ -23,41 +18,39 @@ sealed interface WorkspaceProbe {
 
 data class ShellUiState(
     val title: String = "Harold",
-    val status: String = "Not paired",
-    val pairEnabled: Boolean = true,
-    val pairLabel: String = "Pair",
+    val status: String = "No connections yet",
+    val addConnectionEnabled: Boolean = true,
+    val addConnectionLabel: String = "Add connection",
     val connectionStatus: String? = null,
     val workspacesSummary: String? = null,
     val streamStalled: Boolean = false,
-    val probeUnauthorized: Boolean = false,
 ) {
-    /** Either transport can stop on its own, and either one needs the same escape hatch. */
-    val retryVisible: Boolean get() = streamStalled || probeUnauthorized
+    /** A stalled connection needs the same escape hatch as any other. */
+    val retryVisible: Boolean get() = streamStalled
 }
 
-fun ShellUiState.fromPairedState(pairedState: PairedState): ShellUiState =
-    when (pairedState) {
-        PairedState.NotPaired -> copy(
-            status = "Not paired",
-            pairEnabled = true,
-            pairLabel = "Pair",
+fun ShellUiState.fromActiveConnectionState(activeConnection: ActiveConnectionState): ShellUiState =
+    when (activeConnection) {
+        ActiveConnectionState.NoConnection -> copy(
+            status = "No connections yet",
+            addConnectionEnabled = true,
+            addConnectionLabel = "Add connection",
             connectionStatus = null,
             workspacesSummary = null,
             streamStalled = false,
-            probeUnauthorized = false,
         )
 
-        is PairedState.Paired -> copy(
+        is ActiveConnectionState.Active -> copy(
             status = buildString {
-                append("Paired to ")
-                append(pairedState.serverOrigin)
-                pairedState.deviceName?.let { name ->
+                append("Connected to ")
+                append(activeConnection.connectionId)
+                activeConnection.deviceName?.let { name ->
                     append("\n")
                     append(name)
                 }
             },
-            pairEnabled = true,
-            pairLabel = "Re-pair",
+            addConnectionEnabled = true,
+            addConnectionLabel = "Change connection",
         )
     }
 
@@ -70,21 +63,20 @@ fun ShellUiState.fromConnectionState(state: ConnectionState): ShellUiState =
 fun ShellUiState.fromWorkspaceProbe(probe: WorkspaceProbe): ShellUiState =
     copy(
         workspacesSummary = probe.summary(),
-        probeUnauthorized = probe is WorkspaceProbe.Unauthorized,
     )
 
-private fun ConnectionStatus.label(): String? =
+private fun StreamStatus.label(): String? =
     when (this) {
-        ConnectionStatus.Idle -> null
-        ConnectionStatus.Connecting -> "Connecting"
-        ConnectionStatus.Live -> "Live"
-        is ConnectionStatus.Reconnecting -> "Reconnecting (attempt $attempt)"
-        is ConnectionStatus.AuthFailed -> detail?.let { "Auth failed. $it" } ?: "Auth failed"
-        is ConnectionStatus.TransportError -> "Transport error. $message"
+        StreamStatus.Idle -> null
+        StreamStatus.Connecting -> "Connecting"
+        StreamStatus.Live -> "Live"
+        is StreamStatus.Reconnecting -> "Reconnecting (attempt $attempt)"
+        is StreamStatus.AuthFailed -> detail?.let { "Auth failed. $it" } ?: "Auth failed"
+        is StreamStatus.TransportError -> "Transport error. $message"
     }
 
-private fun ConnectionStatus.hasStoppedRetrying(): Boolean =
-    this is ConnectionStatus.AuthFailed || this is ConnectionStatus.TransportError
+private fun StreamStatus.hasStoppedRetrying(): Boolean =
+    this is StreamStatus.AuthFailed || this is StreamStatus.TransportError
 
 private fun WorkspaceProbe.summary(): String =
     when (this) {
@@ -94,9 +86,6 @@ private fun WorkspaceProbe.summary(): String =
             1 -> "1 workspace"
             else -> "$count workspaces"
         }
-
-        is WorkspaceProbe.Unauthorized ->
-            "Workspaces unavailable. ${detail ?: "Not authorized"}"
 
         is WorkspaceProbe.Failed -> "Workspaces unavailable. $message"
     }

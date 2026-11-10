@@ -6,7 +6,7 @@ data class ActiveSessionSnapshot(
     val id: String,
     val name: String,
     val state: SessionState,
-    val haroldIconId: String? = null,
+    val connectionIconId: String? = null,
 )
 
 data class NotificationCopy(
@@ -87,8 +87,8 @@ fun aggregateActiveLabel(sessions: List<ActiveSessionSnapshot>): String {
 fun runningNotification(sessions: List<ActiveSessionSnapshot>): RunningNotification {
     val copy = notificationCopy(sessions)
     val active = sessions.filter { snapshot -> isUserVisibleActive(snapshot.state) }
-    val icons = active.map { snapshot -> snapshot.haroldIconId }.distinct()
-    val oneHarold = active.size == 1 || (icons.size == 1 && icons.first() != null && active.all { snapshot -> snapshot.haroldIconId != null })
+    val icons = active.map { snapshot -> snapshot.connectionIconId }.distinct()
+    val oneHarold = active.size == 1 || (icons.size == 1 && icons.first() != null && active.all { snapshot -> snapshot.connectionIconId != null })
     val largeIconId = if (oneHarold) icons.singleOrNull() else null
     return RunningNotification(
         copy = copy,
@@ -101,15 +101,15 @@ fun runningNotification(sessions: List<ActiveSessionSnapshot>): RunningNotificat
 fun userInputNotification(
     sessionId: String,
     sessionName: String,
-    haroldName: String,
-    haroldIconId: String,
+    connectionName: String,
+    connectionIconId: String,
     kind: UserInputKind,
 ): UserInputNotification {
     val text = "$sessionName · ${userInputLabel(kind)}"
     return UserInputNotification(
         title = "Harold",
         text = text,
-        largeIconId = haroldIconId,
+        largeIconId = connectionIconId,
         openSessionId = sessionId,
     )
 }
@@ -117,13 +117,13 @@ fun userInputNotification(
 fun permissionNotification(
     sessionId: String,
     sessionName: String,
-    haroldName: String,
-    haroldIconId: String,
+    connectionName: String,
+    connectionIconId: String,
 ): UserInputNotification = userInputNotification(
     sessionId = sessionId,
     sessionName = sessionName,
-    haroldName = haroldName,
-    haroldIconId = haroldIconId,
+    connectionName = connectionName,
+    connectionIconId = connectionIconId,
     kind = UserInputKind.Permission,
 )
 

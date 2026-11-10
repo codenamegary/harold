@@ -32,7 +32,7 @@ data class MarkedUserInput(
     val rowId: String,
     val sessionId: String,
     val sessionName: String,
-    val haroldIconId: String,
+    val connectionIconId: String,
     val request: PermissionRequest? = null,
     val elicitation: Elicitation? = null,
 )

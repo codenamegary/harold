@@ -8,6 +8,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":contracts"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose.ui)
     debugImplementation(libs.bundles.compose.debug)

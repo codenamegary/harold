@@ -21,7 +21,7 @@ class SessionForegroundCoordinatorTest {
             launcher = launcher,
         )
 
-        coordinator.setServerOrigin("https://example.test")
+        coordinator.setConnectionId("https://example.test")
         tracker.upsert(ActiveSessionSnapshot("s1", "One", SessionState.Running))
         coordinator.onSessionsChanged()
         advanceUntilIdle()
@@ -41,7 +41,7 @@ class SessionForegroundCoordinatorTest {
             launcher = launcher,
         )
 
-        coordinator.setServerOrigin("https://example.test")
+        coordinator.setConnectionId("https://example.test")
         tracker.upsert(ActiveSessionSnapshot("s1", "One", SessionState.Running))
         coordinator.onSessionsChanged()
         advanceUntilIdle()
@@ -60,7 +60,7 @@ class SessionForegroundCoordinatorTest {
             launcher = launcher,
         )
 
-        coordinator.setServerOrigin("https://example.test")
+        coordinator.setConnectionId("https://example.test")
         tracker.upsert(ActiveSessionSnapshot("s1", "One", SessionState.Running))
         coordinator.onSessionsChanged()
         advanceUntilIdle()
@@ -83,7 +83,7 @@ class SessionForegroundCoordinatorTest {
             launcher = launcher,
         )
 
-        coordinator.setServerOrigin("https://example.test")
+        coordinator.setConnectionId("https://example.test")
         tracker.replaceAll(
             listOf(
                 ActiveSessionSnapshot("sess_running", "Tea essay", SessionState.Running),

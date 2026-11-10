@@ -31,6 +31,15 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 uiState = uiState,
                 onBack = { navigator.goBack() },
                 onAddClick = navigator::openAddWorkspace,
+                onNewSession = { workspace ->
+                    navigator.openCreateSessionForWorkspace(
+                        connectionId = uiState.connectionByWorkspaceId[workspace.id]
+                            ?.connectionId
+                            .orEmpty(),
+                        path = workspace.path,
+                    )
+                },
+                onDeleteWorkspace = viewModel::delete,
             )
         }
         scope.entry<AddWorkspace> {
@@ -49,7 +58,7 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onCloneUrlChanged = viewModel::onCloneUrlChanged,
                 onCloneFolderNameChanged = viewModel::onCloneFolderNameChanged,
                 onSubmit = viewModel::submit,
-                onHaroldChanged = viewModel::onHaroldChanged,
+                onConnectionChanged = viewModel::onConnectionChanged,
             )
         }
     }

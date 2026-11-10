@@ -2,23 +2,19 @@ package harold.android.database.workspace
 
 import androidx.room.Room
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.PageInfo
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceSource
 import harold.android.contracts.WorkspaceState
-import harold.android.network.AgentApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -110,6 +106,43 @@ class DefaultWorkspaceRepositoryTest {
     }
 
     @Test
+    fun deleteRemovesTheCachedWorkspaceAfterTheServerAcceptsIt() = runTest {
+        api.workspaces = Result.success(
+            WorkspaceCollection(
+                items = listOf(workspace(id = "ws_01", name = "harold")),
+                page = PageInfo(limit = 100, count = 1),
+            ),
+        )
+        repository.refresh(ORIGIN)
+
+        val result = repository.delete(ORIGIN, "/tmp/ws_01")
+
+        assertTrue(result.isSuccess)
+        assertEquals(listOf("/tmp/ws_01"), api.deletedPaths)
+        assertTrue(repository.observe(ORIGIN).first().isEmpty())
+    }
+
+    @Test
+    fun deleteFailureLeavesTheCachedWorkspaceAlone() = runTest {
+        api.workspaces = Result.success(
+            WorkspaceCollection(
+                items = listOf(workspace(id = "ws_01", name = "harold")),
+                page = PageInfo(limit = 100, count = 1),
+            ),
+        )
+        repository.refresh(ORIGIN)
+        api.deleted = Result.failure(IllegalStateException("offline"))
+
+        val result = repository.delete(ORIGIN, "/tmp/ws_01")
+
+        assertTrue(result.isFailure)
+        assertEquals(
+            listOf("harold"),
+            repository.observe(ORIGIN).first().map { cached -> cached.workspace.name },
+        )
+    }
+
+    @Test
     fun createFailureDoesNotWriteToRoom() = runTest {
         api.created = Result.failure(IllegalStateException("offline"))
 
@@ -143,7 +176,7 @@ class DefaultWorkspaceRepositoryTest {
     }
 }
 
-private class WorkspaceFakeAgentApi : AgentApi {
+private class WorkspaceFakeAgentApi : harold.android.network.WorkspaceApi {
     var workspaces: Result<WorkspaceCollection> = Result.success(
         WorkspaceCollection(items = emptyList(), page = PageInfo(limit = 100, count = 0)),
     )
@@ -157,66 +190,38 @@ private class WorkspaceFakeAgentApi : AgentApi {
             lastUsedAt = "2026-08-01T00:00:00.000Z",
         ),
     )
+    var deleted: Result<Unit> = Result.success(Unit)
+    val deletedPaths = mutableListOf<String>()
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> = workspaces
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = created
 
-    override suspend fun getRuntimeSettings(serverOrigin: String) = unused<RuntimeSettingsView>()
+    override suspend fun deleteWorkspace(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> {
+        deletedPaths += path
+        return deleted
+    }
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ) = unused<FilesystemDirectoryCollection>()
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
-
-    override suspend fun listSessions(serverOrigin: String, cwd: String?) = unused<SessionCollection>()
-
-    override suspend fun listAgents(serverOrigin: String) = unused<AgentSettingsCollection>()
-
-    override suspend fun createSession(
-        serverOrigin: String,
-        body: CreateSessionBody,
-    ) = unused<CreateSessionResponse>()
-
-    override suspend fun deleteSession(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-    ) = unused<Unit>()
-
-    override suspend fun getAgentAuth(serverOrigin: String, agentId: AgentId) = unused<AgentAuth>()
-
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ) = unused<AgentAuthSession>()
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ) = unused<AgentAuthSession>()
-
-    override suspend fun logoutAgentAuth(
-        serverOrigin: String,
-        agentId: AgentId,
-    ) = unused<AgentAuthSummary>()
-
-    override suspend fun revokeDevice(serverOrigin: String, deviceId: String) = unused<Unit>()
 
     private fun <T> unused(): Result<T> = Result.failure(UnsupportedOperationException())
 }

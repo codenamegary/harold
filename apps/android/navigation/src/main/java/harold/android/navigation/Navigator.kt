@@ -16,15 +16,21 @@ import kotlinx.serialization.json.Json
 
 data class CreatedWorkspaceResult(
     val workspaceId: String,
-    val serverOrigin: String = "",
+    val connectionId: String = "",
 )
 
-private const val SAVED_STATE_KEY = "harold.navigation"
+/** A workspace row the new-session screen should select when it opens. */
+data class PreferredCreateSessionWorkspace(
+    val connectionId: String = "",
+    val path: String,
+)
+
+private const val SAVED_STATE_KEY = "connection.navigation"
 private const val BACK_STACK_KEY = "back_stack"
 private val backStackSerializer = ListSerializer(AppRoute.serializer())
 
 /**
- * Owns the back stack for the activity. An empty stack means the pairing gate
+ * Owns the back stack for the activity. An empty stack means the start route
  * has not resolved yet. The start route is chosen once. Later moves are events
  * from the screen that owns them.
  */
@@ -32,8 +38,8 @@ private val backStackSerializer = ListSerializer(AppRoute.serializer())
 class Navigator @Inject constructor() {
     val backStack: SnapshotStateList<AppRoute> = mutableStateListOf()
 
-    private var pairingQueued: Boolean = false
-    private var preferredAddWorkspaceOrigin: String? = null
+    private var preferredAddWorkspaceConnection: String? = null
+    private var preferredCreateSessionWorkspace: PreferredCreateSessionWorkspace? = null
     private val workspaceCreatedChannel = Channel<CreatedWorkspaceResult>(Channel.CONFLATED)
     val workspaceCreated: Flow<CreatedWorkspaceResult> = workspaceCreatedChannel.receiveAsFlow()
 
@@ -51,11 +57,11 @@ class Navigator @Inject constructor() {
         }
     }
 
-    fun start(paired: Boolean) {
+    fun start(hasConnection: Boolean) {
         if (backStack.isNotEmpty()) {
             return
         }
-        replaceWith(if (paired) Chat else Shell)
+        replaceWith(if (hasConnection) Chat else Shell)
     }
 
     fun showChat() {
@@ -69,15 +75,25 @@ class Navigator @Inject constructor() {
         replaceWith(Shell)
     }
 
-    fun openPairing() {
+    /** The connections list "Add connection" action opens SSH host setup. */
+    fun openAddConnection() {
         if (backStack.isEmpty()) {
-            pairingQueued = true
             return
         }
-        if (backStack.lastOrNull() == Pairing) {
+        if (backStack.lastOrNull() == SshSetup) {
             return
         }
-        backStack.add(Pairing)
+        backStack.add(SshSetup)
+    }
+
+    fun openSshSetup() {
+        if (backStack.isEmpty()) {
+            return
+        }
+        if (backStack.lastOrNull() == SshSetup) {
+            return
+        }
+        backStack.add(SshSetup)
     }
 
     fun openSessions() {
@@ -85,22 +101,37 @@ class Navigator @Inject constructor() {
     }
 
     fun openCreateSession() {
+        preferredCreateSessionWorkspace = null
         backStack.add(CreateSession)
+    }
+
+    fun openCreateSessionForWorkspace(connectionId: String, path: String) {
+        preferredCreateSessionWorkspace = PreferredCreateSessionWorkspace(
+            connectionId = connectionId,
+            path = path,
+        )
+        backStack.add(CreateSession)
+    }
+
+    fun consumePreferredCreateSessionWorkspace(): PreferredCreateSessionWorkspace? {
+        val preferred = preferredCreateSessionWorkspace
+        preferredCreateSessionWorkspace = null
+        return preferred
     }
 
     fun openWorkspaces() {
         backStack.add(Workspaces)
     }
 
-    fun openAddWorkspace(preferredServerOrigin: String = "") {
-        preferredAddWorkspaceOrigin = preferredServerOrigin.takeIf { it.isNotEmpty() }
+    fun openAddWorkspace(preferredConnectionId: String = "") {
+        preferredAddWorkspaceConnection = preferredConnectionId.takeIf { it.isNotEmpty() }
         workspaceCreatedChannel.tryReceive()
         backStack.add(AddWorkspace)
     }
 
-    fun consumePreferredAddWorkspaceOrigin(): String? {
-        val origin = preferredAddWorkspaceOrigin
-        preferredAddWorkspaceOrigin = null
+    fun consumePreferredAddWorkspaceConnection(): String? {
+        val origin = preferredAddWorkspaceConnection
+        preferredAddWorkspaceConnection = null
         return origin
     }
 
@@ -111,7 +142,7 @@ class Navigator @Inject constructor() {
     }
 
     fun openChanges(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         cwd: String,
@@ -122,7 +153,7 @@ class Navigator @Inject constructor() {
         }
         backStack.add(
             Changes(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 agentId = agentId,
                 sessionId = sessionId,
                 cwd = cwd,
@@ -132,7 +163,7 @@ class Navigator @Inject constructor() {
     }
 
     fun openFileDiff(
-        serverOrigin: String,
+        connectionId: String,
         worktreePath: String,
         scope: GitScope,
         filePath: String,
@@ -143,7 +174,7 @@ class Navigator @Inject constructor() {
         }
         backStack.add(
             FileDiff(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 worktreePath = worktreePath,
                 scope = scope,
                 filePath = filePath,
@@ -152,11 +183,25 @@ class Navigator @Inject constructor() {
         )
     }
 
-    fun openSavedHarolds() {
-        if (backStack.isEmpty() || backStack.lastOrNull() == SavedHarolds) {
+    fun openConnections() {
+        if (backStack.isEmpty() || backStack.lastOrNull() == Connections) {
             return
         }
-        backStack.add(SavedHarolds)
+        backStack.add(Connections)
+    }
+
+    fun openAgents(connectionId: String) {
+        if (backStack.isEmpty() || backStack.lastOrNull() == Agents(connectionId)) {
+            return
+        }
+        backStack.add(Agents(connectionId))
+    }
+
+    fun openConnectionSettings(connectionId: String) {
+        if (backStack.isEmpty() || backStack.lastOrNull() == ConnectionSettings(connectionId)) {
+            return
+        }
+        backStack.add(ConnectionSettings(connectionId))
     }
 
     fun goBack(): Boolean {
@@ -183,9 +228,5 @@ class Navigator @Inject constructor() {
     private fun replaceWith(root: AppRoute) {
         backStack.clear()
         backStack.add(root)
-        if (pairingQueued) {
-            pairingQueued = false
-            openPairing()
-        }
     }
 }

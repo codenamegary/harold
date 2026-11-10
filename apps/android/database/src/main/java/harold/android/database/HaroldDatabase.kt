@@ -4,24 +4,24 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import harold.android.database.session.AgentDao
 import harold.android.database.session.AgentEntity
-import harold.android.database.session.SessionDao
-import harold.android.database.session.SessionEntity
+import harold.android.database.session.SessionWorktreePathDao
+import harold.android.database.session.SessionWorktreePathEntity
 import harold.android.database.workspace.WorkspaceDao
 import harold.android.database.workspace.WorkspaceEntity
 
 @Database(
     entities = [
         WorkspaceEntity::class,
-        SessionEntity::class,
+        SessionWorktreePathEntity::class,
         AgentEntity::class,
     ],
-    version = 2,
+    version = 4,
     exportSchema = false,
 )
 abstract class HaroldDatabase : RoomDatabase() {
     abstract fun workspaceDao(): WorkspaceDao
 
-    abstract fun sessionDao(): SessionDao
+    abstract fun sessionWorktreePathDao(): SessionWorktreePathDao
 
     abstract fun agentDao(): AgentDao
 }

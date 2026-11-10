@@ -3,13 +3,13 @@ package harold.android.workspaces
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.testing.FakeCredentialStore
-import harold.android.testing.FakeSessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.testing.FakeConnectionStore
+import harold.android.testing.FakeConnectionGateway
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +45,7 @@ class WorkspacesViewModelTest {
     @Test
     fun loadsWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(),
         )
 
@@ -60,7 +60,7 @@ class WorkspacesViewModelTest {
     @Test
     fun reportsEmptyWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(workspaces = emptyList()),
         )
 
@@ -73,7 +73,7 @@ class WorkspacesViewModelTest {
     @Test
     fun reportsApiFailure() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(
                 apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
@@ -88,9 +88,9 @@ class WorkspacesViewModelTest {
 
     @Test
     fun firstCachedFrameAlreadyHasScopedIdsAndBadges() = runTest(dispatcher) {
-        val store = FakeCredentialStore()
-        store.save(storedHarold(LAPTOP, "laptop", "tide", "bolt"))
-        store.save(storedHarold(DESKTOP, "desktop", "ink", "mark"))
+        val store = FakeConnectionStore()
+        store.save(storedConnection(LAPTOP, "laptop", "tide", "bolt"))
+        store.save(storedConnection(DESKTOP, "desktop", "ink", "mark"))
         val repository = FakeWorkspaceRepository()
         repository.seed(
             listOf(
@@ -100,9 +100,9 @@ class WorkspacesViewModelTest {
         )
 
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.NotPaired),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.NoConnection),
             workspaceRepository = repository,
-            savedHaroldRepository = SavedHaroldRepository(store),
+            connectionRepository = ConnectionRepository(store),
         )
         advanceUntilIdle()
 
@@ -113,12 +113,54 @@ class WorkspacesViewModelTest {
         )
         assertEquals(
             "laptop",
-            viewModel.uiState.value.haroldByWorkspaceId["$LAPTOP|ws_laptop"]?.name,
+            viewModel.uiState.value.connectionByWorkspaceId["$LAPTOP|ws_laptop"]?.name,
         )
         assertEquals(
             "desktop",
-            viewModel.uiState.value.haroldByWorkspaceId["$DESKTOP|ws_desktop"]?.name,
+            viewModel.uiState.value.connectionByWorkspaceId["$DESKTOP|ws_desktop"]?.name,
         )
+    }
+
+    @Test
+    fun deletesWorkspaceThroughTheRepository() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository()
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = repository,
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+        val workspace = (viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded)
+            .workspaces
+            .single()
+
+        viewModel.delete(workspace)
+        advanceUntilIdle()
+
+        assertEquals(listOf(ORIGIN to "/tmp/harold"), repository.deleteCalls)
+        assertTrue(viewModel.uiState.value.loadState is WorkspacesLoadState.Empty)
+    }
+
+    @Test
+    fun reportsWorkspaceDeleteFailure() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository(
+            deleteFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
+        )
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = repository,
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+        val workspace = (viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded)
+            .workspaces
+            .single()
+
+        viewModel.delete(workspace)
+        advanceUntilIdle()
+
+        assertEquals("Could not reach Harold", viewModel.uiState.value.actionError)
+        assertTrue(viewModel.uiState.value.loadState is WorkspacesLoadState.Loaded)
     }
 
     @Test
@@ -128,7 +170,7 @@ class WorkspacesViewModelTest {
         )
         repository.seed(listOf(CachedWorkspace(ORIGIN, workspace())))
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = repository,
         )
 
@@ -155,20 +197,25 @@ class WorkspacesViewModelTest {
     }
 }
 
-private fun storedHarold(
-    serverOrigin: String,
+private fun storedConnection(
+    connectionId: String,
     name: String,
     colorId: String,
     iconId: String,
-) = StoredCredential(
-    formatVersion = 1,
-    deviceId = "device_$name",
-    serverOrigin = serverOrigin,
+) = SavedConnection(
+    formatVersion = 3,
+    connectionId = connectionId,
     deviceName = "Pixel",
-    credential = "devcred_$name",
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = harold.android.credentials.SshConfig(
+        host = connectionId,
+        port = 22,
+        user = "gary",
+        auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )
 
 private class FakeWorkspaceRepository(
@@ -183,24 +230,38 @@ private class FakeWorkspaceRepository(
         ),
     ),
     private val apiFailure: Throwable? = null,
+    private val deleteFailure: Throwable? = null,
 ) : WorkspaceRepository {
     private val cached = MutableStateFlow<List<CachedWorkspace>>(emptyList())
+    val deleteCalls = mutableListOf<Pair<String, String>>()
 
     override fun observe(): Flow<List<CachedWorkspace>> = cached
 
-    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> =
-        cached.map { workspaces -> workspaces.filter { cached -> cached.serverOrigin == serverOrigin } }
+    override fun observe(connectionId: String): Flow<List<CachedWorkspace>> =
+        cached.map { workspaces -> workspaces.filter { cached -> cached.connectionId == connectionId } }
 
-    override suspend fun refresh(serverOrigin: String): Result<Unit> {
+    override suspend fun refresh(connectionId: String): Result<Unit> {
         apiFailure?.let { error -> return Result.failure(error) }
-        cached.value = workspaces.map { workspace -> CachedWorkspace(serverOrigin, workspace) }
+        cached.value = workspaces.map { workspace -> CachedWorkspace(connectionId, workspace) }
         return Result.success(Unit)
     }
 
     override suspend fun create(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
+
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> {
+        deleteCalls += connectionId to path
+        deleteFailure?.let { error -> return Result.failure(error) }
+        cached.value = cached.value.filterNot { workspace ->
+            workspace.connectionId == connectionId && workspace.workspace.path == path
+        }
+        return Result.success(Unit)
+    }
 
     fun seed(workspaces: List<CachedWorkspace>) {
         cached.value = workspaces

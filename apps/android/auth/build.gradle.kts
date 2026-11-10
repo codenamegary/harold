@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.harold.android.library)
     alias(libs.plugins.harold.android.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -13,7 +14,7 @@ dependencies {
     implementation(project(":database"))
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(project(":testing"))
     testImplementation(libs.junit)

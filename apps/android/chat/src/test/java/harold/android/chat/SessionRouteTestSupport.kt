@@ -1,28 +1,26 @@
 package harold.android.chat
 
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
+import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.ItemCollection
 import harold.android.contracts.PageInfo
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.navigation.Navigator
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
-import harold.android.testing.FakeSessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
+import harold.android.testing.FakeConnectionGateway
 import harold.android.user.UserRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,44 +49,41 @@ internal class RouteUserRepository(
 ) : UserRepository {
     val deleted = mutableListOf<String>()
 
-    override suspend fun listWorkspaces(serverOrigin: String, limit: Int): Result<WorkspaceCollection> =
+    override suspend fun listWorkspaces(connectionId: String, limit: Int): Result<WorkspaceCollection> =
         Result.success(page(workspaces))
 
-    override suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView> =
-        unsupported()
-
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ): Result<FilesystemDirectoryCollection> = unsupported()
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = unsupported()
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> = Result.success(SessionCollection(sessions))
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =
+    override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> =
         Result.success(AgentSettingsCollection(agents))
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = createResult
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> {
@@ -97,31 +92,16 @@ internal class RouteUserRepository(
     }
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth> = Result.success(
         AgentAuth(agentId = agentId, status = authStatus, error = null, session = null),
     )
 
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ): Result<AgentAuthSession> = unsupported()
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ): Result<AgentAuthSession> = unsupported()
-
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary> = unsupported()
-
-    override suspend fun revokeDevice(serverOrigin: String, deviceId: String): Result<Unit> =
-        Result.success(Unit)
 
     private fun <T> unsupported(): Result<T> = Result.failure(UnsupportedOperationException())
 
@@ -133,6 +113,6 @@ internal class RouteUserRepository(
 
 internal fun testNavigator(): Navigator {
     val navigator = Navigator()
-    navigator.start(paired = true)
+    navigator.start(hasConnection = true)
     return navigator
 }

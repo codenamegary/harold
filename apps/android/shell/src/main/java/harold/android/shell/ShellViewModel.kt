@@ -9,43 +9,40 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.forgetSavedHarold
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
-import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
-import harold.android.stream.ConnectionStatus
+import harold.android.network.WorkspaceApi
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
+import harold.android.stream.StreamStatus
 
 private const val WORKSPACE_PROBE_LIMIT = 1
 
 @HiltViewModel
 class ShellViewModel @Inject constructor(
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
-    private val agentApi: AgentApi,
+    private val agentApi: WorkspaceApi,
     private val navigator: Navigator,
-    private val savedHaroldRepository: SavedHaroldRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ShellUiState())
     val uiState: StateFlow<ShellUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            sessionGateway.refresh()
-            navigator.start(paired = sessionGateway.pairedState.value is PairedState.Paired)
+            connectionGateway.refresh()
+            navigator.start(hasConnection = connectionGateway.activeConnection.value is ActiveConnectionState.Active)
         }
 
         viewModelScope.launch {
-            sessionGateway.pairedState.collect { pairedState ->
-                _uiState.update { current -> current.fromPairedState(pairedState) }
+            connectionGateway.activeConnection.collect { activeConnection ->
+                _uiState.update { current -> current.fromActiveConnectionState(activeConnection) }
 
-                when (pairedState) {
-                    PairedState.NotPaired -> sessionOwner.disconnect()
-                    is PairedState.Paired -> open(pairedState.serverOrigin)
+                when (activeConnection) {
+                    ActiveConnectionState.NoConnection -> sessionOwner.disconnect()
+                    is ActiveConnectionState.Active -> open(activeConnection.connectionId)
                 }
             }
         }
@@ -53,16 +50,12 @@ class ShellViewModel @Inject constructor(
         viewModelScope.launch {
             sessionOwner.connectionState.collect { state ->
                 _uiState.update { current -> current.fromConnectionState(state) }
-
-                if (state.status is ConnectionStatus.AuthFailed) {
-                    rejectCurrentHarold()
-                }
             }
         }
     }
 
-    fun onPairClick() {
-        navigator.openPairing()
+    fun onAddConnectionClick() {
+        navigator.openAddConnection()
     }
 
     fun onForeground() {
@@ -74,66 +67,41 @@ class ShellViewModel @Inject constructor(
     }
 
     fun onRetryClick() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active ?: return
 
         sessionOwner.retry()
-        probeWorkspaces(paired.serverOrigin)
+        probeWorkspaces(active.connectionId)
     }
 
-    private fun open(serverOrigin: String) {
-        sessionOwner.connect(serverOrigin)
-        probeWorkspaces(serverOrigin)
+    private fun open(connectionId: String) {
+        sessionOwner.connect(connectionId)
+        probeWorkspaces(connectionId)
     }
 
     /**
-     * Proves the authenticated HTTP path end to end without pulling in workspace
-     * selection: one page of one workspace is enough to show reachable, empty, or
-     * rejected.
+     * Proves the SSH path end to end without pulling in workspace selection:
+     * one page of one workspace is enough to show reachable, empty, or failed.
      */
-    private fun probeWorkspaces(serverOrigin: String) {
+    private fun probeWorkspaces(connectionId: String) {
         _uiState.update { current -> current.fromWorkspaceProbe(WorkspaceProbe.Loading) }
 
         viewModelScope.launch {
-            val probe = agentApi.listWorkspaces(serverOrigin, WORKSPACE_PROBE_LIMIT).fold(
+            val probe = agentApi.listWorkspaces(connectionId, WORKSPACE_PROBE_LIMIT).fold(
                 onSuccess = { collection ->
                     WorkspaceProbe.Loaded(count = collection.page.count ?: collection.items.size)
                 },
                 onFailure = ::probeFailure,
             )
 
-            if (probe is WorkspaceProbe.Unauthorized) {
-                rejectCurrentHarold()
-                return@launch
-            }
-
             _uiState.update { current -> current.fromWorkspaceProbe(probe) }
-        }
-    }
-
-    private fun rejectCurrentHarold() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        viewModelScope.launch {
-            val remains = forgetSavedHarold(
-                serverOrigin = paired.serverOrigin,
-                deviceId = paired.deviceId,
-                revoke = agentApi::revokeDevice,
-                repository = savedHaroldRepository,
-            )
-            if (!remains) {
-                sessionGateway.clearLocalAccess()
-                navigator.showShell()
-                return@launch
-            }
-            sessionGateway.refresh()
         }
     }
 
     private fun probeFailure(error: Throwable): WorkspaceProbe =
         when (val apiError = (error as? AgentApiException)?.error) {
-            is AgentApiError.Unauthorized -> WorkspaceProbe.Unauthorized(apiError.detail)
             is AgentApiError.Problem -> WorkspaceProbe.Failed(apiError.detail ?: apiError.title)
-            is AgentApiError.Decode -> WorkspaceProbe.Failed("Unexpected response from Harold")
             is AgentApiError.Transport -> WorkspaceProbe.Failed("Could not reach Harold")
+            is AgentApiError.Unavailable -> WorkspaceProbe.Failed(apiError.detail)
             null -> WorkspaceProbe.Failed(error.message ?: "Could not reach Harold")
         }
 }

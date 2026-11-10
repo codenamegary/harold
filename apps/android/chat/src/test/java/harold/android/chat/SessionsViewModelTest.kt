@@ -7,19 +7,19 @@ import harold.android.contracts.ConfigOption
 import harold.android.contracts.Session
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
-import harold.android.database.session.CachedSession
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
+import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionRepository
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.navigation.Chat
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 import harold.android.stream.ConnectionState
-import harold.android.testing.FakeCredentialStore
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionStore
+import harold.android.testing.FakeConnectionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -157,7 +157,7 @@ class SessionsViewModelTest {
     }
 
     @Test
-    fun loadsSessionsFromEverySavedHaroldNewestFirst() = runTest {
+    fun loadsSessionsFromEverySavedConnectionNewestFirst() = runTest {
         val repository = OriginSessionRepository(
             sessionsByOrigin = mapOf(
                 LAPTOP to listOf(session("sess_laptop", "Alpha", "2026-08-02T00:00:00.000Z")),
@@ -166,13 +166,13 @@ class SessionsViewModelTest {
         )
         val viewModel = viewModel(
             repository = repository,
-            savedHarolds = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
+            savedConnections = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
         )
 
         assertEquals(listOf("Beta", "Alpha"), viewModel.uiState.value.sessions.map { row -> row.name })
-        assertEquals(listOf("desktop", "laptop"), viewModel.uiState.value.sessions.map { row -> row.haroldName })
-        assertEquals("ink", viewModel.uiState.value.sessions.first().haroldColorId)
-        assertEquals("mark", viewModel.uiState.value.sessions.first().haroldIconId)
+        assertEquals(listOf("desktop", "laptop"), viewModel.uiState.value.sessions.map { row -> row.connectionName })
+        assertEquals("ink", viewModel.uiState.value.sessions.first().connectionColorId)
+        assertEquals("mark", viewModel.uiState.value.sessions.first().connectionIconId)
         assertNotEquals(
             viewModel.uiState.value.sessions[0].id,
             viewModel.uiState.value.sessions[1].id,
@@ -188,14 +188,14 @@ class SessionsViewModelTest {
                     DESKTOP to listOf(session("sess_desktop", "Beta", "2026-08-02T00:00:00.000Z")),
                 ),
             ),
-            savedHarolds = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
+            savedConnections = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
         )
 
-        viewModel.onHaroldFilter(LAPTOP)
+        viewModel.onConnectionFilter(LAPTOP)
 
         assertEquals(listOf("Alpha"), viewModel.uiState.value.sessions.map { row -> row.name })
 
-        viewModel.onHaroldFilter(null)
+        viewModel.onConnectionFilter(null)
 
         assertEquals(listOf("Alpha", "Beta"), viewModel.uiState.value.sessions.map { row -> row.name })
     }
@@ -210,7 +210,7 @@ class SessionsViewModelTest {
         )
         val viewModel = viewModel(
             repository = repository,
-            savedHarolds = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
+            savedConnections = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
         )
         repository.failOrigins += LAPTOP
         repository.sessionsByOrigin[DESKTOP] = listOf(
@@ -222,8 +222,8 @@ class SessionsViewModelTest {
 
         val sessions = viewModel.uiState.value.sessions
         assertEquals(listOf("Gamma", "Alpha", "Beta"), sessions.map { row -> row.name })
-        assertEquals(false, sessions.single { row -> row.name == "Alpha" }.haroldReachable)
-        assertEquals(true, sessions.single { row -> row.name == "Gamma" }.haroldReachable)
+        assertEquals(false, sessions.single { row -> row.name == "Alpha" }.connectionReachable)
+        assertEquals(true, sessions.single { row -> row.name == "Gamma" }.connectionReachable)
     }
 
     private fun viewModel(
@@ -233,28 +233,40 @@ class SessionsViewModelTest {
         repository: harold.android.user.UserRepository = repository(sessions),
         sessionRepository: SessionRepository = TestSessionRepository(repository),
         sessionOwner: SessionsFakeSessionOwner = SessionsFakeSessionOwner(),
-        savedHarolds: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
+        savedConnections: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
     ): SessionsViewModel = SessionsViewModel(
-        sessionGateway = FakeSessionGateway(PAIRED),
+        connectionGateway = FakeConnectionGateway(ACTIVE),
         sessionRepository = sessionRepository,
         sessionCommands = commands,
         navigator = navigator,
         sessionOwner = sessionOwner,
-        savedHaroldRepository = savedHarolds,
+        connectionRepository = savedConnections,
     )
 
     @Test
-    fun showsCachedSessionsWhenTheHaroldIsOffline() = runTest {
-        val origin = PAIRED.serverOrigin
+    fun showsNoSessionsWhenTheHaroldIsOfflineAndNoProcessHasAnswered() = runTest {
+        val origin = ACTIVE.connectionId
+        val network = OriginSessionRepository(sessionsByOrigin = emptyMap())
+        network.failOrigins += origin
+
+        val viewModel = viewModel(repository = network)
+
+        assertTrue(viewModel.uiState.value.sessions.isEmpty())
+        assertFalse(viewModel.uiState.value.loading)
+    }
+
+    @Test
+    fun keepsALiveSnapshotWhenTheHostGoesOffline() = runTest {
+        val origin = ACTIVE.connectionId
         val network = OriginSessionRepository(
-            sessionsByOrigin = mapOf(origin to listOf(session("sess_cached", "Cached", "2026-08-03T00:00:00.000Z"))),
+            sessionsByOrigin = mapOf(origin to listOf(session("sess_live", "Live", "2026-08-03T00:00:00.000Z"))),
         )
         val sessionRepository = TestSessionRepository(network)
         sessionRepository.seed(
             listOf(
-                CachedSession(
-                    serverOrigin = origin,
-                    session = session("sess_cached", "Cached", "2026-08-03T00:00:00.000Z"),
+                SessionListItem(
+                    connectionId = origin,
+                    session = session("sess_live", "Live", "2026-08-03T00:00:00.000Z"),
                     workspaceId = "ws_01",
                     workspaceName = "harold",
                     agentLabel = "Cursor",
@@ -265,8 +277,8 @@ class SessionsViewModelTest {
 
         val viewModel = viewModel(repository = network, sessionRepository = sessionRepository)
 
-        assertEquals(listOf("Cached"), viewModel.uiState.value.sessions.map { row -> row.name })
-        assertFalse(viewModel.uiState.value.sessions.single().haroldReachable)
+        assertEquals(listOf("Live"), viewModel.uiState.value.sessions.map { row -> row.name })
+        assertFalse(viewModel.uiState.value.sessions.single().connectionReachable)
         assertNull(viewModel.uiState.value.error)
     }
 
@@ -304,7 +316,7 @@ class SessionsViewModelTest {
     )
 
     private companion object {
-        val PAIRED = PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel")
+        val ACTIVE = ActiveConnectionState.Active("http://127.0.0.1:8787", "Pixel")
         const val LAPTOP = "http://laptop.local:3847"
         const val DESKTOP = "http://desktop.local:3847"
     }
@@ -314,32 +326,37 @@ private const val LAPTOP = "http://laptop.local:3847"
 private const val DESKTOP = "http://desktop.local:3847"
 
 private fun laptop(name: String, colorId: String, iconId: String) =
-    storedHarold(LAPTOP, name, colorId, iconId, "device_laptop")
+    storedConnection(LAPTOP, name, colorId, iconId, "device_laptop")
 
 private fun desktop(name: String, colorId: String, iconId: String) =
-    storedHarold(DESKTOP, name, colorId, iconId, "device_desktop")
+    storedConnection(DESKTOP, name, colorId, iconId, "device_desktop")
 
-private fun storedHarold(
-    serverOrigin: String,
+private fun storedConnection(
+    connectionId: String,
     name: String,
     colorId: String,
     iconId: String,
     deviceId: String,
-) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
-    serverOrigin = serverOrigin,
+) = SavedConnection(
+    formatVersion = 3,
+    connectionId = connectionId,
     deviceName = "Pixel",
-    credential = "devcred_$deviceId",
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = harold.android.credentials.SshConfig(
+        host = connectionId,
+        port = 22,
+        user = "gary",
+        auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )
 
-private suspend fun saved(vararg harolds: StoredCredential): SavedHaroldRepository {
-    val store = FakeCredentialStore()
-    harolds.forEach { harold -> store.save(harold) }
-    return SavedHaroldRepository(store)
+private suspend fun saved(vararg connections: SavedConnection): ConnectionRepository {
+    val store = FakeConnectionStore()
+    connections.forEach { connection -> store.save(connection) }
+    return ConnectionRepository(store)
 }
 
 private class OriginSessionRepository(
@@ -349,19 +366,19 @@ private class OriginSessionRepository(
     val failOrigins = mutableSetOf<String>()
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<harold.android.contracts.SessionCollection> {
-        if (serverOrigin in failOrigins) {
+        if (connectionId in failOrigins) {
             return Result.failure(IllegalStateException("offline"))
         }
         return Result.success(
-            harold.android.contracts.SessionCollection(sessionsByOrigin[serverOrigin].orEmpty()),
+            harold.android.contracts.SessionCollection(sessionsByOrigin[connectionId].orEmpty()),
         )
     }
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<harold.android.contracts.WorkspaceCollection> = Result.success(
         harold.android.contracts.ItemCollection(
@@ -371,39 +388,30 @@ private class OriginSessionRepository(
     )
 
     override suspend fun listAgents(
-        serverOrigin: String,
+        connectionId: String,
     ): Result<harold.android.contracts.AgentSettingsCollection> = Result.success(
         harold.android.contracts.AgentSettingsCollection(emptyList()),
     )
 
-    override suspend fun getRuntimeSettings(serverOrigin: String) = error("unused")
-    override suspend fun listFilesystemDirectories(serverOrigin: String, root: String?) = error("unused")
+    override suspend fun listFilesystemDirectories(connectionId: String, root: String?) = error("unused")
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateWorkspaceBody,
     ) = error("unused")
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateSessionBody,
     ) = error("unused")
-    override suspend fun deleteSession(serverOrigin: String, agentId: AgentId, sessionId: String) = error("unused")
-    override suspend fun getAgentAuth(serverOrigin: String, agentId: AgentId) = error("unused")
-    override suspend fun startAgentAuthSession(serverOrigin: String, agentId: AgentId) = error("unused")
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: harold.android.contracts.AuthSessionAction,
-    ) = error("unused")
-    override suspend fun logoutAgentAuth(serverOrigin: String, agentId: AgentId) = error("unused")
-    override suspend fun revokeDevice(serverOrigin: String, deviceId: String) = error("unused")
+    override suspend fun deleteSession(connectionId: String, agentId: AgentId, sessionId: String) = error("unused")
+    override suspend fun getAgentAuth(connectionId: String, agentId: AgentId) = error("unused")
+    override suspend fun logoutAgentAuth(connectionId: String, agentId: AgentId) = error("unused")
 }
 
 private class SessionsFakeSessionOwner : SessionOwner {
@@ -422,7 +430,7 @@ private class SessionsFakeSessionOwner : SessionOwner {
         _sessionTitles.value = titles
     }
 
-    override fun connect(serverOrigin: String) = Unit
+    override fun connect(connectionId: String) = Unit
 
     override fun retry() = Unit
 

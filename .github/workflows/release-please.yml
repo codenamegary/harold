@@ -18,13 +18,6 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      # Component paths other than "." namespace outputs as
-      # `<path>--<name>`; unscoped names are only emitted for a root
-      # package. The CLI release unit is the root package because the npm
-      # bundle inlines apps/cli, apps/server, packages/core, and
-      # packages/contracts.
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
       android_release_created: ${{ steps.release.outputs['apps/android--release_created'] }}
       android_tag_name: ${{ steps.release.outputs['apps/android--tag_name'] }}
     steps:
@@ -36,20 +29,6 @@ jobs:
           token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  # Same trigger, npm channel. Trusted publishing validates the OIDC claims
-  # against the package's trusted publishers, and a workflow_call caller
-  # may need its own name registered too, so the caller carries
-  # id-token: write alongside the called workflow.
-  npm:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/publish-cli.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
 
   # Called directly instead of on `release: published`. When release-please
   # falls back to GITHUB_TOKEN, the release it creates starts no workflows,

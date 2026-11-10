@@ -1,81 +1,98 @@
 package harold.android.user
 
+import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
-import harold.android.contracts.AuthSessionAction
+import harold.android.contracts.AgentSettings
+import harold.android.contracts.AgentSettingsCollection
+import harold.android.contracts.CreateCustomAgentBody
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
-import harold.android.network.AgentApi
+import harold.android.contracts.UpdateAgentBody
+import harold.android.network.AcpAgentApi
+import harold.android.network.AgentAuthApi
+import harold.android.network.AgentSettingsApi
+import harold.android.network.WorkspaceApi
 import javax.inject.Inject
 
 class DefaultUserRepository @Inject constructor(
-    private val agentApi: AgentApi,
+    private val workspaceApi: WorkspaceApi,
+    private val acpAgentApi: AcpAgentApi,
+    private val agentSettingsApi: AgentSettingsApi,
+    private val agentAuthApi: AgentAuthApi,
 ) : UserRepository {
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
-    ) = agentApi.listWorkspaces(serverOrigin, limit)
-
-    override suspend fun getRuntimeSettings(serverOrigin: String) =
-        agentApi.getRuntimeSettings(serverOrigin)
+    ) = workspaceApi.listWorkspaces(connectionId, limit)
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
-    ) = agentApi.listFilesystemDirectories(serverOrigin, root)
+    ) = workspaceApi.listFilesystemDirectories(connectionId, root)
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
-    ) = agentApi.createFilesystemDirectory(serverOrigin, body)
+    ) = workspaceApi.createFilesystemDirectory(connectionId, body)
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
-    ) = agentApi.createWorkspace(serverOrigin, body)
+    ) = workspaceApi.createWorkspace(connectionId, body)
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
-    ) = agentApi.listSessions(serverOrigin, cwd)
+    ) = acpAgentApi.listSessions(connectionId, cwd)
 
-    override suspend fun listAgents(serverOrigin: String) = agentApi.listAgents(serverOrigin)
+    override suspend fun listAgents(connectionId: String) = agentSettingsApi.listAgents(connectionId)
+
+    override suspend fun scanAgents(connectionId: String) = agentSettingsApi.scanAgents(connectionId)
+
+    override suspend fun updateAgent(
+        connectionId: String,
+        agentId: AgentId,
+        body: UpdateAgentBody,
+    ) = agentSettingsApi.updateAgent(connectionId, agentId, body)
+
+    override suspend fun createCustomAgent(
+        connectionId: String,
+        body: CreateCustomAgentBody,
+    ) = agentSettingsApi.createCustomAgent(connectionId, body)
+
+    override suspend fun deleteAgent(connectionId: String, agentId: AgentId) =
+        agentSettingsApi.deleteAgent(connectionId, agentId)
+
+    override suspend fun reloadConfig(connectionId: String) = agentSettingsApi.reloadConfig(connectionId)
+
+    override suspend fun restartAgent(connectionId: String, agentId: AgentId) =
+        acpAgentApi.restartAgent(connectionId, agentId)
+
+    override suspend fun getAgentCapabilities(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ) = acpAgentApi.getAgentCapabilities(connectionId, agentId, sessionId)
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
-    ) = agentApi.createSession(serverOrigin, body)
+    ) = acpAgentApi.createSession(connectionId, body)
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
-    ) = agentApi.deleteSession(serverOrigin, agentId, sessionId)
+    ) = acpAgentApi.deleteSession(connectionId, agentId, sessionId)
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
-    ) = agentApi.getAgentAuth(serverOrigin, agentId)
-
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ) = agentApi.startAgentAuthSession(serverOrigin, agentId)
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ) = agentApi.applyAgentAuthSessionAction(serverOrigin, agentId, sessionId, action)
+    ) = agentAuthApi.getAgentAuth(connectionId, agentId)
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
-    ) = agentApi.logoutAgentAuth(serverOrigin, agentId)
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ) = agentApi.revokeDevice(serverOrigin, deviceId)
+    ) = agentAuthApi.logoutAgentAuth(connectionId, agentId)
 }

@@ -12,7 +12,7 @@ class DefaultSessionPreferencesTest {
     fun selectionRoundTrips() = runTest {
         val preferences = newPreferences()
         val selection = LastSessionSelection(
-            serverOrigin = "http://laptop.local:3847",
+            connectionId = "http://laptop.local:3847",
             workspaceId = "ws_01",
             agentId = "cursor",
         )

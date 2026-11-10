@@ -2,70 +2,82 @@ package harold.android.database.workspace
 
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.Workspace
-import harold.android.network.AgentApi
+import harold.android.network.WorkspaceApi
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 data class CachedWorkspace(
-    val serverOrigin: String,
+    val connectionId: String,
     val workspace: Workspace,
 )
 
 interface WorkspaceRepository {
     fun observe(): Flow<List<CachedWorkspace>>
 
-    fun observe(serverOrigin: String): Flow<List<CachedWorkspace>>
+    fun observe(connectionId: String): Flow<List<CachedWorkspace>>
 
-    suspend fun refresh(serverOrigin: String): Result<Unit>
+    suspend fun refresh(connectionId: String): Result<Unit>
 
     suspend fun create(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace>
+
+    suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit>
 }
 
 class DefaultWorkspaceRepository @Inject constructor(
-    private val agentApi: AgentApi,
+    private val agentApi: WorkspaceApi,
     private val dao: WorkspaceDao,
 ) : WorkspaceRepository {
     override fun observe(): Flow<List<CachedWorkspace>> = dao.observeAll().map(::cached)
 
-    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> =
-        dao.observeByOrigin(serverOrigin).map(::cached)
+    override fun observe(connectionId: String): Flow<List<CachedWorkspace>> =
+        dao.observeByOrigin(connectionId).map(::cached)
 
-    override suspend fun refresh(serverOrigin: String): Result<Unit> {
-        val listed = agentApi.listWorkspaces(serverOrigin, WORKSPACE_LIMIT)
+    override suspend fun refresh(connectionId: String): Result<Unit> {
+        val listed = agentApi.listWorkspaces(connectionId, WORKSPACE_LIMIT)
         if (listed.isFailure) {
             return Result.failure(checkNotNull(listed.exceptionOrNull()))
         }
         val workspaces = listed.getOrThrow().items
         dao.replaceByOrigin(
-            serverOrigin = serverOrigin,
+            connectionId = connectionId,
             workspaces = workspaces.mapIndexed { position, workspace ->
-                workspace.toEntity(serverOrigin, position)
+                workspace.toEntity(connectionId, position)
             },
         )
         return Result.success(Unit)
     }
 
     override suspend fun create(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
-    ): Result<Workspace> = agentApi.createWorkspace(serverOrigin, body).onSuccess { created ->
+    ): Result<Workspace> = agentApi.createWorkspace(connectionId, body).onSuccess { created ->
         dao.upsertAll(
             listOf(
                 created.toEntity(
-                    serverOrigin = serverOrigin,
-                    position = dao.countByOrigin(serverOrigin),
+                    connectionId = connectionId,
+                    position = dao.countByOrigin(connectionId),
                 ),
             ),
         )
     }
 
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = agentApi.deleteWorkspace(connectionId, path).onSuccess {
+        dao.deleteByPath(connectionId, path)
+    }
+
     private fun cached(entities: List<WorkspaceEntity>): List<CachedWorkspace> = entities.map { entity ->
         CachedWorkspace(
-            serverOrigin = entity.serverOrigin,
+            connectionId = entity.connectionId,
             workspace = entity.toWorkspace(),
         )
     }

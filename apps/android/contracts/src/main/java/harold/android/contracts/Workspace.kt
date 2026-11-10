@@ -23,6 +23,7 @@ data class Workspace(
     val state: WorkspaceState,
     val createdAt: String,
     val lastUsedAt: String,
+    val git: Boolean = false,
 )
 
 typealias WorkspaceCollection = ItemCollection<Workspace>

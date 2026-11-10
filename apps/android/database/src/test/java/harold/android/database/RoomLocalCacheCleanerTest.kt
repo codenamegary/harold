@@ -2,7 +2,7 @@ package harold.android.database
 
 import androidx.room.Room
 import harold.android.database.session.AgentEntity
-import harold.android.database.session.SessionEntity
+import harold.android.database.session.SessionWorktreePathEntity
 import harold.android.database.workspace.WorkspaceEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -38,16 +38,15 @@ class RoomLocalCacheCleanerTest {
         database.workspaceDao().upsertAll(
             listOf(workspace(ORIGIN), workspace(OTHER_ORIGIN)),
         )
-        database.sessionDao().upsertAll(
-            listOf(session(ORIGIN), session(OTHER_ORIGIN)),
-        )
+        database.sessionWorktreePathDao().upsert(worktreePath(ORIGIN))
+        database.sessionWorktreePathDao().upsert(worktreePath(OTHER_ORIGIN))
         database.agentDao().upsertAll(
             listOf(agent(ORIGIN), agent(OTHER_ORIGIN)),
         )
         val cleaner = RoomLocalCacheCleaner(
             database = database,
             workspaceDao = database.workspaceDao(),
-            sessionDao = database.sessionDao(),
+            worktreePathDao = database.sessionWorktreePathDao(),
             agentDao = database.agentDao(),
         )
 
@@ -55,20 +54,20 @@ class RoomLocalCacheCleanerTest {
 
         assertEquals(
             listOf(OTHER_ORIGIN),
-            database.workspaceDao().observeAll().first().map { row -> row.serverOrigin },
+            database.workspaceDao().observeAll().first().map { row -> row.connectionId },
         )
         assertEquals(
             listOf(OTHER_ORIGIN),
-            database.sessionDao().observeAll().first().map { row -> row.serverOrigin },
+            database.sessionWorktreePathDao().observeAll().first().map { row -> row.connectionId },
         )
         assertEquals(
             listOf(OTHER_ORIGIN),
-            database.agentDao().observeByOrigin(OTHER_ORIGIN).first().map { row -> row.serverOrigin },
+            database.agentDao().observeByOrigin(OTHER_ORIGIN).first().map { row -> row.connectionId },
         )
     }
 
     private fun workspace(origin: String) = WorkspaceEntity(
-        serverOrigin = origin,
+        connectionId = origin,
         id = "ws_01",
         name = "harold",
         path = "/tmp/harold",
@@ -78,20 +77,15 @@ class RoomLocalCacheCleanerTest {
         position = 0,
     )
 
-    private fun session(origin: String) = SessionEntity(
-        serverOrigin = origin,
+    private fun worktreePath(origin: String) = SessionWorktreePathEntity(
+        connectionId = origin,
         agentId = "cursor",
         sessionId = "sess_01",
-        cwd = "/tmp/harold",
-        title = "Alpha",
-        updatedAt = "2026-08-01T00:00:00.000Z",
-        workspaceId = "ws_01",
-        workspaceName = "harold",
-        agentLabel = "Cursor",
+        worktreePath = "/repo/.worktrees/feat-x",
     )
 
     private fun agent(origin: String) = AgentEntity(
-        serverOrigin = origin,
+        connectionId = origin,
         agentId = "cursor",
         displayName = "Cursor",
         available = true,

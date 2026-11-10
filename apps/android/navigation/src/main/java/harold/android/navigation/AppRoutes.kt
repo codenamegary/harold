@@ -12,7 +12,7 @@ sealed interface AppRoute : NavKey
 data object Shell : AppRoute
 
 @Serializable
-data object Pairing : AppRoute
+data object SshSetup : AppRoute
 
 @Serializable
 data object Chat : AppRoute
@@ -30,11 +30,23 @@ data object Workspaces : AppRoute
 data object AddWorkspace : AppRoute
 
 @Serializable
-data object SavedHarolds : AppRoute
+data object Connections : AppRoute
+
+/** Per-connection agent management: detection, settings, sign-in state. */
+@Serializable
+data class Agents(
+    val connectionId: String,
+) : AppRoute
+
+/** Per-connection settings: host details, credentials, appearance, danger zone. */
+@Serializable
+data class ConnectionSettings(
+    val connectionId: String,
+) : AppRoute
 
 @Serializable
 data class Changes(
-    val serverOrigin: String,
+    val connectionId: String,
     val agentId: AgentId,
     val sessionId: String,
     val cwd: String,
@@ -43,7 +55,7 @@ data class Changes(
 
 @Serializable
 data class FileDiff(
-    val serverOrigin: String,
+    val connectionId: String,
     val worktreePath: String,
     val scope: GitScope,
     val filePath: String,

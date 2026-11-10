@@ -1,15 +1,24 @@
 package harold.android
 
+import harold.android.acp.AcpSessionCatalog
+import harold.android.acp.AgentRuntime
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
-import harold.android.session.HaroldConnection
-import harold.android.session.HaroldConnections
-import harold.android.session.PairedState
+import harold.android.process.AgentProcessChannel
+import harold.android.process.AgentProcessLauncher
+import harold.android.process.LaunchableAgent
+import harold.android.process.SessionFileService
+import harold.android.process.TerminalLaunchSpec
+import harold.android.session.ConnectionHealth
+import harold.android.session.Connections
+import harold.android.session.ActiveConnectionState
 import harold.android.stream.ConnectionState
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
+import harold.android.transport.ssh.SshConnectionLease
+import harold.android.transport.ssh.SshConnectionPool
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,7 +37,8 @@ class HaroldConnectionHostTest {
     fun foregroundConnectsTheFocusedHarold() = runTest {
         val owner = RecordingSessionOwner()
         val connections = RecordingConnections(stay = true)
-        val host = host(owner, connections)
+        val pool = RecordingPool()
+        val host = host(owner, connections, pool)
 
         host.onAppForeground()
         runCurrent()
@@ -37,54 +47,110 @@ class HaroldConnectionHostTest {
         assertEquals(listOf(ORIGIN), owner.connects)
         assertEquals(1, owner.foregrounds)
         assertEquals(0, owner.backgroundCloses)
+        assertEquals(0, pool.closeAlls)
     }
 
     @Test
     fun backgroundClosesTheFocusedStreamWhenNoSessionIsLive() = runTest {
         val owner = RecordingSessionOwner()
         val connections = RecordingConnections(stay = false)
-        val host = host(owner, connections)
+        val pool = RecordingPool()
+        val host = host(owner, connections, pool)
 
         host.onAppBackground()
 
         assertEquals(1, connections.backgrounds)
         assertEquals(1, owner.backgroundCloses)
         assertEquals(0, owner.backgrounds)
+        assertEquals(1, pool.closeAlls)
     }
 
     @Test
     fun backgroundKeepsTheFocusedStreamWhenASessionIsLive() = runTest {
         val owner = RecordingSessionOwner()
         val connections = RecordingConnections(stay = true)
-        val host = host(owner, connections)
+        val pool = RecordingPool()
+        val host = host(owner, connections, pool)
 
         host.onAppBackground()
 
         assertEquals(1, connections.backgrounds)
         assertEquals(0, owner.backgroundCloses)
         assertEquals(1, owner.backgrounds)
+        assertEquals(0, pool.closeAlls)
     }
 
     private fun TestScope.host(
         owner: RecordingSessionOwner,
         connections: RecordingConnections,
+        pool: RecordingPool,
     ): HaroldConnectionHost = HaroldConnectionHost(
         connections = connections,
-        sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+        connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
         sessionOwner = owner,
+        connectionPool = pool,
+        agentRuntime = AgentRuntime(NoopLauncher, NoopFiles, AcpSessionCatalog()),
         scope = backgroundScope,
     )
 }
 
+private object NoopLauncher : AgentProcessLauncher {
+    override suspend fun launchableAgents(connectionId: String): Result<List<LaunchableAgent>> =
+        Result.success(emptyList())
+
+    override suspend fun keyFor(connectionId: String): String = "key"
+
+    override suspend fun launchAgent(
+        connectionId: String,
+        agentId: String,
+    ): Result<AgentProcessChannel> = error("not used")
+
+    override suspend fun launchTerminal(
+        connectionId: String,
+        spec: TerminalLaunchSpec,
+    ): Result<AgentProcessChannel> = error("not used")
+}
+
+private object NoopFiles : SessionFileService {
+    override suspend fun readTextFile(connectionId: String, path: String): Result<String> =
+        error("not used")
+
+    override suspend fun writeTextFile(
+        connectionId: String,
+        path: String,
+        content: String,
+    ): Result<Unit> = error("not used")
+}
+
+private class RecordingPool : SshConnectionPool {
+    var closeAlls = 0
+        private set
+
+    override suspend fun acquire(connectionId: String): SshConnectionLease =
+        error("not used")
+
+    override suspend fun keyFor(connectionId: String): String = error("not used")
+
+    override suspend fun close(connectionId: String) = Unit
+
+    override fun closeKey(key: String) = Unit
+
+    override fun closeAll() {
+        closeAlls += 1
+    }
+
+    override fun trimIdle(idleMillis: Long) = Unit
+}
+
 private class RecordingConnections(
     private val stay: Boolean,
-) : HaroldConnections {
+) : Connections {
     var foregrounds = 0
         private set
     var backgrounds = 0
         private set
 
-    override val connections: StateFlow<List<HaroldConnection>> =
+    override val connections: StateFlow<List<ConnectionHealth>> =
         MutableStateFlow(emptyList())
 
     override fun onForeground() {
@@ -98,11 +164,11 @@ private class RecordingConnections(
     override suspend fun refresh() = Unit
 
     override fun setSessionStates(
-        serverOrigin: String,
+        connectionId: String,
         states: List<harold.android.contracts.SessionState>,
     ) = Unit
 
-    override fun shouldStayConnected(serverOrigin: String): Boolean = stay
+    override fun shouldStayConnected(connectionId: String): Boolean = stay
 }
 
 private class RecordingSessionOwner : SessionOwner {
@@ -119,8 +185,8 @@ private class RecordingSessionOwner : SessionOwner {
     override val sessionTitles: StateFlow<Map<String, String>> = MutableStateFlow(emptyMap())
     override val promptCompletions: Flow<Unit> = MutableSharedFlow()
 
-    override fun connect(serverOrigin: String) {
-        connects += serverOrigin
+    override fun connect(connectionId: String) {
+        connects += connectionId
     }
 
     override fun retry() = Unit

@@ -43,8 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
-import harold.android.session.PairedState
+import harold.android.stream.StreamStatus
+import harold.android.session.ActiveConnectionState
 import harold.android.ui.theme.HaroldTheme
 import harold.android.ui.theme.AppMark
 import harold.android.ui.theme.Lime
@@ -56,10 +56,10 @@ private val PanelShape = RoundedCornerShape(12.dp)
 @Composable
 fun ShellScreen(
     uiState: ShellUiState,
-    onPairClick: () -> Unit,
+    onAddConnectionClick: () -> Unit,
     onRetryClick: () -> Unit,
 ) {
-    val pairContentDescription = stringResource(R.string.pair_content_description)
+    val addConnectionContentDescription = stringResource(R.string.add_connection_content_description)
     val retryContentDescription = stringResource(R.string.retry_content_description)
     val isLive = uiState.connectionStatus == "Live"
     val scrollState = rememberScrollState()
@@ -138,10 +138,10 @@ fun ShellScreen(
                 )
 
                 Text(
-                    text = if (uiState.pairLabel == "Re-pair") {
-                        stringResource(R.string.shell_repair_hint)
+                    text = if (uiState.addConnectionLabel == "Change connection") {
+                        stringResource(R.string.shell_change_connection_hint)
                     } else {
-                        stringResource(R.string.shell_pair_hint)
+                        stringResource(R.string.shell_add_connection_hint)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -171,17 +171,17 @@ fun ShellScreen(
             }
 
             Button(
-                onClick = onPairClick,
-                enabled = uiState.pairEnabled,
+                onClick = onAddConnectionClick,
+                enabled = uiState.addConnectionEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                    .testTag("shell_pair_button")
+                    .testTag("shell_add_connection_button")
                     .semantics {
-                        contentDescription = pairContentDescription
+                        contentDescription = addConnectionContentDescription
                     },
             ) {
-                Text(text = uiState.pairLabel)
+                Text(text = uiState.addConnectionLabel)
             }
         }
     }
@@ -286,9 +286,9 @@ private fun ShellStatusRow(
     }
 }
 
-@Preview(name = "Not paired", showBackground = true)
+@Preview(name = "No connection", showBackground = true)
 @Preview(
-    name = "Not paired dark",
+    name = "No connection dark",
     showBackground = true,
     uiMode = Configuration.UI_MODE_NIGHT_YES,
 )
@@ -297,7 +297,7 @@ private fun ShellScreenPreview() {
     HaroldTheme(dynamicColor = false) {
         ShellScreen(
             uiState = ShellUiState(),
-            onPairClick = {},
+            onAddConnectionClick = {},
             onRetryClick = {},
         )
     }
@@ -309,12 +309,12 @@ private fun ShellScreenLivePreview() {
     HaroldTheme(dynamicColor = false) {
         ShellScreen(
             uiState = ShellUiState()
-                .fromPairedState(
-                    PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel 8"),
+                .fromActiveConnectionState(
+                    ActiveConnectionState.Active("ssh://gary@127.0.0.1:22", "Pixel 8"),
                 )
-                .fromConnectionState(ConnectionState(status = ConnectionStatus.Live))
+                .fromConnectionState(ConnectionState(status = StreamStatus.Live))
                 .fromWorkspaceProbe(WorkspaceProbe.Loaded(count = 4)),
-            onPairClick = {},
+            onAddConnectionClick = {},
             onRetryClick = {},
         )
     }
@@ -326,13 +326,13 @@ private fun ShellScreenAuthFailedPreview() {
     HaroldTheme(dynamicColor = false) {
         ShellScreen(
             uiState = ShellUiState()
-                .fromPairedState(
-                    PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel 8"),
+                .fromActiveConnectionState(
+                    ActiveConnectionState.Active("ssh://gary@127.0.0.1:22", "Pixel 8"),
                 )
                 .fromConnectionState(
-                    ConnectionState(status = ConnectionStatus.AuthFailed(detail = null)),
+                    ConnectionState(status = StreamStatus.AuthFailed(detail = null)),
                 ),
-            onPairClick = {},
+            onAddConnectionClick = {},
             onRetryClick = {},
         )
     }

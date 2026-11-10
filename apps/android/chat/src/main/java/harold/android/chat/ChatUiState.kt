@@ -12,6 +12,8 @@ import harold.android.live.ContextUsage
 import harold.android.live.Elicitation
 import harold.android.live.StreamExtension
 import harold.android.live.emptyAcpTranscript
+import harold.android.stream.SessionStatus
+import harold.android.stream.allowsPrompt
 import harold.android.voice.VoiceDictationUiState
 
 data class SessionRow(
@@ -25,20 +27,20 @@ data class SessionRow(
     val state: SessionState,
     val updatedAt: String,
     val worktreePath: String? = null,
-    val serverOrigin: String = "",
-    val haroldName: String = "",
-    val haroldColorId: String = "",
-    val haroldIconId: String = "",
-    val haroldReachable: Boolean = true,
+    val connectionId: String = "",
+    val connectionName: String = "",
+    val connectionColorId: String = "",
+    val connectionIconId: String = "",
+    val connectionReachable: Boolean = true,
     val needsAttention: Boolean = false,
     /** "Needs answer", "Needs permission", or "Needs input". */
     val attentionLabel: String = "Needs input",
 ) {
     val id: String
-        get() = if (serverOrigin.isEmpty()) {
+        get() = if (connectionId.isEmpty()) {
             catalogSessionKey(agentId, sessionId)
         } else {
-            "$serverOrigin|${catalogSessionKey(agentId, sessionId)}"
+            "$connectionId|${catalogSessionKey(agentId, sessionId)}"
         }
 }
 
@@ -70,11 +72,13 @@ data class ExtensionUiState(
 
 data class ChatUiState(
     val connectionBanner: String? = null,
+    /** True while the stream is attaching or retrying, not merely stopped. */
+    val connectionInProgress: Boolean = false,
     val selectedSession: SessionRow? = null,
     val sessions: List<SessionRow> = emptyList(),
-    /** True once the first cached snapshot (or an empty cache) has been read. */
+    /** True once the first live session snapshot (or an empty one) has been read. */
     val hasLoaded: Boolean = false,
-    /** True while the network refresh is running. Cached content stays visible. */
+    /** True while the live session refresh is running. Rows stay visible. */
     val isRefreshing: Boolean = false,
     val sessionsError: String? = null,
     /** True when the selected session's cwd resolved to a git worktree. */
@@ -86,6 +90,8 @@ data class ChatUiState(
     val recentSessionsLoading: Boolean = false,
     val recentSessionsError: String? = null,
     val transcript: AcpTranscriptState = emptyAcpTranscript,
+    /** Live ACP status of the watched session; gates the composer. */
+    val sessionStatus: SessionStatus = SessionStatus.Ready,
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
     /** A newly created session is applying its remembered model; block submit only. */
@@ -115,22 +121,22 @@ data class ChatUiState(
     val voiceCommandListVisible: Boolean = false,
     /** The auth panel slice; the AgentAuthController owns it and the view model mirrors it. */
     val agentAuth: AgentAuthUiState = AgentAuthUiState(),
-    val activeHaroldName: String = "",
-    val activeHaroldColorId: String = "",
-    val activeHaroldIconId: String = "",
+    val activeConnectionName: String = "",
+    val activeConnectionColorId: String = "",
+    val activeConnectionIconId: String = "",
 ) {
     /** Latest context window usage for the selected session, if the agent reports it. */
     val contextUsage: ContextUsage?
         get() = transcript.usage
 
-    val disconnectHaroldName: String
-        get() = selectedSession?.haroldName?.takeIf { it.isNotEmpty() } ?: activeHaroldName
+    val disconnectConnectionName: String
+        get() = selectedSession?.connectionName?.takeIf { it.isNotEmpty() } ?: activeConnectionName
 
-    val disconnectHaroldColorId: String
-        get() = selectedSession?.haroldColorId?.takeIf { it.isNotEmpty() } ?: activeHaroldColorId
+    val disconnectConnectionColorId: String
+        get() = selectedSession?.connectionColorId?.takeIf { it.isNotEmpty() } ?: activeConnectionColorId
 
-    val disconnectHaroldIconId: String
-        get() = selectedSession?.haroldIconId?.takeIf { it.isNotEmpty() } ?: activeHaroldIconId
+    val disconnectConnectionIconId: String
+        get() = selectedSession?.connectionIconId?.takeIf { it.isNotEmpty() } ?: activeConnectionIconId
 
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
@@ -153,7 +159,8 @@ data class ChatUiState(
     val composerEnabled: Boolean
         get() {
             val session = selectedSession ?: return false
-            return session.haroldReachable &&
+            return session.connectionReachable &&
+                sessionStatus.allowsPrompt &&
                 isComposerPromptable(
                     agentId = session.agentId,
                     sessionId = session.sessionId,
@@ -171,7 +178,7 @@ data class ChatUiState(
 
     val composerBlockedMessage: String?
         get() = when {
-            selectedSession?.haroldReachable == false -> WAITING_FOR_HAROLD
+            selectedSession?.connectionReachable == false -> WAITING_FOR_HAROLD
             isPendingNewSession -> PENDING_SESSION_MESSAGE
             // The reconnect banner already explains why the composer is
             // locked. Showing the Offline message too just adds a red line
@@ -189,8 +196,25 @@ data class ChatUiState(
     val showProgress: Boolean
         get() = sessionProgressMessage != null
 
+    /**
+     * An empty transcript that is waiting on the stream: the switch is still
+     * attaching, or the server is replaying the session after a reconnect.
+     */
+    val showSessionLoading: Boolean
+        get() = selectedSession != null &&
+            transcript.rows.isEmpty() &&
+            (
+                connectionInProgress ||
+                    streamReconnecting ||
+                    sessionStatus == SessionStatus.Starting ||
+                    effectiveSessionState == SessionState.Starting
+                )
+
     val showEmptyWelcome: Boolean
-        get() = selectedSession != null && transcript.rows.isEmpty() && !showProgress
+        get() = selectedSession != null &&
+            transcript.rows.isEmpty() &&
+            !showProgress &&
+            !showSessionLoading
 
     val showSelectSessionCta: Boolean
         get() = selectedSession == null
@@ -233,6 +257,7 @@ internal fun ChatUiState.resetSessionScopedState(
 ): ChatUiState = copy(
     selectedSession = keep.selectedSession,
     transcript = keep.transcript,
+    sessionStatus = SessionStatus.Ready,
     composerText = "",
     composerSubmitting = false,
     modelSyncPending = false,

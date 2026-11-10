@@ -14,13 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import harold.android.chat.auth.AgentAuthPanel
-import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentAuthSummary
-import harold.android.contracts.AuthSessionStatus
-import harold.android.contracts.AuthShowMessageLevel
-import harold.android.contracts.AuthStep
 import harold.android.ui.theme.HaroldTheme
 
 /**
@@ -31,7 +26,6 @@ import harold.android.ui.theme.HaroldTheme
 class AuthFixtureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val scene = intent.getStringExtra(EXTRA_SCENE) ?: SCENE_IDLE
         setContent {
             HaroldTheme(dynamicColor = false) {
                 Column(
@@ -47,67 +41,16 @@ class AuthFixtureActivity : ComponentActivity() {
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onBackground,
                     )
-                    when (scene) {
-                        SCENE_PANEL -> AgentAuthPanel(
-                            agentName = "Claude",
-                            summary = AgentAuthSummary(
-                                status = AgentAuthStatus.NeedsAuth,
-                                error = null,
-                                activeSessionId = "auth-1",
-                                canLogout = false,
-                            ),
-                            auth = AgentAuth(
-                                agentId = "claude",
-                                status = AgentAuthStatus.NeedsAuth,
-                                error = null,
-                                session = AgentAuthSession(
-                                    sessionId = "auth-1",
-                                    agentId = "claude",
-                                    status = AuthSessionStatus.InProgress,
-                                    steps = listOf(
-                                        AuthStep.ShowMessage(
-                                            level = AuthShowMessageLevel.Info,
-                                            body = "Sign in on the host machine, then confirm here.",
-                                        ),
-                                        AuthStep.Confirm(
-                                            stepId = "confirm-1",
-                                            title = "Ready?",
-                                            body = "Finish login on the host, then continue.",
-                                            confirmLabel = "I have logged in",
-                                        ),
-                                    ),
-                                    error = null,
-                                ),
-                            ),
-                            submitting = false,
-                            actionBusy = false,
+                    AgentAuthPanel(
+                        agentName = "Claude",
+                        summary = AgentAuthSummary(
+                            status = AgentAuthStatus.NeedsAuth,
                             error = null,
-                            onSignIn = {},
-                            onConfirm = {},
-                            onCancel = {},
-                        )
-                        else -> AgentAuthPanel(
-                            agentName = "Claude",
-                            summary = AgentAuthSummary(
-                                status = AgentAuthStatus.NeedsAuth,
-                                error = null,
-                                activeSessionId = null,
-                                canLogout = false,
-                            ),
-                            auth = AgentAuth(
-                                agentId = "claude",
-                                status = AgentAuthStatus.NeedsAuth,
-                                error = null,
-                                session = null,
-                            ),
-                            submitting = false,
-                            actionBusy = false,
-                            error = null,
-                            onSignIn = {},
-                            onConfirm = {},
-                            onCancel = {},
-                        )
-                    }
+                            activeSessionId = null,
+                            canLogout = false,
+                        ),
+                        error = null,
+                    )
                 }
             }
         }

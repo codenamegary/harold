@@ -13,14 +13,12 @@ import harold.android.navigation.ActivityEffect
 import harold.android.navigation.AppNavHost
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
-import harold.android.pairing.PairingRequests
 import harold.android.ui.theme.HaroldTheme
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var openSessionRequests: OpenSessionRequests
-    @Inject lateinit var pairingRequests: PairingRequests
     @Inject lateinit var navigator: Navigator
     @Inject lateinit var entryProviders: Set<@JvmSuppressWildcards FeatureEntryProvider>
     @Inject lateinit var activityEffects: Set<@JvmSuppressWildcards ActivityEffect>
@@ -30,7 +28,6 @@ class MainActivity : ComponentActivity() {
         navigator.attach(savedStateRegistry)
 
         deliverOpenSession(intent)
-        deliverPairingDeepLink(intent)
 
         enableEdgeToEdge()
         setContent {
@@ -48,7 +45,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         deliverOpenSession(intent)
-        deliverPairingDeepLink(intent)
     }
 
     private fun deliverOpenSession(intent: Intent?) {
@@ -58,13 +54,5 @@ class MainActivity : ComponentActivity() {
         }
         val sessionId = intent?.getStringExtra(EXTRA_OPEN_SESSION_ID) ?: return
         openSessionRequests.open(sessionId)
-    }
-
-    private fun deliverPairingDeepLink(intent: Intent?) {
-        val uri = intent?.dataString ?: return
-        if (intent.action == Intent.ACTION_VIEW) {
-            pairingRequests.requestPairing(uri)
-            navigator.openPairing()
-        }
     }
 }

@@ -11,7 +11,9 @@ import harold.android.contracts.PermissionStatus
 import harold.android.contracts.SessionState
 import harold.android.live.AcpTranscriptState
 import harold.android.live.ContextUsage
+import harold.android.live.TranscriptAssistantRow
 import harold.android.live.emptyAcpTranscript
+import harold.android.stream.SessionStatus
 
 class ChatUiStateTest {
     @Test
@@ -46,9 +48,74 @@ class ChatUiStateTest {
     }
 
     @Test
+    fun emptyReconnectingSessionShowsTheLoadingAnimationInsteadOfWelcome() {
+        val state = ChatUiState(
+            selectedSession = sessionRow(SessionState.Offline),
+            transcript = AcpTranscriptState(sessionState = SessionState.Offline),
+            streamReconnecting = true,
+        )
+
+        assertTrue(state.showSessionLoading)
+        assertFalse(state.showEmptyWelcome)
+    }
+
+    @Test
+    fun connectingSessionShowsTheLoadingAnimation() {
+        val state = ChatUiState(
+            connectionInProgress = true,
+            selectedSession = sessionRow(SessionState.Idle),
+        )
+
+        assertTrue(state.showSessionLoading)
+    }
+
+    @Test
+    fun transcriptAndTerminalErrorsAreNotLoadingStates() {
+        val withRows = ChatUiState(
+            streamReconnecting = true,
+            selectedSession = sessionRow(SessionState.Running),
+            transcript = AcpTranscriptState(
+                sessionState = SessionState.Running,
+                rows = listOf(
+                    TranscriptAssistantRow(
+                        turnId = "turn_01",
+                        text = "Still here.",
+                    ),
+                ),
+            ),
+        )
+        val authFailed = ChatUiState(
+            connectionBanner = "Auth failed",
+            selectedSession = sessionRow(SessionState.Offline),
+        )
+        val idle = ChatUiState(selectedSession = sessionRow(SessionState.Idle))
+
+        assertFalse(withRows.showSessionLoading)
+        assertFalse(authFailed.showSessionLoading)
+        assertFalse(idle.showSessionLoading)
+    }
+
+    @Test
+    fun composerRequiresAReadyOrRunningSessionStatus() {
+        val offline = ChatUiState(
+            selectedSession = sessionRow(SessionState.Idle),
+            sessionStatus = SessionStatus.Offline,
+        )
+        val ready = offline.copy(sessionStatus = SessionStatus.Ready)
+        val running = offline.copy(sessionStatus = SessionStatus.Running)
+
+        assertFalse(offline.composerEnabled)
+        assertTrue(ready.composerEnabled)
+        assertTrue(running.composerEnabled)
+        assertFalse(ready.copy(sessionStatus = SessionStatus.AuthFailed).composerEnabled)
+    }
+
+    @Test
     fun switchingSessionsClearsTheSessionScopedSurface() {
         val busy = ChatUiState(
             connectionBanner = "Reconnecting",
+            connectionInProgress = true,
+            sessionStatus = SessionStatus.Offline,
             selectedSession = sessionRow(SessionState.Running),
             sessions = listOf(sessionRow(SessionState.Running)),
             recentSessions = listOf(sessionRow(SessionState.Running)),
@@ -77,6 +144,7 @@ class ChatUiStateTest {
         val reset = busy.resetSessionScopedState()
 
         assertNull(reset.selectedSession)
+        assertEquals(SessionStatus.Ready, reset.sessionStatus)
         assertNull(reset.contextUsage)
         assertEquals(emptyAcpTranscript, reset.transcript)
         assertEquals("", reset.composerText)
@@ -95,6 +163,7 @@ class ChatUiStateTest {
         assertEquals(0, reset.changesBadgeCount)
         // Outside the reset policy: switching sessions leaves these alone.
         assertEquals("Reconnecting", reset.connectionBanner)
+        assertTrue(reset.connectionInProgress)
         assertEquals(busy.sessions, reset.sessions)
         assertEquals(busy.recentSessions, reset.recentSessions)
         // SessionConfigWriter owns the composer config; clearing it here would

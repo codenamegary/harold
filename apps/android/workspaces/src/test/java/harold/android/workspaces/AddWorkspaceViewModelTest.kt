@@ -1,11 +1,9 @@
 package harold.android.workspaces
 
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
@@ -13,7 +11,6 @@ import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
@@ -24,9 +21,9 @@ import harold.android.navigation.Navigator
 import harold.android.navigation.Workspaces
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
-import harold.android.testing.FakeSessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
+import harold.android.testing.FakeConnectionGateway
 import harold.android.user.UserRepository
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
@@ -391,7 +388,7 @@ class AddWorkspaceViewModelTest {
         workspaceRepository: WorkspaceRepository = FakeAddWorkspaceRepository(),
         navigator: Navigator = Navigator(),
     ) = AddWorkspaceViewModel(
-        sessionGateway = fakeSession(),
+        connectionGateway = fakeSession(),
         navigator = navigator,
         userRepository = userRepository,
         workspaceRepository = workspaceRepository,
@@ -399,14 +396,14 @@ class AddWorkspaceViewModelTest {
 
     private fun openAddWorkspace(): Navigator {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         navigator.openWorkspaces()
         navigator.openAddWorkspace()
         return navigator
     }
 
     private fun fakeSession() =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+        FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
@@ -468,15 +465,13 @@ private class FakeAddUserRepository(
     val createDirectoryCalls = mutableListOf<CreateFilesystemDirectoryBody>()
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView> =
-        Result.failure(UnsupportedOperationException())
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ): Result<FilesystemDirectoryCollection> {
         listCalls += root
@@ -493,7 +488,7 @@ private class FakeAddUserRepository(
     }
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
     ): Result<FilesystemDirectoryCreated> {
         events += "mkdir"
@@ -502,55 +497,39 @@ private class FakeAddUserRepository(
     }
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =
+    override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> =
         Result.failure(UnsupportedOperationException())
 
+
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = Result.failure(UnsupportedOperationException())
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> = Result.failure(UnsupportedOperationException())
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ): Result<AgentAuthSession> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ): Result<AgentAuthSession> = Result.failure(UnsupportedOperationException())
-
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit> = Result.success(Unit)
 }
 
 private class FakeAddWorkspaceRepository(
@@ -562,12 +541,17 @@ private class FakeAddWorkspaceRepository(
 
     override fun observe(): Flow<List<CachedWorkspace>> = cached
 
-    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> = cached
+    override fun observe(connectionId: String): Flow<List<CachedWorkspace>> = cached
 
-    override suspend fun refresh(serverOrigin: String): Result<Unit> = Result.success(Unit)
+    override suspend fun refresh(connectionId: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = Result.failure(UnsupportedOperationException())
 
     override suspend fun create(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> {
         events += "create"
@@ -582,7 +566,7 @@ private class FakeAddWorkspaceRepository(
             createdAt = "2026-08-10T00:00:00.000Z",
             lastUsedAt = "2026-08-10T00:00:00.000Z",
         )
-        cached.value = listOf(CachedWorkspace(serverOrigin, workspace))
+        cached.value = listOf(CachedWorkspace(connectionId, workspace))
         return Result.success(workspace)
     }
 }

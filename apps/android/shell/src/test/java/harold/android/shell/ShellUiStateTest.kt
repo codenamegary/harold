@@ -6,8 +6,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
-import harold.android.session.PairedState
+import harold.android.stream.StreamStatus
+import harold.android.session.ActiveConnectionState
 
 class ShellUiStateTest {
     @Test
@@ -21,38 +21,37 @@ class ShellUiStateTest {
 
     @Test
     fun labelsEachConnectionStatus() {
-        assertEquals("Connecting", labelFor(ConnectionStatus.Connecting))
-        assertEquals("Live", labelFor(ConnectionStatus.Live))
-        assertEquals("Reconnecting (attempt 3)", labelFor(ConnectionStatus.Reconnecting(attempt = 3)))
-        assertEquals("Auth failed", labelFor(ConnectionStatus.AuthFailed(detail = null)))
+        assertEquals("Connecting", labelFor(StreamStatus.Connecting))
+        assertEquals("Live", labelFor(StreamStatus.Live))
+        assertEquals("Reconnecting (attempt 3)", labelFor(StreamStatus.Reconnecting(attempt = 3)))
+        assertEquals("Auth failed", labelFor(StreamStatus.AuthFailed(detail = null)))
         assertEquals(
             "Auth failed. Device revoked",
-            labelFor(ConnectionStatus.AuthFailed(detail = "Device revoked")),
+            labelFor(StreamStatus.AuthFailed(detail = "Device revoked")),
         )
         assertEquals(
             "Transport error. Unknown event type",
-            labelFor(ConnectionStatus.TransportError("Unknown event type")),
+            labelFor(StreamStatus.TransportError("Unknown event type")),
         )
     }
 
     @Test
     fun offersRetryOnlyWhenAutoRetryHasStopped() {
-        assertFalse(uiFor(ConnectionStatus.Connecting).retryVisible)
-        assertFalse(uiFor(ConnectionStatus.Live).retryVisible)
-        assertFalse(uiFor(ConnectionStatus.Reconnecting(attempt = 2)).retryVisible)
-        assertTrue(uiFor(ConnectionStatus.AuthFailed(detail = null)).retryVisible)
-        assertTrue(uiFor(ConnectionStatus.TransportError("drift")).retryVisible)
+        assertFalse(uiFor(StreamStatus.Connecting).retryVisible)
+        assertFalse(uiFor(StreamStatus.Live).retryVisible)
+        assertFalse(uiFor(StreamStatus.Reconnecting(attempt = 2)).retryVisible)
+        assertTrue(uiFor(StreamStatus.AuthFailed(detail = null)).retryVisible)
+        assertTrue(uiFor(StreamStatus.TransportError("drift")).retryVisible)
     }
 
     @Test
-    fun keepsRepairAvailableWhenAuthFails() {
+    fun keepsChangeConnectionAvailableWhenAuthFails() {
         val state = ShellUiState()
-            .fromPairedState(PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel"))
-            .fromConnectionStatus(ConnectionStatus.AuthFailed(detail = null))
+            .fromActiveConnectionState(ActiveConnectionState.Active("ssh://gary@127.0.0.1:22", "Pixel"))
+            .fromConnectionStatus(StreamStatus.AuthFailed(detail = null))
 
-        assertEquals("Re-pair", state.pairLabel)
-        assertTrue(state.pairEnabled)
-        assertTrue(state.retryVisible)
+        assertEquals("Change connection", state.addConnectionLabel)
+        assertTrue(state.addConnectionEnabled)
     }
 
     @Test
@@ -68,26 +67,26 @@ class ShellUiStateTest {
     }
 
     @Test
-    fun clearsConnectionDetailWhenTheDeviceIsNotPaired() {
+    fun clearsConnectionDetailWhenThereIsNoConnection() {
         val state = ShellUiState()
-            .fromConnectionStatus(ConnectionStatus.AuthFailed(detail = "gone"))
+            .fromConnectionStatus(StreamStatus.AuthFailed(detail = "gone"))
             .fromWorkspaceProbe(WorkspaceProbe.Loaded(count = 2))
-            .fromPairedState(PairedState.NotPaired)
+            .fromActiveConnectionState(ActiveConnectionState.NoConnection)
 
         assertNull(state.connectionStatus)
         assertNull(state.workspacesSummary)
         assertFalse(state.retryVisible)
-        assertEquals("Pair", state.pairLabel)
+        assertEquals("Add connection", state.addConnectionLabel)
     }
 
-    private fun labelFor(status: ConnectionStatus): String? = uiFor(status).connectionStatus
+    private fun labelFor(status: StreamStatus): String? = uiFor(status).connectionStatus
 
-    private fun uiFor(status: ConnectionStatus): ShellUiState =
+    private fun uiFor(status: StreamStatus): ShellUiState =
         ShellUiState().fromConnectionState(ConnectionState(status = status))
 
     private fun summaryFor(probe: WorkspaceProbe): String? =
         ShellUiState().fromWorkspaceProbe(probe).workspacesSummary
 }
 
-private fun ShellUiState.fromConnectionStatus(status: ConnectionStatus): ShellUiState =
+private fun ShellUiState.fromConnectionStatus(status: StreamStatus): ShellUiState =
     fromConnectionState(ConnectionState(status = status))

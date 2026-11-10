@@ -6,10 +6,10 @@ import harold.android.contracts.WorkspaceState
 
 @Entity(
     tableName = "workspaces",
-    primaryKeys = ["serverOrigin", "id"],
+    primaryKeys = ["connectionId", "id"],
 )
 data class WorkspaceEntity(
-    val serverOrigin: String,
+    val connectionId: String,
     val id: String,
     val name: String,
     val path: String,
@@ -29,10 +29,10 @@ fun WorkspaceEntity.toWorkspace(): Workspace = Workspace(
 )
 
 fun Workspace.toEntity(
-    serverOrigin: String,
+    connectionId: String,
     position: Int,
 ): WorkspaceEntity = WorkspaceEntity(
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     id = id,
     name = name,
     path = path,

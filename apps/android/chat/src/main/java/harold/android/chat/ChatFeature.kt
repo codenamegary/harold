@@ -53,7 +53,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onChangesClick = {
                     uiState.selectedSession?.let { session ->
                         navigator.openChanges(
-                            serverOrigin = session.serverOrigin,
+                            connectionId = session.connectionId,
                             agentId = session.agentId,
                             sessionId = session.sessionId,
                             cwd = session.cwd,
@@ -95,13 +95,10 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onVoiceCommandDismiss = viewModel::dismissVoiceCommandList,
                 onVoiceCommandPick = viewModel::pickVoiceCommand,
                 onComposerCommandPick = viewModel::pickComposerCommand,
-                onAuthSignIn = viewModel::onAuthSignIn,
-                onAuthConfirm = viewModel::onAuthConfirm,
-                onAuthCancel = viewModel::onAuthCancel,
-                onAuthLogout = viewModel::onAuthLogout,
                 onDisconnectFromServer = viewModel::disconnectFromServer,
-                onPairAnotherHarold = navigator::openPairing,
-                onSavedHarolds = navigator::openSavedHarolds,
+                onConnections = navigator::openConnections,
+                onAgentAuthRestart = viewModel::restartAgentAuth,
+                onAgentAuthLogout = viewModel::logoutAgentAuth,
                 agentLabel = uiState.selectedSession?.agentLabel.orEmpty(),
                 onElicitationOpen = viewModel::openElicitationSheet,
                 onElicitationClose = viewModel::closeElicitationSheet,
@@ -134,7 +131,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSessionClick = viewModel::select,
                 onDeleteSession = viewModel::delete,
                 onCreateClick = navigator::openCreateSession,
-                onHaroldFilter = viewModel::onHaroldFilter,
+                onConnectionFilter = viewModel::onConnectionFilter,
             )
         }
 

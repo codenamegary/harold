@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.LoadingSkeletonList
+import harold.android.ui.components.SwipeToDeleteListItem
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -57,7 +58,7 @@ fun SessionsScreen(
     onSessionClick: (SessionRow) -> Unit,
     onDeleteSession: (SessionRow) -> Unit,
     onCreateClick: () -> Unit,
-    onHaroldFilter: (String?) -> Unit = {},
+    onConnectionFilter: (String?) -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -99,7 +100,7 @@ fun SessionsScreen(
             onSearchChanged = onSearchChanged,
             onSessionClick = onSessionClick,
             onDeleteSession = onDeleteSession,
-            onHaroldFilter = onHaroldFilter,
+            onConnectionFilter = onConnectionFilter,
             modifier = Modifier.padding(innerPadding),
         )
     }
@@ -113,7 +114,7 @@ fun SessionsListContent(
     onDeleteSession: (SessionRow) -> Unit,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
-    onHaroldFilter: (String?) -> Unit = {},
+    onConnectionFilter: (String?) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -141,7 +142,7 @@ fun SessionsListContent(
             },
         )
 
-        if (uiState.harolds.isNotEmpty()) {
+        if (uiState.connections.isNotEmpty()) {
             val chipColors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                 selectedLabelColor = MaterialTheme.colorScheme.primary,
@@ -150,14 +151,14 @@ fun SessionsListContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .testTag("session_harold_filters"),
+                    .testTag("session_connection_filters"),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val allSelected = uiState.haroldFilter == null
+                val allSelected = uiState.connectionFilter == null
                 FilterChip(
                     selected = allSelected,
-                    onClick = { onHaroldFilter(null) },
+                    onClick = { onConnectionFilter(null) },
                     label = { Text(text = "All") },
                     colors = chipColors,
                     border = FilterChipDefaults.filterChipBorder(
@@ -167,26 +168,26 @@ fun SessionsListContent(
                     ),
                     modifier = Modifier.testTag("session_filter_all"),
                 )
-                uiState.harolds.forEach { harold ->
-                    val selected = uiState.haroldFilter == harold.serverOrigin
+                uiState.connections.forEach { connection ->
+                    val selected = uiState.connectionFilter == connection.connectionId
                     FilterChip(
                         selected = selected,
-                        onClick = { onHaroldFilter(harold.serverOrigin) },
+                        onClick = { onConnectionFilter(connection.connectionId) },
                         leadingIcon = {
                             HaroldBadge(
-                                colorId = harold.colorId,
-                                iconId = harold.iconId,
+                                colorId = connection.colorId,
+                                iconId = connection.iconId,
                                 size = 18.dp,
                             )
                         },
-                        label = { Text(text = harold.name) },
+                        label = { Text(text = connection.name) },
                         colors = chipColors,
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = selected,
                             selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
                         ),
-                        modifier = Modifier.testTag("session_filter_${harold.serverOrigin}"),
+                        modifier = Modifier.testTag("session_filter_${connection.connectionId}"),
                     )
                 }
             }
@@ -199,6 +200,30 @@ fun SessionsListContent(
                 modifier = Modifier.testTag("sessions_list_error"),
             )
         }
+
+        uiState.agents
+            .filter { agent -> agent.loading || agent.error != null }
+            .forEach { agent ->
+                val label = listOf(agent.connectionName, agent.agentId)
+                    .filter { part -> part.isNotEmpty() }
+                    .joinToString(" · ")
+                Text(
+                    text = if (agent.error != null) {
+                        "$label: ${agent.error}"
+                    } else {
+                        "Refreshing $label…"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (agent.error != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.testTag(
+                        "sessions_agent_status_${agent.connectionId}_${agent.agentId}",
+                    ),
+                )
+            }
 
         when {
             uiState.sessions.isEmpty() && uiState.loading -> {
@@ -227,9 +252,13 @@ fun SessionsListContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.sessions, key = { session -> session.id }) { session ->
-                        SwipeToRevealDelete(
+                        SwipeToDeleteListItem(
                             rowTag = session.id,
+                            deleteLabel = stringResource(R.string.sessions_delete),
                             onDelete = { onDeleteSession(session) },
+                            deleteActionTag = "session_delete_${session.id}",
+                            confirmationTitle = stringResource(R.string.sessions_delete_confirm_title),
+                            confirmationText = stringResource(R.string.sessions_delete_confirm_body),
                         ) {
                             SessionListRow(
                                 session = session,
@@ -249,9 +278,9 @@ private fun SessionListRow(
     onClick: () -> Unit,
 ) {
     val hasHaroldIdentity =
-        session.haroldColorId.isNotEmpty() ||
-            session.haroldIconId.isNotEmpty() ||
-            session.haroldName.isNotEmpty()
+        session.connectionColorId.isNotEmpty() ||
+            session.connectionIconId.isNotEmpty() ||
+            session.connectionName.isNotEmpty()
 
     Card(
         shape = RectangleShape,
@@ -273,10 +302,10 @@ private fun SessionListRow(
         ) {
             if (hasHaroldIdentity) {
                 HaroldBadge(
-                    colorId = session.haroldColorId,
-                    iconId = session.haroldIconId,
+                    colorId = session.connectionColorId,
+                    iconId = session.connectionIconId,
                     size = 28.dp,
-                    modifier = Modifier.testTag("session_harold_${session.id}"),
+                    modifier = Modifier.testTag("session_connection_${session.id}"),
                 )
             }
             Column(
@@ -290,13 +319,19 @@ private fun SessionListRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${session.workspaceLabel} · ${session.agentLabel} · ${sessionStatusLabel(session.state)}",
+                    text = buildString {
+                        append(session.workspaceLabel)
+                        append(" · ")
+                        append(session.agentLabel)
+                        append(" · ")
+                        append(sessionStatusLabel(session.state))
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (session.needsAttention || !session.haroldReachable) {
+                if (session.needsAttention || !session.connectionReachable) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (session.needsAttention) {
                             Text(
@@ -306,7 +341,7 @@ private fun SessionListRow(
                                 modifier = Modifier.testTag("session_attention_${session.id}"),
                             )
                         }
-                        if (!session.haroldReachable) {
+                        if (!session.connectionReachable) {
                             Text(
                                 text = "Unreachable",
                                 style = MaterialTheme.typography.bodySmall,

@@ -7,11 +7,29 @@ import org.gradle.api.artifacts.result.ResolvedComponentResult
 import org.gradle.api.artifacts.result.ResolvedDependencyResult
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
 
 private val MODULE_KIND: Attribute<String> = Attribute.of("harold.module.kind", String::class.java)
 private const val FEATURE = "feature"
+
+/**
+ * Domain modules own SSH, host state, and ACP. Features and shared libraries
+ * may only see them through the ports in :api; only the app wires the
+ * concrete implementations together.
+ */
+private val DOMAIN_MODULES = setOf(":transport", ":host", ":acp")
+
+private fun forbiddenModulesFor(projectPath: String): Set<String> = when (projectPath) {
+    // SSH primitives and setup only.
+    ":transport" -> setOf(":host", ":acp")
+    // ACP must stay free of SSH, host state, and credentials.
+    ":acp" -> setOf(":host", ":transport", ":auth")
+    // Host operations may use SSH, but never the ACP layer.
+    ":host" -> setOf(":acp")
+    else -> DOMAIN_MODULES
+}
 
 /**
  * Tags the variants this project publishes as a feature, so consumers can see it
@@ -29,13 +47,15 @@ internal fun Project.markAsFeature() {
 
 /**
  * Only the app may depend on a feature. Fails the build when any variant's runtime
- * graph reaches a feature, directly or through another module.
+ * graph reaches a feature, directly or through another module. Library modules also
+ * enforce the domain-module boundary rule for their own role in the graph.
  */
 internal fun Project.checkModuleBoundaries() {
     val modulePath = path
+    val forbidden = forbiddenModulesFor(modulePath)
     val checkAll = tasks.register("checkModuleBoundaries") {
         group = "verification"
-        description = "Fails when this module depends on a feature module."
+        description = "Fails when this module depends on a forbidden module."
     }
     extensions.getByType(AndroidComponentsExtension::class.java).onVariants { variant ->
         val check = tasks.register(
@@ -43,6 +63,7 @@ internal fun Project.checkModuleBoundaries() {
             CheckModuleBoundariesTask::class.java,
         ) {
             projectPath.set(modulePath)
+            forbiddenModulePaths.set(forbidden)
             runtimeGraph.set(variant.runtimeConfiguration.incoming.resolutionResult.rootComponent)
         }
         checkAll.configure { dependsOn(check) }
@@ -55,11 +76,19 @@ abstract class CheckModuleBoundariesTask : DefaultTask() {
     abstract val projectPath: Property<String>
 
     @get:Input
+    abstract val forbiddenModulePaths: SetProperty<String>
+
+    @get:Input
     abstract val runtimeGraph: Property<ResolvedComponentResult>
 
     @TaskAction
     fun check() {
         val root = runtimeGraph.get()
+        val reachable = reachableComponents(root)
+            .mapNotNull { (it.id as? ProjectComponentIdentifier)?.projectPath }
+            .filter { path -> path != projectPath.get() }
+            .toSet()
+
         val features = reachableComponents(root)
             .filter { component -> component.variants.any { it.attributes.getAttribute(MODULE_KIND) == FEATURE } }
             .mapNotNull { (it.id as? ProjectComponentIdentifier)?.projectPath }
@@ -67,6 +96,15 @@ abstract class CheckModuleBoundariesTask : DefaultTask() {
             .sorted()
         if (features.isNotEmpty()) {
             throw GradleException("${projectPath.get()} cannot depend on feature ${features.joinToString()}")
+        }
+
+        val forbidden = reachable
+            .filter { path -> path in forbiddenModulePaths.get() }
+            .sorted()
+        if (forbidden.isNotEmpty()) {
+            throw GradleException(
+                "${projectPath.get()} cannot depend on forbidden module ${forbidden.joinToString()}",
+            )
         }
     }
 

@@ -20,39 +20,49 @@ class TestWorkspaceRepository(
 
     override fun observe(): Flow<List<CachedWorkspace>> = workspaces
 
-    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> =
+    override fun observe(connectionId: String): Flow<List<CachedWorkspace>> =
         workspaces.map { cached ->
-            cached.filter { workspace -> workspace.serverOrigin == serverOrigin }
+            cached.filter { workspace -> workspace.connectionId == connectionId }
         }
 
-    override suspend fun refresh(serverOrigin: String): Result<Unit> {
-        val listed = network.listWorkspaces(serverOrigin, 100)
+    override suspend fun refresh(connectionId: String): Result<Unit> {
+        val listed = network.listWorkspaces(connectionId, 100)
         if (listed.isFailure) {
             return Result.failure(checkNotNull(listed.exceptionOrNull()))
         }
         val cached = listed.getOrThrow().items.map { workspace ->
-            CachedWorkspace(serverOrigin = serverOrigin, workspace = workspace)
+            CachedWorkspace(connectionId = connectionId, workspace = workspace)
         }
         workspaces.value = workspaces.value.filterNot { workspace ->
-            workspace.serverOrigin == serverOrigin
+            workspace.connectionId == connectionId
         } + cached
         return Result.success(Unit)
     }
 
     override suspend fun create(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
-    ): Result<Workspace> = network.createWorkspace(serverOrigin, body).onSuccess { created ->
+    ): Result<Workspace> = network.createWorkspace(connectionId, body).onSuccess { created ->
         workspaces.value = workspaces.value.filterNot { cached ->
-            cached.serverOrigin == serverOrigin && cached.workspace.id == created.id
-        } + CachedWorkspace(serverOrigin = serverOrigin, workspace = created)
+            cached.connectionId == connectionId && cached.workspace.id == created.id
+        } + CachedWorkspace(connectionId = connectionId, workspace = created)
     }
 
-    fun seed(serverOrigin: String, workspaces: List<Workspace>) {
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> {
+        workspaces.value = workspaces.value.filterNot { cached ->
+            cached.connectionId == connectionId && cached.workspace.path == path
+        }
+        return Result.success(Unit)
+    }
+
+    fun seed(connectionId: String, workspaces: List<Workspace>) {
         this.workspaces.value = this.workspaces.value.filterNot { cached ->
-            cached.serverOrigin == serverOrigin
+            cached.connectionId == connectionId
         } + workspaces.map { workspace ->
-            CachedWorkspace(serverOrigin = serverOrigin, workspace = workspace)
+            CachedWorkspace(connectionId = connectionId, workspace = workspace)
         }
     }
 }

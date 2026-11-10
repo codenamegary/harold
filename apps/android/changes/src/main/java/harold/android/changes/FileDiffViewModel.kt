@@ -46,25 +46,25 @@ class FileDiffViewModel @Inject constructor(
     val uiState: StateFlow<FileDiffUiState> = _uiState.asStateFlow()
 
     private var startedKey: String? = null
-    private var lastServerOrigin: String = ""
+    private var lastConnectionId: String = ""
     private var lastWorktreePath: String = ""
     private var lastScope: GitScope = GitScope.Uncommitted
     private var lastFilePath: String = ""
     private var lastOldPath: String? = null
 
     fun start(
-        serverOrigin: String,
+        connectionId: String,
         worktreePath: String,
         scope: GitScope,
         filePath: String,
         oldPath: String?,
     ) {
-        lastServerOrigin = serverOrigin
+        lastConnectionId = connectionId
         lastWorktreePath = worktreePath
         lastScope = scope
         lastFilePath = filePath
         lastOldPath = oldPath
-        val key = "$serverOrigin|$worktreePath|$scope|$filePath|$oldPath"
+        val key = "$connectionId|$worktreePath|$scope|$filePath|$oldPath"
         if (startedKey == key) {
             return
         }
@@ -77,7 +77,7 @@ class FileDiffViewModel @Inject constructor(
         )
         viewModelScope.launch {
             gitApi.getFileDiff(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 worktreePath = worktreePath,
                 scope = scope,
                 filePath = filePath,
@@ -106,7 +106,7 @@ class FileDiffViewModel @Inject constructor(
         }
         startedKey = null
         start(
-            serverOrigin = lastServerOrigin,
+            connectionId = lastConnectionId,
             worktreePath = lastWorktreePath,
             scope = lastScope,
             filePath = lastFilePath,

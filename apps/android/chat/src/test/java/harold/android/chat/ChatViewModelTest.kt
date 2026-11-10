@@ -30,9 +30,8 @@ import harold.android.contracts.SessionState
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
-import harold.android.database.session.CachedSession
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
 import harold.android.database.session.SessionRepository
 import harold.android.live.ContextUsage
 import harold.android.live.SessionOwner
@@ -50,13 +49,13 @@ import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
-import harold.android.session.HaroldConnection
-import harold.android.session.HaroldConnectionStatus
-import harold.android.session.PairedState
-import harold.android.testing.FakeCredentialStore
-import harold.android.session.SessionGateway
+import harold.android.session.ConnectionHealth
+import harold.android.session.ConnectionStatus
+import harold.android.session.ActiveConnectionState
+import harold.android.testing.FakeConnectionStore
+import harold.android.session.ConnectionGateway
 import harold.android.stream.ConnectionState
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import harold.android.testing.FakeSpeechRecognitionClient
 import harold.android.user.UserRepository
 import harold.android.voice.ImmediateVoiceDictationRestartScheduler
@@ -109,12 +108,12 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun tellsConnectionsWhichSessionsAreLiveOnThePairedHarold() = runTest(dispatcher) {
+    fun tellsConnectionsWhichSessionsAreLiveOnTheActiveConnection() = runTest(dispatcher) {
         val reported = mutableListOf<Pair<String, List<harold.android.contracts.SessionState>>>()
         val viewModel = createViewModel(
             repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(),
-            haroldConnections = RecordingHaroldConnections(reported),
+            connections = RecordingHaroldConnections(reported),
         )
 
         advanceUntilIdle()
@@ -130,23 +129,12 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun paintsCachedSessionsBeforeTheRefreshCompletes() = runTest(dispatcher) {
+    fun waitsForTheLiveSessionListInsteadOfRestoringACache() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
         val repository = ChatFakeUserRepository(sessionsGate = gate)
-        val cached = CachedSession(
-            serverOrigin = ORIGIN,
-            session = session("sess_cached", "Cached"),
-            workspaceId = "ws_01",
-            workspaceName = "harold",
-            agentLabel = "Cursor",
-        )
-        val sessionRepository = TestSessionRepository(repository).apply {
-            seed(listOf(cached))
-        }
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(),
-            sessionRepository = sessionRepository,
         )
 
         advanceUntilIdle()
@@ -154,7 +142,7 @@ class ChatViewModelTest {
         val loading = viewModel.uiState.value
         assertTrue(loading.hasLoaded)
         assertTrue(loading.isRefreshing)
-        assertEquals(listOf("Cached"), loading.sessions.map { row -> row.name })
+        assertTrue(loading.sessions.isEmpty())
 
         gate.complete(Unit)
         advanceUntilIdle()
@@ -193,19 +181,19 @@ class ChatViewModelTest {
 
         viewModel.selectSession(
             listedSession("sess_desktop", "Beta").copy(
-                serverOrigin = "http://desktop.local:3847",
-                haroldName = "desktop",
-                haroldColorId = "ink",
-                haroldIconId = "mark",
+                connectionId = "http://desktop.local:3847",
+                connectionName = "desktop",
+                connectionColorId = "ink",
+                connectionIconId = "mark",
             ),
         )
         advanceUntilIdle()
 
         assertEquals(listOf("http://desktop.local:3847"), sessionOwner.connections)
         assertEquals("cursor" to "sess_desktop", sessionOwner.target)
-        assertEquals("desktop", viewModel.uiState.value.selectedSession?.haroldName)
-        assertEquals("ink", viewModel.uiState.value.selectedSession?.haroldColorId)
-        assertEquals("mark", viewModel.uiState.value.selectedSession?.haroldIconId)
+        assertEquals("desktop", viewModel.uiState.value.selectedSession?.connectionName)
+        assertEquals("ink", viewModel.uiState.value.selectedSession?.connectionColorId)
+        assertEquals("mark", viewModel.uiState.value.selectedSession?.connectionIconId)
     }
 
     @Test
@@ -218,10 +206,10 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
         val open = listedSession("sess_laptop", "Alpha").copy(
-            serverOrigin = "http://laptop.local:3847",
-            haroldName = "laptop",
-            haroldColorId = "tide",
-            haroldIconId = "bolt",
+            connectionId = "http://laptop.local:3847",
+            connectionName = "laptop",
+            connectionColorId = "tide",
+            connectionIconId = "bolt",
         )
         viewModel.selectSession(open)
         advanceUntilIdle()
@@ -238,7 +226,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.selectSession(open.copy(haroldReachable = false))
+        viewModel.selectSession(open.copy(connectionReachable = false))
         advanceUntilIdle()
 
         assertEquals("hello", (viewModel.uiState.value.transcript.rows.single() as harold.android.live.TranscriptUserRow).text)
@@ -259,17 +247,17 @@ class ChatViewModelTest {
             repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(),
             sessionOwner = sessionOwner,
-            haroldConnections = connections,
+            connections = connections,
         )
         advanceUntilIdle()
         val open = listedSession("sess_laptop", "Alpha").copy(
-            serverOrigin = "http://laptop.local:3847",
-            haroldName = "laptop",
-            haroldColorId = "tide",
-            haroldIconId = "bolt",
+            connectionId = "http://laptop.local:3847",
+            connectionName = "laptop",
+            connectionColorId = "tide",
+            connectionIconId = "bolt",
         )
         connections.connections.value = listOf(
-            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Connected),
+            ConnectionHealth("http://laptop.local:3847", ConnectionStatus.Connected),
         )
         viewModel.selectSession(open)
         advanceUntilIdle()
@@ -278,7 +266,7 @@ class ChatViewModelTest {
         // A link parked in the background is Closed, not Unreachable. It must
         // not clear the watch or block the composer while it reconnects.
         connections.connections.value = listOf(
-            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Closed),
+            ConnectionHealth("http://laptop.local:3847", ConnectionStatus.Closed),
         )
         advanceUntilIdle()
 
@@ -295,24 +283,24 @@ class ChatViewModelTest {
             repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(),
             sessionOwner = sessionOwner,
-            haroldConnections = connections,
+            connections = connections,
         )
         advanceUntilIdle()
         val open = listedSession("sess_laptop", "Alpha").copy(
-            serverOrigin = "http://laptop.local:3847",
-            haroldName = "laptop",
-            haroldColorId = "tide",
-            haroldIconId = "bolt",
+            connectionId = "http://laptop.local:3847",
+            connectionName = "laptop",
+            connectionColorId = "tide",
+            connectionIconId = "bolt",
         )
         connections.connections.value = listOf(
-            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Connected),
+            ConnectionHealth("http://laptop.local:3847", ConnectionStatus.Connected),
         )
         viewModel.selectSession(open)
         advanceUntilIdle()
         assertEquals("cursor" to "sess_laptop", sessionOwner.target)
 
         connections.connections.value = listOf(
-            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Unreachable),
+            ConnectionHealth("http://laptop.local:3847", ConnectionStatus.Unreachable),
         )
         advanceUntilIdle()
         assertEquals("cursor" to "sess_laptop", sessionOwner.target)
@@ -322,7 +310,7 @@ class ChatViewModelTest {
         viewModel.onResume()
         advanceUntilIdle()
         connections.connections.value = listOf(
-            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Connected),
+            ConnectionHealth("http://laptop.local:3847", ConnectionStatus.Connected),
         )
         advanceUntilIdle()
 
@@ -336,17 +324,17 @@ class ChatViewModelTest {
             "http://laptop.local:3847" to listOf(session("sess_laptop", "Alpha", updatedAt = "2026-08-02T00:00:00.000Z")),
             "http://desktop.local:3847" to listOf(session("sess_desktop", "Beta", updatedAt = "2026-08-03T00:00:00.000Z")),
         )
-        val store = FakeCredentialStore()
-        store.save(storedHarold("http://laptop.local:3847", "laptop", "tide", "bolt", "device_laptop"))
-        store.save(storedHarold("http://desktop.local:3847", "desktop", "ink", "mark", "device_desktop"))
+        val store = FakeConnectionStore()
+        store.save(storedConnection("http://laptop.local:3847", "laptop", "tide", "bolt", "device_laptop"))
+        store.save(storedConnection("http://desktop.local:3847", "desktop", "ink", "mark", "device_desktop"))
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(),
-            savedHaroldRepository = SavedHaroldRepository(store),
+            connectionRepository = ConnectionRepository(store),
         )
         advanceUntilIdle()
         assertEquals(listOf("Beta", "Alpha"), viewModel.uiState.value.sessions.map { row -> row.name })
-        assertEquals(listOf("desktop", "laptop"), viewModel.uiState.value.sessions.map { row -> row.haroldName })
+        assertEquals(listOf("desktop", "laptop"), viewModel.uiState.value.sessions.map { row -> row.connectionName })
 
         repository.failOrigins = setOf("http://laptop.local:3847")
         repository.sessionsByOrigin = mapOf(
@@ -361,8 +349,8 @@ class ChatViewModelTest {
 
         val sessions = viewModel.uiState.value.sessions
         assertEquals(listOf("Gamma", "Beta", "Alpha"), sessions.map { row -> row.name })
-        assertEquals(false, sessions.single { row -> row.name == "Alpha" }.haroldReachable)
-        assertEquals(true, sessions.single { row -> row.name == "Gamma" }.haroldReachable)
+        assertEquals(false, sessions.single { row -> row.name == "Alpha" }.connectionReachable)
+        assertEquals(true, sessions.single { row -> row.name == "Gamma" }.connectionReachable)
     }
 
     @Test
@@ -545,59 +533,6 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun pendingSessionIsCreatedOnceLoginSucceeds() = runTest(dispatcher) {
-        val inProgress = harold.android.contracts.AgentAuthSession(
-            sessionId = "auth-1",
-            agentId = "cursor",
-            status = harold.android.contracts.AuthSessionStatus.InProgress,
-            steps = listOf(
-                harold.android.contracts.AuthStep.Confirm(
-                    stepId = "confirm-1",
-                    title = "Ready?",
-                    body = "Finish login",
-                    confirmLabel = "I have logged in",
-                ),
-            ),
-            error = null,
-        )
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-                error = null,
-                session = inProgress,
-            ),
-            actionSession = inProgress.copy(
-                status = harold.android.contracts.AuthSessionStatus.Succeeded,
-                steps = emptyList(),
-            ),
-        )
-        repository.createFailure = AgentApiException(
-            AgentApiError.Problem(status = 409, title = "Agent authentication required", detail = null),
-        )
-        val sessionOwner = ChatFakeSessionOwner()
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(),
-            sessionOwner = sessionOwner,
-        )
-
-        advanceUntilIdle()
-        createSessionThroughRoute(repository)
-        assertTrue(viewModel.uiState.value.isPendingNewSession)
-
-        repository.createFailure = null
-        viewModel.onAuthConfirm("confirm-1")
-        advanceUntilIdle()
-
-        assertEquals(2, repository.createCalls.size)
-        assertEquals("/tmp/harold", repository.createCalls.last().cwd)
-        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
-        assertEquals("cursor" to "sess_new", sessionOwner.target)
-        assertEquals("sess_new", sessionOwner.rememberedConfigs.single().second)
-    }
-
-    @Test
     fun composerSendPromptsTheNewlyCreatedSession() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
@@ -669,12 +604,12 @@ class ChatViewModelTest {
         advanceUntilIdle()
         val selected = viewModel.uiState.value.selectedSession!!
         val sessionsRoute = SessionsViewModel(
-            sessionGateway = pairedGateway(),
+            connectionGateway = activeGateway(),
             sessionRepository = TestSessionRepository(repository),
             sessionCommands = sessionCommands,
             navigator = Navigator(),
             sessionOwner = ChatFakeSessionOwner(),
-            savedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
+            connectionRepository = ConnectionRepository(FakeConnectionStore()),
         )
         advanceUntilIdle()
         sessionsRoute.delete(selected)
@@ -796,8 +731,8 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
         val open = listedSession("sess_02", "Alpha").copy(
-            haroldName = "laptop",
-            haroldIconId = "bolt",
+            connectionName = "laptop",
+            connectionIconId = "bolt",
         )
         viewModel.selectSession(open)
         advanceUntilIdle()
@@ -906,7 +841,7 @@ class ChatViewModelTest {
         assertEquals(
             listOf(
                 RecordingSessionConfigApi.Call(
-                    serverOrigin = ORIGIN,
+                    connectionId = ORIGIN,
                     agentId = "cursor",
                     sessionId = "sess_02",
                     configId = "model",
@@ -932,10 +867,10 @@ class ChatViewModelTest {
         val remoteOrigin = "http://desktop.local:3847"
         viewModel.selectSession(
             listedSession("sess_remote", "Remote").copy(
-                serverOrigin = remoteOrigin,
-                haroldName = "desktop",
-                haroldColorId = "ink",
-                haroldIconId = "mark",
+                connectionId = remoteOrigin,
+                connectionName = "desktop",
+                connectionColorId = "ink",
+                connectionIconId = "mark",
             ),
         )
         advanceUntilIdle()
@@ -951,7 +886,7 @@ class ChatViewModelTest {
         viewModel.onModelPick("m2")
         advanceUntilIdle()
 
-        assertEquals(remoteOrigin, configApi.calls.single().serverOrigin)
+        assertEquals(remoteOrigin, configApi.calls.single().connectionId)
     }
 
     @Test
@@ -1052,7 +987,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
         val remote = listedSession("sess_remote", "Remote").copy(
-            serverOrigin = REMOTE_ORIGIN,
+            connectionId = REMOTE_ORIGIN,
         )
 
         viewModel.selectSession(remote)
@@ -1060,7 +995,7 @@ class ChatViewModelTest {
 
         assertEquals(
             LastSessionSelection(
-                serverOrigin = REMOTE_ORIGIN,
+                connectionId = REMOTE_ORIGIN,
                 workspaceId = "ws_01",
                 agentId = "cursor",
             ),
@@ -1083,7 +1018,7 @@ class ChatViewModelTest {
 
         assertEquals(
             LastSessionSelection(
-                serverOrigin = ORIGIN,
+                connectionId = ORIGIN,
                 workspaceId = "ws_01",
                 agentId = "cursor",
             ),
@@ -1175,7 +1110,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         viewModel.selectSession(
-            listedSession("sess_remote", "Remote").copy(serverOrigin = REMOTE_ORIGIN),
+            listedSession("sess_remote", "Remote").copy(connectionId = REMOTE_ORIGIN),
         )
         advanceUntilIdle()
         sessionOwner.publish(
@@ -1228,6 +1163,7 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
+                transcript = emptyAcpTranscript.copy(live = true),
                 configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
             ),
         )
@@ -1254,6 +1190,41 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aNewSessionWaitsForTheLiveStreamBeforeApplyingTheRememberedModel() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        val seeded = sessionOwner.snapshot.value.copy(
+            agentId = "cursor",
+            sessionId = "sess_new",
+            configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+        )
+        sessionOwner.publish(seeded)
+        runCurrent()
+
+        assertTrue(configApi.calls.isEmpty())
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+
+        sessionOwner.publish(seeded.copy(transcript = emptyAcpTranscript.copy(live = true)))
+        runCurrent()
+
+        assertEquals(ConfigValue.Text("m2"), configApi.calls.single().value)
+    }
+
+    @Test
     fun anUnavailableRememberedModelIsIgnoredWithoutAnError() = runTest(dispatcher) {
         val preferences = FakeSessionPreferences().apply {
             seedModel(ORIGIN, "cursor", "m_gone")
@@ -1275,6 +1246,7 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
+                transcript = emptyAcpTranscript.copy(live = true),
                 configOptions = listOf(modelOption("m1", listOf("m1"))),
             ),
         )
@@ -1307,6 +1279,7 @@ class ChatViewModelTest {
         val configSnapshot = sessionOwner.snapshot.value.copy(
             agentId = "cursor",
             sessionId = "sess_new",
+            transcript = emptyAcpTranscript.copy(live = true),
             configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
         )
         sessionOwner.publish(configSnapshot)
@@ -1341,13 +1314,38 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
-                configOptions = emptyList(),
+                transcript = emptyAcpTranscript.copy(live = true),
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
             ),
         )
         runCurrent()
         assertTrue(viewModel.uiState.value.modelSyncPending)
 
         advanceTimeBy(ChatViewModel.MODEL_SYNC_TIMEOUT_MS + 1)
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.modelSyncPending)
+        assertTrue(viewModel.uiState.value.submitEnabled)
+    }
+
+    @Test
+    fun aSessionThatNeverGoesLiveStopsBlockingSubmitAfterTheLiveTimeout() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val repository = ChatFakeUserRepository()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = ChatFakeSessionOwner(),
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+
+        advanceTimeBy(ChatViewModel.MODEL_SYNC_LIVE_TIMEOUT_MS + 1)
         runCurrent()
 
         assertFalse(viewModel.uiState.value.modelSyncPending)
@@ -1377,6 +1375,7 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
+                transcript = emptyAcpTranscript.copy(live = true),
                 configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
             ),
         )
@@ -1540,130 +1539,10 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun authSignInStartsSession() = runTest(dispatcher) {
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-                error = null,
-                session = null,
-            ),
-            startSession = harold.android.contracts.AgentAuthSession(
-                sessionId = "auth-1",
-                agentId = "cursor",
-                status = harold.android.contracts.AuthSessionStatus.InProgress,
-                steps = listOf(
-                    harold.android.contracts.AuthStep.Confirm(
-                        stepId = "confirm-1",
-                        title = "Ready?",
-                        body = "Finish login",
-                        confirmLabel = "I have logged in",
-                    ),
-                ),
-                error = null,
-            ),
-        )
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
-        viewModel.onAuthSignIn()
-        advanceUntilIdle()
-
-        assertEquals(1, repository.authStartCalls.size)
-        assertEquals("auth-1", viewModel.uiState.value.agentAuth.agentAuth?.session?.sessionId)
-        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
-    }
-
-    @Test
-    fun authConfirmAndCancelCallRepository() = runTest(dispatcher) {
-        val inProgress = harold.android.contracts.AgentAuthSession(
-            sessionId = "auth-1",
-            agentId = "cursor",
-            status = harold.android.contracts.AuthSessionStatus.InProgress,
-            steps = listOf(
-                harold.android.contracts.AuthStep.Confirm(
-                    stepId = "confirm-1",
-                    title = "Ready?",
-                    body = "Finish login",
-                    confirmLabel = "I have logged in",
-                ),
-            ),
-            error = null,
-        )
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-                error = null,
-                session = inProgress,
-            ),
-            actionSession = inProgress.copy(
-                steps = listOf(
-                    harold.android.contracts.AuthStep.Working(label = "Checking…"),
-                ),
-            ),
-        )
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-        advanceUntilIdle()
-
-        viewModel.onAuthConfirm("confirm-1")
-        advanceUntilIdle()
-        assertEquals(1, repository.authActionCalls.size)
-        assertEquals(
-            harold.android.contracts.AuthSessionAction.Confirm("confirm-1"),
-            repository.authActionCalls.single().third,
-        )
-
-        viewModel.onAuthCancel()
-        advanceUntilIdle()
-        assertEquals(2, repository.authActionCalls.size)
-        assertEquals(
-            harold.android.contracts.AuthSessionAction.Cancel,
-            repository.authActionCalls.last().third,
-        )
-    }
-
-    @Test
-    fun authLogoutWhenCanLogout() = runTest(dispatcher) {
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.Authenticated,
-                error = null,
-                session = null,
-            ),
-            canLogout = true,
-        )
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.agentAuth.authSummary?.canLogout == true)
-        viewModel.onAuthLogout()
-        advanceUntilIdle()
-
-        assertEquals(listOf("cursor"), repository.authLogoutCalls)
-        assertEquals(
-            harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            viewModel.uiState.value.agentAuth.summary?.status,
-        )
-        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
-    }
-
-    @Test
-    fun disconnectFromServerRevokesDeviceAndClearsLocalAccess() = runTest(dispatcher) {
+    fun disconnectFromServerRemovesTheConnectionAndClearsLocalAccess() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
-        val sessionGateway = FakeSessionGateway(
-            PairedState.Paired(ORIGIN, "device_01", "Pixel"),
+        val connectionGateway = FakeConnectionGateway(
+            ActiveConnectionState.Active(ORIGIN, "Pixel"),
         )
         val sessionOwner = ChatFakeSessionOwner()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
@@ -1671,7 +1550,7 @@ class ChatViewModelTest {
             repository = repository,
             navigation = navigation,
             sessionOwner = sessionOwner,
-            sessionGateway = sessionGateway,
+            connectionGateway = connectionGateway,
         )
         advanceUntilIdle()
 
@@ -1694,8 +1573,7 @@ class ChatViewModelTest {
         viewModel.disconnectFromServer()
         advanceUntilIdle()
 
-        assertEquals(listOf("device_01"), repository.revokeDeviceCalls)
-        assertEquals(PairedState.NotPaired, sessionGateway.pairedState.value)
+        assertEquals(ActiveConnectionState.NoConnection, connectionGateway.activeConnection.value)
         assertTrue(navigation.lastSessionCleared)
         assertEquals(1, sessionOwner.disconnects)
         assertTrue(viewModel.uiState.value.availableCommands.isEmpty())
@@ -1704,21 +1582,21 @@ class ChatViewModelTest {
     @Test
     fun disconnectFromServerKeepsTheOtherHarold() = runTest(dispatcher) {
         val desktopOrigin = "http://desktop.local:3847"
-        val store = FakeCredentialStore()
-        store.save(savedHarold(ORIGIN, "device_01", "devcred_loop", "loopback"))
-        store.save(savedHarold(desktopOrigin, "device_desktop", "devcred_desk", "desktop"))
+        val store = FakeConnectionStore()
+        store.save(savedConnection(ORIGIN, "device_01", "devcred_loop", "loopback"))
+        store.save(savedConnection(desktopOrigin, "device_desktop", "devcred_desk", "desktop"))
         val repository = ChatFakeUserRepository()
-        val sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
-        sessionGateway.pairedAfterRefresh = PairedState.Paired(desktopOrigin, "device_desktop", "Pixel")
+        val connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
+        connectionGateway.activeAfterRefresh = ActiveConnectionState.Active(desktopOrigin, "Pixel")
         val sessionOwner = ChatFakeSessionOwner()
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
-            sessionGateway = sessionGateway,
-            savedHaroldRepository = SavedHaroldRepository(store),
+            connectionGateway = connectionGateway,
+            connectionRepository = ConnectionRepository(store),
             navigator = navigator,
         )
         advanceUntilIdle()
@@ -1726,10 +1604,10 @@ class ChatViewModelTest {
         viewModel.disconnectFromServer()
         advanceUntilIdle()
 
-        assertEquals(listOf(desktopOrigin), store.list().map { harold -> harold.serverOrigin })
+        assertEquals(listOf(desktopOrigin), store.list().map { connection -> connection.connectionId })
         assertEquals(desktopOrigin, sessionOwner.connections.last())
         assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
-        assertEquals(0, sessionGateway.clearLocalAccessCount)
+        assertEquals(0, connectionGateway.clearLocalAccessCount)
     }
 
     @Test
@@ -2011,24 +1889,24 @@ class ChatViewModelTest {
         repository: ChatFakeUserRepository,
         navigation: ChatFakeNavigationPreferences,
         sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
-        sessionGateway: FakeSessionGateway = pairedGateway(),
+        connectionGateway: FakeConnectionGateway = activeGateway(),
         sessionRepository: SessionRepository = TestSessionRepository(repository),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
         gitApi: GitApi = RecordingGitApi(),
-        savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
+        connectionRepository: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
         navigator: Navigator = Navigator(),
         sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
-        haroldConnections: harold.android.session.HaroldConnections? = null,
+        connections: harold.android.session.Connections? = null,
         sessionAttention: harold.android.foreground.SessionAttentionMarks? = null,
         permissionNotifier: harold.android.foreground.PermissionAttentionNotifier? = null,
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
-        sessionGateway = sessionGateway,
+        connectionGateway = connectionGateway,
         sessionOwner = sessionOwner,
         sessionRepository = sessionRepository,
         userRepository = repository,
-        savedHaroldRepository = savedHaroldRepository,
+        connectionRepository = connectionRepository,
         attachmentApi = attachmentApi,
         configApi = configApi,
         gitApi = gitApi,
@@ -2042,21 +1920,21 @@ class ChatViewModelTest {
         previewDispatcher = dispatcher,
         navigator = navigator,
         sessionCommands = sessionCommands,
-        haroldConnections = haroldConnections,
+        connections = connections,
         sessionAttention = sessionAttention,
         permissionNotifier = permissionNotifier,
     )
 
-    private fun pairedGateway(): FakeSessionGateway =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+    private fun activeGateway(): FakeConnectionGateway =
+        FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
 
     private fun TestScope.createSessionThroughRoute(
         repository: ChatFakeUserRepository,
         sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
     ) {
         val route = CreateSessionViewModel(
-            sessionGateway = pairedGateway(),
-            sessionRepository = TestSessionRepository(repository),
+            connectionGateway = activeGateway(),
+            agentRepository = TestAgentRepository(repository),
             workspaceRepository = TestWorkspaceRepository(repository),
             userRepository = repository,
             sessionCommands = sessionCommands,
@@ -2075,8 +1953,8 @@ class ChatViewModelTest {
         sessionPreferences: FakeSessionPreferences,
     ) {
         val route = CreateSessionViewModel(
-            sessionGateway = pairedGateway(),
-            sessionRepository = TestSessionRepository(repository),
+            connectionGateway = activeGateway(),
+            agentRepository = TestAgentRepository(repository),
             workspaceRepository = TestWorkspaceRepository(repository),
             userRepository = repository,
             sessionCommands = sessionCommands,
@@ -2167,7 +2045,7 @@ class ChatViewModelTest {
     fun attachmentFailsWithTheServerReasonWhenTheSessionFolderIsUnavailable() = runTest(dispatcher) {
         val attachments = object : AttachmentApi {
             override suspend fun uploadAttachment(
-                serverOrigin: String,
+                connectionId: String,
                 request: AttachmentUploadRequest,
             ): Result<AttachmentDescriptor> = Result.failure(
                 AgentApiException(
@@ -2180,7 +2058,7 @@ class ChatViewModelTest {
             )
 
             override suspend fun deleteAttachment(
-                serverOrigin: String,
+                connectionId: String,
                 agentId: String,
                 sessionId: String,
                 attachmentId: String,
@@ -2220,7 +2098,7 @@ class ChatViewModelTest {
 
 private class RecordingSessionConfigApi : SessionConfigApi {
     data class Call(
-        val serverOrigin: String,
+        val connectionId: String,
         val agentId: String,
         val sessionId: String,
         val configId: String,
@@ -2231,13 +2109,13 @@ private class RecordingSessionConfigApi : SessionConfigApi {
     var result: Result<Unit> = Result.success(Unit)
 
     override suspend fun setConfigOption(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         configId: String,
         value: ConfigValue,
     ): Result<Unit> {
-        calls += Call(serverOrigin, agentId, sessionId, configId, value)
+        calls += Call(connectionId, agentId, sessionId, configId, value)
         return result
     }
 }
@@ -2245,12 +2123,12 @@ private class RecordingSessionConfigApi : SessionConfigApi {
 private class NoopAttachmentApi : AttachmentApi {
 
     override suspend fun uploadAttachment(
-        serverOrigin: String,
+        connectionId: String,
         request: AttachmentUploadRequest,
     ): Result<AttachmentDescriptor> = Result.failure(UnsupportedOperationException("not used"))
 
     override suspend fun deleteAttachment(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         attachmentId: String,
@@ -2262,7 +2140,7 @@ private class RecordingAttachmentApi : AttachmentApi {
     val deletes = mutableListOf<Triple<String, String, String>>()
 
     override suspend fun uploadAttachment(
-        serverOrigin: String,
+        connectionId: String,
         request: AttachmentUploadRequest,
     ): Result<AttachmentDescriptor> {
         uploads += request
@@ -2279,7 +2157,7 @@ private class RecordingAttachmentApi : AttachmentApi {
     }
 
     override suspend fun deleteAttachment(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         attachmentId: String,
@@ -2306,28 +2184,28 @@ private class RecordingGitApi(
     val summaryCalls = mutableListOf<Pair<String, String>>()
 
     override suspend fun getSummary(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
     ): Result<GitSummary> {
-        summaryCalls += serverOrigin to path
+        summaryCalls += connectionId to path
         return summaryResult
     }
 
     override suspend fun listWorktrees(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
     ): Result<GitWorktreeCollection> =
         Result.failure(UnsupportedOperationException("not used"))
 
     override suspend fun getChanges(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
         scope: GitScope,
     ): Result<GitChanges> =
         Result.failure(UnsupportedOperationException("not used"))
 
     override suspend fun getFileDiff(
-        serverOrigin: String,
+        connectionId: String,
         worktreePath: String,
         scope: GitScope,
         filePath: String,
@@ -2377,8 +2255,8 @@ private class ChatFakeSessionOwner : SessionOwner {
 
     val connections = mutableListOf<String>()
 
-    override fun connect(serverOrigin: String) {
-        connections += serverOrigin
+    override fun connect(connectionId: String) {
+        connections += connectionId
     }
     override fun retry() = Unit
 
@@ -2485,18 +2363,11 @@ private class ChatFakeUserRepository(
         error = null,
         session = null,
     ),
-    private val startSession: harold.android.contracts.AgentAuthSession? = null,
-    private val actionSession: harold.android.contracts.AgentAuthSession? = null,
-    var canLogout: Boolean = false,
     var sessionsGate: CompletableDeferred<Unit>? = null,
 ) : UserRepository {
     val createCalls = mutableListOf<CreateSessionBody>()
     val deleteCalls = mutableListOf<Pair<String, String>>()
     val authGetCalls = mutableListOf<String>()
-    val authStartCalls = mutableListOf<String>()
-    val authActionCalls = mutableListOf<Triple<String, String, harold.android.contracts.AuthSessionAction>>()
-    val authLogoutCalls = mutableListOf<String>()
-    val revokeDeviceCalls = mutableListOf<String>()
     var agentAuthOverride: harold.android.contracts.AgentAuth = agentAuth
     var createFailure: Throwable? = null
     var sessionsOverride: List<Session>? = null
@@ -2512,7 +2383,7 @@ private class ChatFakeUserRepository(
     }
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ) = Result.success(
         WorkspaceCollection(
@@ -2530,38 +2401,35 @@ private class ChatFakeUserRepository(
         ),
     )
 
-    override suspend fun getRuntimeSettings(serverOrigin: String) =
-        Result.failure<harold.android.contracts.RuntimeSettingsView>(UnsupportedOperationException())
-
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCollection>(
         UnsupportedOperationException(),
     )
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateWorkspaceBody,
     ) = Result.failure<Workspace>(UnsupportedOperationException())
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> {
         listSessionsCalls += 1
         sessionsGate?.await()
-        if (serverOrigin in failOrigins) {
+        if (connectionId in failOrigins) {
             return Result.failure(IllegalStateException("offline"))
         }
-        sessionsByOrigin?.get(serverOrigin)?.let { sessions ->
+        sessionsByOrigin?.get(connectionId)?.let { sessions ->
             return Result.success(SessionCollection(items = sessions))
         }
         return Result.success(
@@ -2569,7 +2437,7 @@ private class ChatFakeUserRepository(
         )
     }
 
-    override suspend fun listAgents(serverOrigin: String) = Result.success(
+    override suspend fun listAgents(connectionId: String) = Result.success(
         AgentSettingsCollection(
             items = listOf(
                 AgentSettings(
@@ -2586,7 +2454,7 @@ private class ChatFakeUserRepository(
                                 it.status == harold.android.contracts.AuthSessionStatus.InProgress
                             }
                             ?.sessionId,
-                        canLogout = canLogout,
+                        canLogout = false,
                     ),
                 ),
             ),
@@ -2594,7 +2462,7 @@ private class ChatFakeUserRepository(
     )
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> {
         createCalls += body
@@ -2634,7 +2502,7 @@ private class ChatFakeUserRepository(
     }
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
     ): Result<Unit> {
@@ -2654,95 +2522,32 @@ private class ChatFakeUserRepository(
     }
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
     ): Result<harold.android.contracts.AgentAuth> {
         authGetCalls += agentId
         return Result.success(agentAuthOverride.copy(agentId = agentId))
     }
 
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: String,
-    ): Result<harold.android.contracts.AgentAuthSession> {
-        authStartCalls += agentId
-        val session = startSession ?: return Result.failure(UnsupportedOperationException())
-        agentAuthOverride = agentAuthOverride.copy(
-            status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            session = session,
-        )
-        return Result.success(session)
-    }
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: String,
-        sessionId: String,
-        action: harold.android.contracts.AuthSessionAction,
-    ): Result<harold.android.contracts.AgentAuthSession> {
-        authActionCalls += Triple(agentId, sessionId, action)
-        val session = when (action) {
-            is harold.android.contracts.AuthSessionAction.Cancel -> {
-                (actionSession ?: agentAuthOverride.session)?.copy(
-                    status = harold.android.contracts.AuthSessionStatus.Cancelled,
-                    steps = listOf(
-                        harold.android.contracts.AuthStep.Done(
-                            outcome = harold.android.contracts.AuthDoneOutcome.Cancelled,
-                            message = null,
-                        ),
-                    ),
-                )
-            }
-            else -> actionSession
-        } ?: return Result.failure(UnsupportedOperationException())
-        agentAuthOverride = agentAuthOverride.copy(session = session)
-        return Result.success(session)
-    }
-
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
-    ): Result<harold.android.contracts.AgentAuthSummary> {
-        authLogoutCalls += agentId
-        val summary = harold.android.contracts.AgentAuthSummary(
-            status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            error = null,
-            activeSessionId = null,
-            canLogout = false,
-        )
-        agentAuthOverride = harold.android.contracts.AgentAuth(
-            agentId = agentId,
-            status = summary.status,
-            error = null,
-            session = null,
-        )
-        canLogout = false
-        return Result.success(summary)
-    }
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit> {
-        revokeDeviceCalls += deviceId
-        return Result.success(Unit)
-    }
+    ) = Result.failure<harold.android.contracts.AgentAuthSummary>(UnsupportedOperationException())
 }
 
-private fun savedHarold(
-    serverOrigin: String,
+private fun savedConnection(
+    connectionId: String,
     deviceId: String,
     credential: String,
     name: String,
-) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
-    serverOrigin = serverOrigin,
+) = SavedConnection(
+    formatVersion = 3,
+    connectionId = connectionId,
     deviceName = "Pixel",
-    credential = credential,
     name = name,
     colorId = "ink",
     iconId = "mark",
+    ssh = sshConfig(connectionId),
 )
 
 private fun session(
@@ -2770,27 +2575,34 @@ private fun listedSession(id: String, title: String) = SessionRow(
     updatedAt = "2026-08-05T01:00:00.000Z",
 )
 
-private fun storedHarold(
-    serverOrigin: String,
+private fun storedConnection(
+    connectionId: String,
     name: String,
     colorId: String,
     iconId: String,
     deviceId: String,
-) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
-    serverOrigin = serverOrigin,
+) = SavedConnection(
+    formatVersion = 3,
+    connectionId = connectionId,
     deviceName = "Pixel",
-    credential = "devcred_$deviceId",
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = sshConfig(connectionId),
+)
+
+private fun sshConfig(connectionId: String) = harold.android.credentials.SshConfig(
+    host = connectionId,
+    port = 22,
+    user = "gary",
+    auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
+    hostKeyFingerprint = "SHA256:abc",
 )
 
 private class RecordingHaroldConnections(
     private val reported: MutableList<Pair<String, List<harold.android.contracts.SessionState>>>,
-) : harold.android.session.HaroldConnections {
-    override val connections = MutableStateFlow(emptyList<harold.android.session.HaroldConnection>())
+) : harold.android.session.Connections {
+    override val connections = MutableStateFlow(emptyList<harold.android.session.ConnectionHealth>())
 
     override fun onForeground() = Unit
 
@@ -2799,11 +2611,11 @@ private class RecordingHaroldConnections(
     override suspend fun refresh() = Unit
 
     override fun setSessionStates(
-        serverOrigin: String,
+        connectionId: String,
         states: List<harold.android.contracts.SessionState>,
     ) {
-        reported += serverOrigin to states
+        reported += connectionId to states
     }
 
-    override fun shouldStayConnected(serverOrigin: String): Boolean = false
+    override fun shouldStayConnected(connectionId: String): Boolean = false
 }

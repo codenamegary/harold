@@ -189,6 +189,7 @@ fun HaroldAppearanceEditor(
     iconTagPrefix: String,
     modifier: Modifier = Modifier,
     endpointSubtitle: String? = null,
+    previewAtEnd: Boolean = false,
 ) {
     val activeColor = haroldColorOption(colorId)
 
@@ -196,63 +197,20 @@ fun HaroldAppearanceEditor(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = activeColor.containerColor.copy(alpha = 0.35f),
-                    shape = RoundedCornerShape(14.dp),
-                ),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                HaroldBadge(
-                    colorId = colorId,
-                    iconId = iconId,
-                    size = 44.dp,
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = name.ifBlank { "Harold" },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (!endpointSubtitle.isNullOrBlank()) {
-                        Text(
-                            text = endpointSubtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
+        if (!previewAtEnd) {
+            AppearancePreview(
+                name = name,
+                colorId = colorId,
+                iconId = iconId,
+                endpointSubtitle = endpointSubtitle,
+            )
         }
 
-        OutlinedTextField(
+        HaroldTextField(
             value = name,
             onValueChange = onNameChanged,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(nameFieldTag),
-            label = { Text(text = nameLabel) },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            label = nameLabel,
+            fieldTestTag = nameFieldTag,
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -369,6 +327,73 @@ fun HaroldAppearanceEditor(
                             modifier = Modifier.size(22.dp),
                         )
                     }
+                }
+            }
+        }
+
+        if (previewAtEnd) {
+            AppearancePreview(
+                name = name,
+                colorId = colorId,
+                iconId = iconId,
+                endpointSubtitle = endpointSubtitle,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppearancePreview(
+    name: String,
+    colorId: String,
+    iconId: String,
+    endpointSubtitle: String?,
+) {
+    val activeColor = haroldColorOption(colorId)
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = activeColor.containerColor.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(14.dp),
+            ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            HaroldBadge(
+                colorId = colorId,
+                iconId = iconId,
+                size = 44.dp,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = name.ifBlank { "Harold" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!endpointSubtitle.isNullOrBlank()) {
+                    Text(
+                        text = endpointSubtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }

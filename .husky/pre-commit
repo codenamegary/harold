@@ -1,4 +1,0 @@
-bunx --bun lint-staged
-bun run lint
-bun run lint:boundaries
-bun run typecheck

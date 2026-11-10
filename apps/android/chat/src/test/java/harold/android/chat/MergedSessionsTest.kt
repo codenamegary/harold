@@ -10,14 +10,14 @@ class MergedSessionsTest {
     fun listsEveryHaroldNewestFirstWithItsNameColorAndIcon() {
         val rows = mergedSessionRows(
             listOf(
-                haroldGroup(
+                connectionGroup(
                     origin = "http://laptop.local:3847",
                     name = "laptop",
                     colorId = "tide",
                     iconId = "bolt",
                     sessions = listOf(session("sess_laptop", "Alpha", "2026-08-02T00:00:00.000Z")),
                 ),
-                haroldGroup(
+                connectionGroup(
                     origin = "http://desktop.local:3847",
                     name = "desktop",
                     colorId = "ink",
@@ -27,12 +27,12 @@ class MergedSessionsTest {
             ),
         )
 
-        assertEquals(listOf("desktop", "laptop"), rows.map { row -> row.haroldName })
+        assertEquals(listOf("desktop", "laptop"), rows.map { row -> row.connectionName })
         assertEquals(listOf("Alpha", "Alpha"), rows.map { row -> row.name })
-        assertEquals("ink", rows[0].haroldColorId)
-        assertEquals("mark", rows[0].haroldIconId)
-        assertEquals("tide", rows[1].haroldColorId)
-        assertEquals("bolt", rows[1].haroldIconId)
+        assertEquals("ink", rows[0].connectionColorId)
+        assertEquals("mark", rows[0].connectionIconId)
+        assertEquals("tide", rows[1].connectionColorId)
+        assertEquals("bolt", rows[1].connectionIconId)
         assertNotEquals(rows[0].id, rows[1].id)
     }
 
@@ -40,14 +40,14 @@ class MergedSessionsTest {
     fun choosingOneHaroldOnlyHidesTheOtherRows() {
         val all = mergedSessionRows(
             listOf(
-                haroldGroup(
+                connectionGroup(
                     origin = "http://laptop.local:3847",
                     name = "laptop",
                     colorId = "tide",
                     iconId = "bolt",
                     sessions = listOf(session("sess_laptop", "Alpha", "2026-08-03T00:00:00.000Z")),
                 ),
-                haroldGroup(
+                connectionGroup(
                     origin = "http://desktop.local:3847",
                     name = "desktop",
                     colorId = "ink",
@@ -67,7 +67,7 @@ class MergedSessionsTest {
     fun unreachableHaroldStaysInTheListMarkedUnreachable() {
         val rows = mergedSessionRows(
             listOf(
-                haroldGroup(
+                connectionGroup(
                     origin = "http://laptop.local:3847",
                     name = "laptop",
                     colorId = "tide",
@@ -79,11 +79,11 @@ class MergedSessionsTest {
         )
 
         assertEquals("Alpha", rows.single().name)
-        assertEquals(false, rows.single().haroldReachable)
+        assertEquals(false, rows.single().connectionReachable)
     }
 }
 
-private fun haroldGroup(
+private fun connectionGroup(
     origin: String,
     name: String,
     colorId: String,
@@ -91,8 +91,8 @@ private fun haroldGroup(
     reachable: Boolean = true,
     sessions: List<SessionRow>,
 ) = HaroldSessionGroup(
-    serverOrigin = origin,
-    haroldName = name,
+    connectionId = origin,
+    connectionName = name,
     colorId = colorId,
     iconId = iconId,
     reachable = reachable,

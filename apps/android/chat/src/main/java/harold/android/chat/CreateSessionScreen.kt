@@ -79,13 +79,6 @@ fun CreateSessionScreen(
                 .testTag("create_session_screen"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(R.string.create_session_helper),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag("create_session_helper"),
-            )
-
             WorkspaceDropdown(
                 workspaces = createState.workspaces,
                 selectedWorkspaceId = createState.selectedWorkspaceId,
@@ -109,9 +102,9 @@ fun CreateSessionScreen(
 
             HaroldButton(
                 text = if (createState.submitting) {
-                    stringResource(R.string.create_session_continuing)
+                    stringResource(R.string.create_session_starting)
                 } else {
-                    stringResource(R.string.create_session_continue)
+                    stringResource(R.string.create_session_start)
                 },
                 onClick = onSubmit,
                 enabled = !createState.submitting,
@@ -137,9 +130,9 @@ private fun WorkspaceDropdown(
     val selectedLabel = selectedWorkspace?.pickerLabel() ?: "Choose workspace"
     val showSelectedBadge = selectedWorkspace != null &&
         (
-            selectedWorkspace.haroldColorId.isNotEmpty() ||
-                selectedWorkspace.haroldIconId.isNotEmpty() ||
-                selectedWorkspace.haroldName.isNotEmpty()
+            selectedWorkspace.connectionColorId.isNotEmpty() ||
+                selectedWorkspace.connectionIconId.isNotEmpty() ||
+                selectedWorkspace.connectionName.isNotEmpty()
             )
 
     ExposedDropdownMenuBox(
@@ -154,8 +147,8 @@ private fun WorkspaceDropdown(
             leadingIcon = if (showSelectedBadge) {
                 {
                     HaroldBadge(
-                        colorId = selectedWorkspace.haroldColorId,
-                        iconId = selectedWorkspace.haroldIconId,
+                        colorId = selectedWorkspace.connectionColorId,
+                        iconId = selectedWorkspace.connectionIconId,
                         size = 22.dp,
                         modifier = Modifier.testTag("create_session_workspace_badge"),
                     )
@@ -205,16 +198,16 @@ private fun WorkspaceDropdown(
             }
 
             workspaces.forEach { workspace ->
-                val hasBadge = workspace.haroldColorId.isNotEmpty() ||
-                    workspace.haroldIconId.isNotEmpty() ||
-                    workspace.haroldName.isNotEmpty()
+                val hasBadge = workspace.connectionColorId.isNotEmpty() ||
+                    workspace.connectionIconId.isNotEmpty() ||
+                    workspace.connectionName.isNotEmpty()
                 val isSelected = workspace.id == selectedWorkspaceId
                 DropdownMenuItem(
                     leadingIcon = if (hasBadge) {
                         {
                             HaroldBadge(
-                                colorId = workspace.haroldColorId,
-                                iconId = workspace.haroldIconId,
+                                colorId = workspace.connectionColorId,
+                                iconId = workspace.connectionIconId,
                                 size = 22.dp,
                                 modifier = Modifier.testTag("create_session_workspace_option_badge_${workspace.id}"),
                             )
