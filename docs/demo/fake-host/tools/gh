@@ -16,7 +16,7 @@ JSON
   "pr list")
     cat "$state_dir/pull-request.json" 2>/dev/null || echo "[]"
     ;;
-  "--version "|"version ")
+  "--version"|"version ")
     echo "gh version 2.63.2 (harold demo)"
     ;;
   *)

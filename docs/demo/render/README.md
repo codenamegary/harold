@@ -3,7 +3,7 @@
 Remotion cut for the site and the README. The terminal is drawn here; the phone
 screen is assembled from the slices captured by `docs/demo/capture/capture.sh`.
 
-The cut opens on the SSH host: the terminal types `ssh gary@demo-host -p 2223`,
+The cut opens on the SSH host: the terminal types `ssh -p 2223 gary@127.0.0.1`,
 lists the repos, shows a clean `feat/cat-mode` worktree, and prints the fixed
 host key fingerprint. The phone slides in beside it, adds the host, signs in
 with the demo password, tests the connection, trusts the fingerprint, and lands
