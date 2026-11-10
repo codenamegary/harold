@@ -190,4 +190,4 @@ restart and session deletion.
 
 ## CI
 
-Android checks run in `.github/workflows/ci.yml` when `apps/android/**` changes.
+Android checks run in `.github/workflows/ci.yml`.

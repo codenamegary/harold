@@ -1,3 +1,4 @@
+#!/bin/sh
 # Conventional Commits check. release-please cuts releases from these subjects,
 # so malformed ones must not land on main.
 commit_msg=$(head -n 1 "$1")

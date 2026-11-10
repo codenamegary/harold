@@ -52,7 +52,7 @@ The script rebuilds the icon and the feature graphic. Set `CHROME` if Chrome is 
 The store asset check verifies the Play size, dimension, format, and aspect ratio limits:
 
 ```sh
-bun test scripts/checks/store-assets.test.ts
+python3 scripts/checks/store_assets.py
 ```
 
 ## Upload order

@@ -1,89 +1,20 @@
 name: ci
 
-# Single entry point for pull request and push CI. Branch protection needs a
-# status check that reports on every pull request, so no trigger here may use
-# paths/paths-ignore — path filtering happens inside the `changes` job, and
-# `ci-ok` is the one check that always reports. The invariants are enforced
-# by scripts/checks/workflows.test.ts.
-
+# Android is the only product in the repo, so every pull request and main
+# push runs the Android checks. ci-ok is the single required status check for
+# branch protection.
 on:
   push:
     branches:
       - main
-  # No branches filter here: stacked PRs target other PR branches, and a
-  # base-branch filter skips them entirely. Push stays filtered to main so
-  # branches with open PRs do not double-run CI.
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      # Manual dispatch has no meaningful diff to inspect, so it runs
-      # everything; otherwise the filter step decides.
-      check: ${{ steps.all.outputs.check || steps.filter.outputs.check }}
-      android: ${{ steps.all.outputs.android || steps.filter.outputs.android }}
-    steps:
-      # pull requests diff via the GitHub API, push events diff git history
-      # against the previous push (base defaults to the pushed branch).
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed paths
-        id: filter
-        uses: dorny/paths-filter@v4
-        with:
-          # `check` relies on its `!apps/android/**` exclusion, which the
-          # default `some` quantifier would silently ignore.
-          predicate-quantifier: some-with-excludes
-          filters: |
-            check:
-              - '**'
-              - '!apps/android/**'
-            android:
-              - 'apps/android/**'
-              - '.github/workflows/ci.yml'
-
-      - name: Run everything on manual dispatch
-        id: all
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          for name in check android; do
-            echo "$name=true" >> "$GITHUB_OUTPUT"
-          done
-
-  check:
-    needs: changes
-    if: needs.changes.outputs.check == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Lint, format, and script checks
-        run: |
-          bun run lint
-          bun run format:check
-          bun test scripts
-
   android:
-    needs: changes
-    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -119,21 +50,32 @@ jobs:
           name: test-results
           path: apps/android/**/build/test-results/testDebugUnitTest/
 
-  # The single required status check. It always runs (even when jobs above
-  # are skipped or failed) and fails unless every job reported success or
-  # was skipped by the path filter — see scripts/ci/gate.ts.
-  ci-ok:
-    if: always()
-    needs: [changes, check, android]
+  store-assets:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
+      - name: Check Play store assets
+        run: python3 scripts/checks/store_assets.py
 
+  # The single required status check. It always runs and fails unless every
+  # job reported success or was skipped.
+  ci-ok:
+    if: always()
+    needs: [android, store-assets]
+    runs-on: ubuntu-latest
+    steps:
       - name: Enforce the gate
-        run: bun run scripts/ci/gate.ts ${{ join(needs.*.result, ' ') }}
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          [ -n "$RESULTS" ] || { echo "gate: fail (no results)"; exit 1; }
+          for result in $RESULTS; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "gate: fail ($RESULTS)"; exit 1 ;;
+            esac
+          done
+          echo "gate: pass"

@@ -35,13 +35,14 @@ Harold installs nothing on the host. It runs your agent CLI over an SSH exec cha
 
 ## Working on the app
 
+Install the commit hook once per clone:
+
 ```sh
-bun install    # repo tooling (oxlint, scripts)
-bun run check  # lint, format check, and script tests
+git config core.hooksPath .githooks
 ```
 
-The Android build and the SSH integration test are documented in
-[apps/android/README.md](apps/android/README.md).
+The Android build, unit tests, and the opt-in SSH integration test are
+documented in [apps/android/README.md](apps/android/README.md).
 
 ## Architecture
 
