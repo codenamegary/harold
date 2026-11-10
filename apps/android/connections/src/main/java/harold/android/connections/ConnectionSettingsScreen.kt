@@ -129,6 +129,28 @@ fun ConnectionSettingsScreen(
             }
 
             HaroldFormSection(
+                title = stringResource(R.string.settings_appearance_section),
+                modifier = Modifier.testTag("settings_appearance_section"),
+            ) {
+                HaroldAppearanceEditor(
+                    name = uiState.name,
+                    colorId = uiState.colorId,
+                    iconId = uiState.iconId,
+                    onNameChanged = onNameChanged,
+                    onColorSelected = onColorSelected,
+                    onIconSelected = onIconSelected,
+                    nameLabel = stringResource(R.string.connections_name_label),
+                    colorLabel = stringResource(R.string.connections_color_label),
+                    iconLabel = stringResource(R.string.connections_icon_label),
+                    nameFieldTag = "settings_name",
+                    colorTagPrefix = "settings_color_",
+                    iconTagPrefix = "settings_icon_",
+                    endpointSubtitle = uiState.endpoint,
+                    previewAtEnd = true,
+                )
+            }
+
+            HaroldFormSection(
                 title = stringResource(R.string.settings_host_section),
                 modifier = Modifier.testTag("settings_host_section"),
             ) {
@@ -221,27 +243,6 @@ fun ConnectionSettingsScreen(
                     label = stringResource(R.string.settings_default_workspace_label),
                     placeholder = stringResource(R.string.settings_default_workspace_placeholder),
                     modifier = Modifier.testTag("settings_default_workspace"),
-                )
-            }
-
-            HaroldFormSection(
-                title = stringResource(R.string.settings_appearance_section),
-                modifier = Modifier.testTag("settings_appearance_section"),
-            ) {
-                HaroldAppearanceEditor(
-                    name = uiState.name,
-                    colorId = uiState.colorId,
-                    iconId = uiState.iconId,
-                    onNameChanged = onNameChanged,
-                    onColorSelected = onColorSelected,
-                    onIconSelected = onIconSelected,
-                    nameLabel = stringResource(R.string.connections_name_label),
-                    colorLabel = stringResource(R.string.connections_color_label),
-                    iconLabel = stringResource(R.string.connections_icon_label),
-                    nameFieldTag = "settings_name",
-                    colorTagPrefix = "settings_color_",
-                    iconTagPrefix = "settings_icon_",
-                    endpointSubtitle = uiState.endpoint,
                 )
             }
 
