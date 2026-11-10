@@ -106,6 +106,43 @@ class DefaultWorkspaceRepositoryTest {
     }
 
     @Test
+    fun deleteRemovesTheCachedWorkspaceAfterTheServerAcceptsIt() = runTest {
+        api.workspaces = Result.success(
+            WorkspaceCollection(
+                items = listOf(workspace(id = "ws_01", name = "harold")),
+                page = PageInfo(limit = 100, count = 1),
+            ),
+        )
+        repository.refresh(ORIGIN)
+
+        val result = repository.delete(ORIGIN, "/tmp/ws_01")
+
+        assertTrue(result.isSuccess)
+        assertEquals(listOf("/tmp/ws_01"), api.deletedPaths)
+        assertTrue(repository.observe(ORIGIN).first().isEmpty())
+    }
+
+    @Test
+    fun deleteFailureLeavesTheCachedWorkspaceAlone() = runTest {
+        api.workspaces = Result.success(
+            WorkspaceCollection(
+                items = listOf(workspace(id = "ws_01", name = "harold")),
+                page = PageInfo(limit = 100, count = 1),
+            ),
+        )
+        repository.refresh(ORIGIN)
+        api.deleted = Result.failure(IllegalStateException("offline"))
+
+        val result = repository.delete(ORIGIN, "/tmp/ws_01")
+
+        assertTrue(result.isFailure)
+        assertEquals(
+            listOf("harold"),
+            repository.observe(ORIGIN).first().map { cached -> cached.workspace.name },
+        )
+    }
+
+    @Test
     fun createFailureDoesNotWriteToRoom() = runTest {
         api.created = Result.failure(IllegalStateException("offline"))
 
@@ -153,6 +190,8 @@ private class WorkspaceFakeAgentApi : harold.android.network.WorkspaceApi {
             lastUsedAt = "2026-08-01T00:00:00.000Z",
         ),
     )
+    var deleted: Result<Unit> = Result.success(Unit)
+    val deletedPaths = mutableListOf<String>()
 
     override suspend fun listWorkspaces(
         connectionId: String,
@@ -163,6 +202,14 @@ private class WorkspaceFakeAgentApi : harold.android.network.WorkspaceApi {
         connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = created
+
+    override suspend fun deleteWorkspace(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> {
+        deletedPaths += path
+        return deleted
+    }
 
     override suspend fun listFilesystemDirectories(
         connectionId: String,

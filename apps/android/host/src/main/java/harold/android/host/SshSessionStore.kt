@@ -61,12 +61,28 @@ class SshSessionStore(
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * Paths the user deleted from the workspace list. Session directories are
+     * hints, so without this a deleted folder would return on the next list.
+     */
+    suspend fun hiddenWorkspaces(): Set<String> {
+        val bytes = runCatching { connection.readFile(hiddenWorkspacesPath()) }.getOrNull()
+            ?: return emptySet()
+        return runCatching {
+            json.decodeFromString<List<String>>(bytes.toString(Charsets.UTF_8)).toSet()
+        }.getOrDefault(emptySet())
+    }
+
     suspend fun rememberWorkspace(path: String, name: String): HostWorkspace {
         val now = Instant.now().toString()
         val existing = workspaces()
         val found = existing.find { workspace -> workspace.path == path }
         if (found != null) {
             return found
+        }
+        val hidden = hiddenWorkspaces()
+        if (path in hidden) {
+            writeHiddenWorkspaces(hidden - path)
         }
         val workspace = HostWorkspace(
             id = stableId(path),
@@ -81,6 +97,7 @@ class SshSessionStore(
 
     suspend fun forgetWorkspace(path: String) {
         writeWorkspaces(workspaces().filterNot { workspace -> workspace.path == path })
+        writeHiddenWorkspaces(hiddenWorkspaces() + path)
     }
 
     fun agentsConfigPath(): String = "$baseDir/agents.json"
@@ -127,7 +144,16 @@ class SshSessionStore(
         )
     }
 
+    private suspend fun writeHiddenWorkspaces(paths: Set<String>) {
+        connection.writeFile(
+            hiddenWorkspacesPath(),
+            json.encodeToString(paths.sorted()).toByteArray(Charsets.UTF_8),
+        )
+    }
+
     private fun workspacesPath(): String = "$baseDir/workspaces.json"
+
+    private fun hiddenWorkspacesPath(): String = "$baseDir/hidden-workspaces.json"
 
     companion object {
         fun safe(value: String): String = value.replace(Regex("[^A-Za-z0-9._-]"), "_")

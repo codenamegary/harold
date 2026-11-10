@@ -31,6 +31,7 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 uiState = uiState,
                 onBack = { navigator.goBack() },
                 onAddClick = navigator::openAddWorkspace,
+                onDeleteWorkspace = viewModel::delete,
             )
         }
         scope.entry<AddWorkspace> {

@@ -35,6 +35,15 @@ interface WorkspaceApi {
         connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace>
+
+    /**
+     * Forgets the workspace bookmark and hides its folder from session
+     * directory hints. The folder itself is untouched.
+     */
+    suspend fun deleteWorkspace(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = Result.failure(unsupported("workspace removal is not supported"))
 }
 
 /** Agent catalog and settings surface for one saved connection. */

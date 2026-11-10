@@ -41,6 +41,7 @@ sealed interface WorkspacesLoadState {
 data class WorkspacesUiState(
     val loadState: WorkspacesLoadState = WorkspacesLoadState.Loading,
     val connectionByWorkspaceId: Map<String, WorkspaceConnectionBadge> = emptyMap(),
+    val actionError: String? = null,
 )
 
 @HiltViewModel
@@ -74,6 +75,24 @@ class WorkspacesViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             loadWorkspaces()
+        }
+    }
+
+    fun delete(workspace: Workspace) {
+        val origin = _uiState.value.connectionByWorkspaceId[workspace.id]?.connectionId
+            ?: targetOrigins.singleOrNull()
+            ?: (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
+            ?: return
+
+        viewModelScope.launch {
+            workspaceRepository.delete(origin, workspace.path).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(actionError = null)
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(actionError = apiErrorMessage(error))
+                },
+            )
         }
     }
 

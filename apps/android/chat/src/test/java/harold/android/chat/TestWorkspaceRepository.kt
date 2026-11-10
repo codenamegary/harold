@@ -48,6 +48,16 @@ class TestWorkspaceRepository(
         } + CachedWorkspace(connectionId = connectionId, workspace = created)
     }
 
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> {
+        workspaces.value = workspaces.value.filterNot { cached ->
+            cached.connectionId == connectionId && cached.workspace.path == path
+        }
+        return Result.success(Unit)
+    }
+
     fun seed(connectionId: String, workspaces: List<Workspace>) {
         this.workspaces.value = this.workspaces.value.filterNot { cached ->
             cached.connectionId == connectionId

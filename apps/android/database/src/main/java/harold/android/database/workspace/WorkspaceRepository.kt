@@ -23,6 +23,11 @@ interface WorkspaceRepository {
         connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace>
+
+    suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit>
 }
 
 class DefaultWorkspaceRepository @Inject constructor(
@@ -61,6 +66,13 @@ class DefaultWorkspaceRepository @Inject constructor(
                 ),
             ),
         )
+    }
+
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = agentApi.deleteWorkspace(connectionId, path).onSuccess {
+        dao.deleteByPath(connectionId, path)
     }
 
     private fun cached(entities: List<WorkspaceEntity>): List<CachedWorkspace> = entities.map { entity ->

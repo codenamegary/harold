@@ -53,9 +53,12 @@ class HostWorkspaceApi @Inject constructor(
             }
             // Session folders are hints from the last ACP session/list. They
             // are memory-only; a cold app simply shows the saved workspaces
-            // until the next chat refresh.
+            // until the next chat refresh. Hidden paths were deleted by the
+            // user and stay out of the list.
+            val hidden = store.hiddenWorkspaces()
             sessionDirectories.sessionDirectories(connectionId)
                 .distinct()
+                .filterNot { cwd -> cwd in hidden }
                 .forEach { cwd ->
                     if (cwd !in workspaces) {
                         workspaces[cwd] = workspaceOf(
@@ -141,6 +144,12 @@ class HostWorkspaceApi @Inject constructor(
                 ?: body.path.substringAfterLast('/').ifBlank { body.path }
             val workspace = store.rememberWorkspace(body.path, name)
             workspaceOf(connection, workspace)
+        }
+    }
+
+    override suspend fun deleteWorkspace(connectionId: String, path: String): Result<Unit> = hostCall {
+        connections.useConnection(connectionId) { _, store ->
+            store.forgetWorkspace(path)
         }
     }
 

@@ -26,6 +26,12 @@ abstract class WorkspaceDao {
         id: String,
     )
 
+    @Query("DELETE FROM workspaces WHERE connectionId = :connectionId AND path = :path")
+    abstract suspend fun deleteByPath(
+        connectionId: String,
+        path: String,
+    )
+
     @Query("DELETE FROM workspaces WHERE connectionId = :connectionId")
     abstract suspend fun deleteByOrigin(connectionId: String)
 

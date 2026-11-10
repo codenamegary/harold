@@ -545,6 +545,11 @@ private class FakeAddWorkspaceRepository(
 
     override suspend fun refresh(connectionId: String): Result<Unit> = Result.success(Unit)
 
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = Result.failure(UnsupportedOperationException())
+
     override suspend fun create(
         connectionId: String,
         body: CreateWorkspaceBody,

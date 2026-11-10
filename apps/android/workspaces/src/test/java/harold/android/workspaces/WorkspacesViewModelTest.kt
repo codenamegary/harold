@@ -122,6 +122,48 @@ class WorkspacesViewModelTest {
     }
 
     @Test
+    fun deletesWorkspaceThroughTheRepository() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository()
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = repository,
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+        val workspace = (viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded)
+            .workspaces
+            .single()
+
+        viewModel.delete(workspace)
+        advanceUntilIdle()
+
+        assertEquals(listOf(ORIGIN to "/tmp/harold"), repository.deleteCalls)
+        assertTrue(viewModel.uiState.value.loadState is WorkspacesLoadState.Empty)
+    }
+
+    @Test
+    fun reportsWorkspaceDeleteFailure() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository(
+            deleteFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
+        )
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = repository,
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+        val workspace = (viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded)
+            .workspaces
+            .single()
+
+        viewModel.delete(workspace)
+        advanceUntilIdle()
+
+        assertEquals("Could not reach Harold", viewModel.uiState.value.actionError)
+        assertTrue(viewModel.uiState.value.loadState is WorkspacesLoadState.Loaded)
+    }
+
+    @Test
     fun keepsCachedWorkspacesWhenTheHaroldIsOffline() = runTest(dispatcher) {
         val repository = FakeWorkspaceRepository(
             apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
@@ -188,8 +230,10 @@ private class FakeWorkspaceRepository(
         ),
     ),
     private val apiFailure: Throwable? = null,
+    private val deleteFailure: Throwable? = null,
 ) : WorkspaceRepository {
     private val cached = MutableStateFlow<List<CachedWorkspace>>(emptyList())
+    val deleteCalls = mutableListOf<Pair<String, String>>()
 
     override fun observe(): Flow<List<CachedWorkspace>> = cached
 
@@ -206,6 +250,18 @@ private class FakeWorkspaceRepository(
         connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
+
+    override suspend fun delete(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> {
+        deleteCalls += connectionId to path
+        deleteFailure?.let { error -> return Result.failure(error) }
+        cached.value = cached.value.filterNot { workspace ->
+            workspace.connectionId == connectionId && workspace.workspace.path == path
+        }
+        return Result.success(Unit)
+    }
 
     fun seed(workspaces: List<CachedWorkspace>) {
         cached.value = workspaces

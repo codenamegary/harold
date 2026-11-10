@@ -38,6 +38,7 @@ import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.LoadingSkeletonList
+import harold.android.ui.components.SwipeToDeleteListItem
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -47,9 +48,11 @@ fun WorkspacesScreen(
     uiState: WorkspacesUiState,
     onBack: () -> Unit,
     onAddClick: () -> Unit,
+    onDeleteWorkspace: (Workspace) -> Unit,
 ) {
     val backContentDescription = stringResource(R.string.workspaces_back_content_description)
     val addContentDescription = stringResource(R.string.workspaces_add_content_description)
+    val deleteLabel = stringResource(R.string.workspaces_delete)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -97,6 +100,18 @@ fun WorkspacesScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            uiState.actionError?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .testTag("workspaces_action_error")
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                )
+            }
+
             when (val state = uiState.loadState) {
                 WorkspacesLoadState.Loading -> {
                     LoadingSkeletonList(
@@ -141,10 +156,23 @@ fun WorkspacesScreen(
                         modifier = Modifier.testTag("workspaces_list"),
                     ) {
                         items(state.workspaces, key = { workspace -> workspace.id }) { workspace ->
-                            WorkspaceCard(
-                                workspace = workspace,
-                                connection = uiState.connectionByWorkspaceId[workspace.id],
-                            )
+                            SwipeToDeleteListItem(
+                                rowTag = workspace.id,
+                                deleteLabel = deleteLabel,
+                                onDelete = { onDeleteWorkspace(workspace) },
+                                deleteActionTag = "workspace_delete_${workspace.id}",
+                                confirmationTitle = stringResource(
+                                    R.string.workspaces_delete_confirm_title,
+                                ),
+                                confirmationText = stringResource(
+                                    R.string.workspaces_delete_confirm_body,
+                                ),
+                            ) {
+                                WorkspaceCard(
+                                    workspace = workspace,
+                                    connection = uiState.connectionByWorkspaceId[workspace.id],
+                                )
+                            }
                         }
                     }
                 }
