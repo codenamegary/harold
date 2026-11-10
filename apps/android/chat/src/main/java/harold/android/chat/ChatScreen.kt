@@ -44,7 +44,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -708,59 +707,62 @@ fun ChatScreen(
                                 onClick = onChangesClick,
                             )
                         }
-                        HeaderIconAction(
-                            onClick = { menuExpanded = true },
-                            contentDescription = overflowContentDescription,
-                            testTag = "chat_overflow",
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = null,
-                            )
-                        }
+                        Box {
+                            HeaderIconAction(
+                                onClick = { menuExpanded = true },
+                                contentDescription = overflowContentDescription,
+                                testTag = "chat_overflow",
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.MoreVert,
+                                    contentDescription = null,
+                                )
+                            }
 
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(text = "Workspaces") },
-                                onClick = {
-                                    menuExpanded = false
-                                    onWorkspacesClick()
-                                },
-                                modifier = Modifier.testTag("workspaces_menu_item"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.chat_connections)) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onConnections()
-                                },
-                                modifier = Modifier.testTag("connections_menu_item"),
-                            )
-                            DropdownMenuItem(
-                                leadingIcon = if (hasDisconnectBadge) {
-                                    {
-                                        HaroldBadge(
-                                            colorId = disconnectColorId,
-                                            iconId = disconnectIconId,
-                                            size = 20.dp,
-                                            modifier = Modifier.testTag("disconnect_menu_badge"),
-                                        )
-                                    }
-                                } else {
-                                    null
-                                },
-                                text = {
-                                    Text(text = disconnectLabel)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    disconnectConfirmVisible = true
-                                },
-                                modifier = Modifier.testTag("disconnect_menu_item"),
-                            )
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                modifier = Modifier
+                                    .widthIn(min = SessionMenuMinWidth, max = 340.dp)
+                                    .testTag("chat_overflow_menu"),
+                            ) {
+                                SessionMenuRow(
+                                    text = "Workspaces",
+                                    onClick = {
+                                        menuExpanded = false
+                                        onWorkspacesClick()
+                                    },
+                                    testTag = "workspaces_menu_item",
+                                )
+                                SessionMenuRow(
+                                    text = stringResource(R.string.chat_connections),
+                                    onClick = {
+                                        menuExpanded = false
+                                        onConnections()
+                                    },
+                                    testTag = "connections_menu_item",
+                                )
+                                SessionMenuRow(
+                                    text = disconnectLabel,
+                                    onClick = {
+                                        menuExpanded = false
+                                        disconnectConfirmVisible = true
+                                    },
+                                    testTag = "disconnect_menu_item",
+                                    leadingContent = if (hasDisconnectBadge) {
+                                        {
+                                            HaroldBadge(
+                                                colorId = disconnectColorId,
+                                                iconId = disconnectIconId,
+                                                size = 20.dp,
+                                                modifier = Modifier.testTag("disconnect_menu_badge"),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            }
                         }
                     }
                 }
