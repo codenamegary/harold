@@ -1,0 +1,23 @@
+name: harold-demo
+
+services:
+  host:
+    build:
+      context: ..
+      dockerfile: fake-host/Dockerfile
+      network: host
+    image: harold-demo-host:latest
+    container_name: harold-demo-host
+    hostname: demo-host
+    ports:
+      - "127.0.0.1:${HAROLD_DEMO_SSH_PORT:-2223}:2222"
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/2222'"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+    stop_grace_period: 2s
+    tmpfs:
+      - /run

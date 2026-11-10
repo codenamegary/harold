@@ -1,0 +1,26 @@
+#!/bin/sh
+# Tiny deterministic gh for the demo host. Only the calls the fake agent makes
+# are supported. The JSON state lets the capture verify the draft PR.
+set -eu
+
+state_dir="${HOME}/.harold-demo"
+mkdir -p "$state_dir"
+
+case "${1:-} ${2:-}" in
+  "pr create")
+    cat >"$state_dir/pull-request.json" <<'JSON'
+{"number":42,"url":"https://github.com/codenamegary/cat-screensaver/pull/42","draft":true,"state":"OPEN"}
+JSON
+    echo "https://github.com/codenamegary/cat-screensaver/pull/42"
+    ;;
+  "pr list")
+    cat "$state_dir/pull-request.json" 2>/dev/null || echo "[]"
+    ;;
+  "--version "|"version ")
+    echo "gh version 2.63.2 (harold demo)"
+    ;;
+  *)
+    echo "gh: unsupported demo command: $*" >&2
+    exit 1
+    ;;
+esac
