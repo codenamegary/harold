@@ -20,7 +20,7 @@ class CreateSessionScreenTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsWorkspaceAgentAndContinueWithoutInitialPrompt() {
+    fun showsWorkspaceAgentAndStartSessionWithoutInitialPrompt() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 CreateSessionScreen(
@@ -52,9 +52,9 @@ class CreateSessionScreenTest {
         composeTestRule.onNodeWithTag("create_session_submit").assertIsDisplayed()
         composeTestRule.onNodeWithTag("create_session_workspace").assertIsDisplayed()
         composeTestRule.onNodeWithTag("create_session_agent").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("create_session_helper").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("create_session_helper").assertDoesNotExist()
         composeTestRule.onNodeWithText("New session").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Continue").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Start Session").assertIsDisplayed()
     }
 
     @Test

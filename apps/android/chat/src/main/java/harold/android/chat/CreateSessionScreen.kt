@@ -79,13 +79,6 @@ fun CreateSessionScreen(
                 .testTag("create_session_screen"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(R.string.create_session_helper),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag("create_session_helper"),
-            )
-
             WorkspaceDropdown(
                 workspaces = createState.workspaces,
                 selectedWorkspaceId = createState.selectedWorkspaceId,
@@ -109,9 +102,9 @@ fun CreateSessionScreen(
 
             HaroldButton(
                 text = if (createState.submitting) {
-                    stringResource(R.string.create_session_continuing)
+                    stringResource(R.string.create_session_starting)
                 } else {
-                    stringResource(R.string.create_session_continue)
+                    stringResource(R.string.create_session_start)
                 },
                 onClick = onSubmit,
                 enabled = !createState.submitting,
