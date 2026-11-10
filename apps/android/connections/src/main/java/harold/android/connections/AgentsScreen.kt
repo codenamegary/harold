@@ -1,7 +1,6 @@
 package harold.android.connections
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,10 +10,11 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
@@ -36,7 +35,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -62,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import harold.android.contracts.AgentAuthStatus
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonSize
 import harold.android.ui.components.HaroldButtonVariant
@@ -73,6 +71,7 @@ import harold.android.ui.components.HaroldSegmentOption
 import harold.android.ui.components.HaroldSegmentedControl
 import harold.android.ui.components.HaroldTextField
 import harold.android.ui.components.RemoteFolderBrowser
+import harold.android.ui.components.SwipeToDeleteListItem
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -156,7 +155,7 @@ fun AgentsScreen(
                     IconButton(
                         onClick = onReload,
                         modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .size(36.dp)
                             .testTag("agents_reload"),
                     ) {
                         Icon(
@@ -168,7 +167,7 @@ fun AgentsScreen(
                         onClick = onScan,
                         enabled = !uiState.scanning,
                         modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .size(36.dp)
                             .testTag("agents_scan"),
                     ) {
                         Icon(
@@ -452,106 +451,110 @@ private fun AgentCard(
     onSaveEdit: () -> Unit,
     onCancelEdit: () -> Unit,
 ) {
-    HaroldCard(
+    SwipeToDeleteListItem(
+        rowTag = row.id,
+        deleteLabel = stringResource(R.string.agents_delete),
+        onDelete = { onDelete(row.id) },
+        enabled = row.custom && !editing,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(
-            1.dp,
-            if (row.enabled) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-            } else {
-                MaterialTheme.colorScheme.outlineVariant
-            },
-        ),
-        containerColor = if (row.enabled) {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        } else {
-            MaterialTheme.colorScheme.surfaceContainer
-        },
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("agent_${row.id}"),
+        deleteActionTag = "agent_delete_${row.id}",
     ) {
-        if (editing) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                HaroldTextField(
-                    value = uiState.editDisplayName,
-                    onValueChange = onEditDisplayNameChanged,
-                    label = stringResource(R.string.agents_display_name_label),
-                    modifier = Modifier.testTag("agent_edit_name"),
-                )
-                HaroldTextField(
-                    value = uiState.editPath,
-                    onValueChange = onEditPathChanged,
-                    label = stringResource(R.string.agents_path_label),
-                    placeholder = stringResource(R.string.agents_path_placeholder),
-                    modifier = Modifier.testTag("agent_edit_path"),
-                )
-                HaroldTextField(
-                    value = uiState.editArgs,
-                    onValueChange = onEditArgsChanged,
-                    label = stringResource(R.string.agents_args_label),
-                    placeholder = stringResource(R.string.agents_args_placeholder),
-                    modifier = Modifier.testTag("agent_edit_args"),
-                )
-                BinDirEditor(
-                    value = uiState.editBinDir,
-                    version = uiState.editBinDirVersion,
-                    requiredNodeMajor = row.requiredNodeMajor,
-                    onValueChanged = onEditBinDirChanged,
-                    onBrowse = onEditBinDirBrowse,
-                    onClear = onEditBinDirClear,
-                    testTagPrefix = "agent_edit_bin_dir",
-                )
-                HaroldCheckboxRow(
-                    checked = uiState.editEnabled,
-                    onCheckedChange = onEditEnabledChanged,
-                    label = stringResource(R.string.agents_enabled),
-                    modifier = Modifier.testTag("agent_edit_enabled"),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+        HaroldCard(
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(
+                1.dp,
+                if (row.enabled) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                },
+            ),
+            containerColor = if (row.enabled) {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            } else {
+                MaterialTheme.colorScheme.surfaceContainer
+            },
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("agent_${row.id}"),
+        ) {
+            if (editing) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    HaroldButton(
-                        text = stringResource(R.string.connections_cancel),
-                        onClick = onCancelEdit,
-                        variant = HaroldButtonVariant.Secondary,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("agent_edit_cancel"),
+                    HaroldTextField(
+                        value = uiState.editDisplayName,
+                        onValueChange = onEditDisplayNameChanged,
+                        label = stringResource(R.string.agents_display_name_label),
+                        modifier = Modifier.testTag("agent_edit_name"),
                     )
-                    HaroldButton(
-                        text = stringResource(R.string.agents_save),
-                        onClick = onSaveEdit,
-                        variant = HaroldButtonVariant.Primary,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("agent_edit_save"),
+                    HaroldTextField(
+                        value = uiState.editPath,
+                        onValueChange = onEditPathChanged,
+                        label = stringResource(R.string.agents_path_label),
+                        placeholder = stringResource(R.string.agents_path_placeholder),
+                        modifier = Modifier.testTag("agent_edit_path"),
                     )
+                    HaroldTextField(
+                        value = uiState.editArgs,
+                        onValueChange = onEditArgsChanged,
+                        label = stringResource(R.string.agents_args_label),
+                        placeholder = stringResource(R.string.agents_args_placeholder),
+                        modifier = Modifier.testTag("agent_edit_args"),
+                    )
+                    BinDirEditor(
+                        value = uiState.editBinDir,
+                        version = uiState.editBinDirVersion,
+                        requiredNodeMajor = row.requiredNodeMajor,
+                        onValueChanged = onEditBinDirChanged,
+                        onBrowse = onEditBinDirBrowse,
+                        onClear = onEditBinDirClear,
+                        testTagPrefix = "agent_edit_bin_dir",
+                    )
+                    HaroldCheckboxRow(
+                        checked = uiState.editEnabled,
+                        onCheckedChange = onEditEnabledChanged,
+                        label = stringResource(R.string.agents_enabled),
+                        modifier = Modifier.testTag("agent_edit_enabled"),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        HaroldButton(
+                            text = stringResource(R.string.connections_cancel),
+                            onClick = onCancelEdit,
+                            variant = HaroldButtonVariant.Secondary,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("agent_edit_cancel"),
+                        )
+                        HaroldButton(
+                            text = stringResource(R.string.agents_save),
+                            onClick = onSaveEdit,
+                            variant = HaroldButtonVariant.Primary,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("agent_edit_save"),
+                        )
+                    }
                 }
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                // Header: Title & Badges on Left, Switch on Right
+            } else {
+                // Name, path, and runtime with the toggle, edit, and restart actions
+                // kept on one compact line.
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -606,15 +609,18 @@ private fun AgentCard(
                             }
                         }
 
-                        // Path (if present)
-                        row.path?.let { path ->
-                            Text(
-                                text = path,
-                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                        // Enabled cards stay compact: keep the Node runtime
+                        // summary, but hide the executable and bin paths.
+                        if (!row.enabled) {
+                            row.path?.let { path ->
+                                Text(
+                                    text = path,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                         row.binDir?.let { dir ->
                             Text(
@@ -628,200 +634,66 @@ private fun AgentCard(
                                     MaterialTheme.colorScheme.error
                                 },
                             )
-                            Text(
-                                text = dir,
-                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.testTag("agent_bin_dir_${row.id}"),
-                            )
+                            if (!row.enabled) {
+                                Text(
+                                    text = dir,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.testTag("agent_bin_dir_${row.id}"),
+                                )
+                            }
                         }
                     }
 
-                    Box(
-                        modifier = Modifier.padding(start = 8.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Switch(
-                            checked = row.enabled,
-                            onCheckedChange = { onToggleEnabled(row.id, it) },
-                            modifier = Modifier
-                                .defaultMinSize(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
-                                .testTag("agent_enabled_${row.id}"),
-                        )
-                    }
-                }
-
-                // Status Chips Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("agent_status_${row.id}"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    StatusPill(
-                        label = if (row.present) {
-                            stringResource(R.string.agents_present)
-                        } else {
-                            stringResource(R.string.agents_not_present)
-                        },
-                        isPositive = row.present,
-                    )
-                    StatusPill(
-                        label = if (row.enabled) {
-                            stringResource(R.string.agents_enabled)
-                        } else {
-                            stringResource(R.string.agents_disabled)
-                        },
-                        isPositive = row.enabled,
-                    )
-                    AuthStatusPill(status = row.authStatus)
-                }
-
-                // Divider before action row
-                HorizontalDivider(
-                    modifier = Modifier.padding(top = 2.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                )
-
-                // Bottom Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End,
-                ) {
                     IconButton(
                         onClick = { onRestart(row.id) },
                         modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .size(34.dp)
                             .testTag("agent_restart_${row.id}"),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Refresh,
                             contentDescription = stringResource(R.string.agents_restart),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .offset(x = 4.dp),
                         )
                     }
                     IconButton(
                         onClick = { onEdit(row.id) },
                         modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .size(34.dp)
                             .testTag("agent_edit_${row.id}"),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Edit,
                             contentDescription = stringResource(R.string.agents_edit),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .offset(x = (-2).dp),
                         )
                     }
-                    IconButton(
-                        onClick = { onDelete(row.id) },
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Box(
                         modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("agent_delete_${row.id}"),
+                            .width(42.dp)
+                            .height(MIN_TOUCH_TARGET),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = stringResource(R.string.agents_delete),
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                            modifier = Modifier.size(20.dp),
+                        Switch(
+                            checked = row.enabled,
+                            onCheckedChange = { onToggleEnabled(row.id, it) },
+                            modifier = Modifier
+                                .scale(0.8f)
+                                .testTag("agent_enabled_${row.id}"),
                         )
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun StatusPill(
-    label: String,
-    isPositive: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val containerColor = if (isPositive) {
-        MaterialTheme.colorScheme.surfaceContainerHighest
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
-    val contentColor = if (isPositive) {
-        MaterialTheme.colorScheme.onSurface
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-    }
-    val dotColor = if (isPositive) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.outline
-    }
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(5.dp)
-                    .background(dotColor, CircleShape),
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor,
-            )
-        }
-    }
-}
-
-@Composable
-private fun AuthStatusPill(
-    status: AgentAuthStatus,
-    modifier: Modifier = Modifier,
-) {
-    val (containerColor, contentColor) = when (status) {
-        AgentAuthStatus.Authenticated -> Pair(
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-            MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        AgentAuthStatus.NeedsAuth -> Pair(
-            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
-            MaterialTheme.colorScheme.onTertiaryContainer,
-        )
-        AgentAuthStatus.Error -> Pair(
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
-            MaterialTheme.colorScheme.onErrorContainer,
-        )
-        AgentAuthStatus.Unknown -> Pair(
-            MaterialTheme.colorScheme.surfaceContainerHighest,
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        )
-    }
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = authLabel(status),
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor,
-            )
         }
     }
 }
@@ -832,52 +704,49 @@ private fun DismissedAgentCard(
     onRestore: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    HaroldCard(
+    SwipeToDeleteListItem(
+        rowTag = row.id,
+        deleteLabel = stringResource(R.string.agents_delete),
+        onDelete = { onDelete(row.id) },
+        enabled = row.custom,
         shape = RoundedCornerShape(14.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("agent_dismissed_${row.id}"),
+        deleteActionTag = "agent_dismissed_delete_${row.id}",
     ) {
-        Row(
+        HaroldCard(
+            shape = RoundedCornerShape(14.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .testTag("agent_dismissed_${row.id}"),
         ) {
-            Text(
-                text = row.displayName,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(
-                onClick = { onRestore(row.id) },
+            Row(
                 modifier = Modifier
-                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                    .testTag("agent_restore_${row.id}"),
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Restore,
-                    contentDescription = stringResource(R.string.agents_restore),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                Text(
+                    text = row.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-            }
-            IconButton(
-                onClick = { onDelete(row.id) },
-                modifier = Modifier
-                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                    .testTag("agent_dismissed_delete_${row.id}"),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Delete,
-                    contentDescription = stringResource(R.string.agents_delete),
-                    tint = MaterialTheme.colorScheme.error,
-                )
+                IconButton(
+                    onClick = { onRestore(row.id) },
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("agent_restore_${row.id}"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Restore,
+                        contentDescription = stringResource(R.string.agents_restore),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -1098,12 +967,4 @@ private fun BinDirPickerDialog(
             }
         }
     }
-}
-
-@Composable
-private fun authLabel(status: AgentAuthStatus): String = when (status) {
-    AgentAuthStatus.Authenticated -> stringResource(R.string.agents_auth_authenticated)
-    AgentAuthStatus.NeedsAuth -> stringResource(R.string.agents_auth_needs_auth)
-    AgentAuthStatus.Error -> stringResource(R.string.agents_auth_error)
-    AgentAuthStatus.Unknown -> stringResource(R.string.agents_auth_unknown)
 }

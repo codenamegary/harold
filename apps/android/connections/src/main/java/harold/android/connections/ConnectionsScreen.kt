@@ -25,12 +25,10 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -234,26 +232,26 @@ fun ConnectionsScreen(
                                 }
                             }
                         } else {
-                            Column(
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                HaroldBadge(
+                                    colorId = row.colorId,
+                                    iconId = row.iconId,
+                                    size = 40.dp,
+                                    modifier = Modifier.testTag("connection_badge_${row.connectionId}"),
+                                )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
                                 ) {
-                                    HaroldBadge(
-                                        colorId = row.colorId,
-                                        iconId = row.iconId,
-                                        size = 44.dp,
-                                        modifier = Modifier.testTag("connection_badge_${row.connectionId}"),
-                                    )
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     ) {
                                         Text(
                                             text = row.name,
@@ -262,61 +260,36 @@ fun ConnectionsScreen(
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
-                                        Text(
-                                            text = row.endpoint,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                        ConnectionStatusDot(
+                                            status = row.status,
+                                            modifier = Modifier.testTag("connection_status_${row.connectionId}"),
                                         )
                                     }
-                                    ConnectionStatusPill(
-                                        status = row.status,
-                                        modifier = Modifier.testTag("connection_status_${row.connectionId}"),
+                                    Text(
+                                        text = row.endpoint,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
-
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Surface(
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
                                         onClick = { onOpenAgents(row.connectionId) },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
                                         modifier = Modifier
-                                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                            .size(36.dp)
                                             .testTag("connection_agents_${row.connectionId}"),
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.ListAlt,
-                                                contentDescription = stringResource(R.string.connections_open_agents),
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.connections_open_agents),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ListAlt,
+                                            contentDescription = stringResource(R.string.connections_open_agents),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
                                     }
-
                                     IconButton(
                                         onClick = { onOpenSettings(row.connectionId) },
                                         modifier = Modifier
-                                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                            .size(36.dp)
                                             .testTag("connection_settings_${row.connectionId}"),
                                     ) {
                                         Icon(
@@ -338,56 +311,23 @@ fun ConnectionsScreen(
 }
 
 @Composable
-private fun ConnectionStatusPill(
+private fun ConnectionStatusDot(
     status: ConnectionStatus,
     modifier: Modifier = Modifier,
 ) {
-    val (containerColor, contentColor, dotColor) = when (status) {
-        ConnectionStatus.Connected -> Triple(
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            MaterialTheme.colorScheme.primary,
-        )
-        ConnectionStatus.Connecting -> Triple(
-            MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,
-            MaterialTheme.colorScheme.tertiary,
-        )
-        ConnectionStatus.Unreachable -> Triple(
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer,
-            MaterialTheme.colorScheme.error,
-        )
-        ConnectionStatus.Closed -> Triple(
-            MaterialTheme.colorScheme.surfaceContainerHighest,
-            MaterialTheme.colorScheme.onSurfaceVariant,
-            MaterialTheme.colorScheme.outline,
-        )
+    val dotColor = when (status) {
+        ConnectionStatus.Connected -> MaterialTheme.colorScheme.primary
+        ConnectionStatus.Connecting -> MaterialTheme.colorScheme.tertiary
+        ConnectionStatus.Unreachable -> MaterialTheme.colorScheme.error
+        ConnectionStatus.Closed -> MaterialTheme.colorScheme.outline
     }
 
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .background(dotColor, CircleShape),
-            )
-            Text(
-                text = statusLabel(status),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                color = contentColor,
-            )
-        }
-    }
+    Box(
+        modifier = modifier
+            .size(8.dp)
+            .background(dotColor, CircleShape)
+            .semantics { contentDescription = statusLabel(status) },
+    )
 }
 
 private fun statusLabel(status: ConnectionStatus): String = when (status) {

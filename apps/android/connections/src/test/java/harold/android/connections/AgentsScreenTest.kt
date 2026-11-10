@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.FilesystemDirectory
 import harold.android.ui.theme.HaroldTheme
@@ -92,6 +94,145 @@ class AgentsScreenTest {
         composeTestRule.onNodeWithTag("agent_cursor").assertExists()
         composeTestRule.onNodeWithTag("agent_enabled_cursor").assertExists()
         composeTestRule.onNodeWithTag("agent_auggie").assertExists()
+        composeTestRule.onNodeWithText("Installed").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Signed in").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Enabled").assertDoesNotExist()
+    }
+
+    @Test
+    fun standardAgentsCannotBeSwipedAway() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                AgentsScreen(
+                    uiState = AgentsUiState(
+                        loading = false,
+                        rows = listOf(agentRow(id = "cursor", custom = false)),
+                    ),
+                    onBack = {},
+                    onScan = {},
+                    onReload = {},
+                    onRestart = {},
+                    onToggleEnabled = { _, _ -> },
+                    onEdit = {},
+                    onDelete = {},
+                    onRestore = {},
+                    onEditDisplayNameChanged = {},
+                    onEditPathChanged = {},
+                    onEditArgsChanged = {},
+                    onEditEnabledChanged = {},
+                    onSaveEdit = {},
+                    onCancelEdit = {},
+                    onStartCreateCustom = {},
+                    onCreateNameChanged = {},
+                    onCreatePathChanged = {},
+                    onCreateArgsChanged = {},
+                    onCreateCustom = {},
+                    onCancelCreateCustom = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("swipe_delete_cursor")
+            .performTouchInput { swipeLeft() }
+
+        composeTestRule.onNodeWithTag("agent_delete_cursor").assertDoesNotExist()
+    }
+
+    @Test
+    fun customAgentsCanBeSwipedToDeleteAfterConfirmation() {
+        var deleted: String? = null
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                AgentsScreen(
+                    uiState = AgentsUiState(
+                        loading = false,
+                        rows = listOf(agentRow(id = "custom-claude", custom = true)),
+                    ),
+                    onBack = {},
+                    onScan = {},
+                    onReload = {},
+                    onRestart = {},
+                    onToggleEnabled = { _, _ -> },
+                    onEdit = {},
+                    onDelete = { deleted = it },
+                    onRestore = {},
+                    onEditDisplayNameChanged = {},
+                    onEditPathChanged = {},
+                    onEditArgsChanged = {},
+                    onEditEnabledChanged = {},
+                    onSaveEdit = {},
+                    onCancelEdit = {},
+                    onStartCreateCustom = {},
+                    onCreateNameChanged = {},
+                    onCreatePathChanged = {},
+                    onCreateArgsChanged = {},
+                    onCreateCustom = {},
+                    onCancelCreateCustom = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("swipe_delete_custom-claude")
+            .performTouchInput { swipeLeft() }
+        composeTestRule.onNodeWithTag("agent_delete_custom-claude").performClick()
+        composeTestRule.onNodeWithTag("swipe_delete_confirm_action_custom-claude").performClick()
+
+        assertEquals("custom-claude", deleted)
+    }
+
+    @Test
+    fun enabledCardsHidePathsButKeepTheNodeRuntime() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                AgentsScreen(
+                    uiState = AgentsUiState(
+                        loading = false,
+                        rows = listOf(
+                            agentRow(
+                                id = "pi-acp",
+                                custom = false,
+                                path = "/custom/pi",
+                                binDir = "/home/u/.nvm/versions/node/v22.19.0/bin",
+                                binDirVersion = "v22.19.0",
+                            ),
+                            agentRow(
+                                id = "auggie",
+                                custom = false,
+                                enabled = false,
+                                path = "/bin/auggie",
+                            ),
+                        ),
+                    ),
+                    onBack = {},
+                    onScan = {},
+                    onReload = {},
+                    onRestart = {},
+                    onToggleEnabled = { _, _ -> },
+                    onEdit = {},
+                    onDelete = {},
+                    onRestore = {},
+                    onEditDisplayNameChanged = {},
+                    onEditPathChanged = {},
+                    onEditArgsChanged = {},
+                    onEditEnabledChanged = {},
+                    onSaveEdit = {},
+                    onCancelEdit = {},
+                    onStartCreateCustom = {},
+                    onCreateNameChanged = {},
+                    onCreatePathChanged = {},
+                    onCreateArgsChanged = {},
+                    onCreateCustom = {},
+                    onCancelCreateCustom = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("/custom/pi").assertDoesNotExist()
+        composeTestRule.onNodeWithText("/home/u/.nvm/versions/node/v22.19.0/bin").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Node v22.19.0").assertExists()
+        composeTestRule.onNodeWithText("/bin/auggie").assertExists()
     }
 
     @Test
@@ -314,6 +455,30 @@ class AgentsScreenTest {
         composeTestRule.onNodeWithTag("agent_cursor").assertIsDisplayed()
         composeTestRule.onNodeWithTag("agent_auggie").assertDoesNotExist()
     }
+
+    private fun agentRow(
+        id: String,
+        custom: Boolean,
+        enabled: Boolean = true,
+        path: String? = "/bin/$id",
+        binDir: String? = null,
+        binDirVersion: String? = null,
+    ) = AgentRow(
+        id = id,
+        displayName = "Agent $id",
+        path = path,
+        args = emptyList(),
+        binDir = binDir,
+        binDirVersion = binDirVersion,
+        enabled = enabled,
+        present = true,
+        popular = false,
+        custom = custom,
+        dismissed = false,
+        authStatus = AgentAuthStatus.Unknown,
+        authError = null,
+        canLogout = false,
+    )
 
     private fun piRow() = AgentRow(
         id = "pi-acp",

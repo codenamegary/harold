@@ -178,7 +178,36 @@ fun SshSetupScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Section 1: Connection Details
+            // Section 1: Appearance
+            val endpointPreview = buildString {
+                val userPart = uiState.user.ifBlank { "user" }
+                val hostPart = uiState.host.ifBlank { "host" }
+                val portPart = uiState.port.ifBlank { "22" }
+                append("$userPart@$hostPart:$portPart")
+            }
+
+            HaroldFormSection(
+                title = stringResource(R.string.ssh_appearance_section_title),
+            ) {
+                HaroldAppearanceEditor(
+                    name = uiState.name,
+                    colorId = uiState.colorId,
+                    iconId = uiState.iconId,
+                    onNameChanged = onNameChanged,
+                    onColorSelected = onColorSelected,
+                    onIconSelected = onIconSelected,
+                    nameLabel = stringResource(R.string.connections_name_label),
+                    colorLabel = stringResource(R.string.connections_color_label),
+                    iconLabel = stringResource(R.string.connections_icon_label),
+                    nameFieldTag = "ssh_name_field",
+                    colorTagPrefix = "ssh_color_",
+                    iconTagPrefix = "ssh_icon_",
+                    endpointSubtitle = endpointPreview,
+                    previewAtEnd = true,
+                )
+            }
+
+            // Section 2: Connection Details
             HaroldFormSection(
                 title = stringResource(R.string.ssh_connection_section_title),
             ) {
@@ -228,7 +257,7 @@ fun SshSetupScreen(
                 }
             }
 
-            // Section 2: Authentication
+            // Section 3: Authentication
             HaroldFormSection(
                 title = stringResource(R.string.ssh_auth_label),
                 headerAction = {
@@ -547,34 +576,6 @@ fun SshSetupScreen(
                         )
                     }
                 }
-            }
-
-            // Section 3: Appearance
-            val endpointPreview = buildString {
-                val userPart = uiState.user.ifBlank { "user" }
-                val hostPart = uiState.host.ifBlank { "host" }
-                val portPart = uiState.port.ifBlank { "22" }
-                append("$userPart@$hostPart:$portPart")
-            }
-
-            HaroldFormSection(
-                title = stringResource(R.string.ssh_appearance_section_title),
-            ) {
-                HaroldAppearanceEditor(
-                    name = uiState.name,
-                    colorId = uiState.colorId,
-                    iconId = uiState.iconId,
-                    onNameChanged = onNameChanged,
-                    onColorSelected = onColorSelected,
-                    onIconSelected = onIconSelected,
-                    nameLabel = stringResource(R.string.connections_name_label),
-                    colorLabel = stringResource(R.string.connections_color_label),
-                    iconLabel = stringResource(R.string.connections_icon_label),
-                    nameFieldTag = "ssh_name_field",
-                    colorTagPrefix = "ssh_color_",
-                    iconTagPrefix = "ssh_icon_",
-                    endpointSubtitle = endpointPreview,
-                )
             }
 
             // Section 4: Host Verification & Actions

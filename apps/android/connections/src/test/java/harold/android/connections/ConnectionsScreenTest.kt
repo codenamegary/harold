@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import harold.android.session.ConnectionStatus
 import harold.android.ui.theme.HaroldTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -58,6 +59,41 @@ class ConnectionsScreenTest {
         composeTestRule.onNodeWithTag("connection_settings_ssh://gary@laptop.local:22").assertIsDisplayed()
         composeTestRule.onNodeWithTag("swipe_delete_ssh://gary@laptop.local:22").assertIsDisplayed()
         composeTestRule.onNodeWithTag("connection_remove_ssh://gary@laptop.local:22").assertDoesNotExist()
+    }
+
+    @Test
+    fun connectedStatusIsADotWithoutTheConnectedLabel() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ConnectionsScreen(
+                    uiState = ConnectionsUiState(
+                        rows = listOf(
+                            ConnectionRow(
+                                connectionId = "ssh://gary@laptop.local:22",
+                                name = "laptop",
+                                colorId = "tide",
+                                iconId = "bolt",
+                                status = ConnectionStatus.Connected,
+                            ),
+                        ),
+                    ),
+                    onBack = {},
+                    onAdd = {},
+                    onEdit = {},
+                    onRemove = {},
+                    onNameChanged = {},
+                    onColorSelected = {},
+                    onIconSelected = {},
+                    onSave = {},
+                    onCancelEdit = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("connection_status_ssh://gary@laptop.local:22")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connected").assertDoesNotExist()
     }
 
     @Test
