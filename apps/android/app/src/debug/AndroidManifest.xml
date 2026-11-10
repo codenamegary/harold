@@ -10,6 +10,13 @@
             android:name=".debug.VoiceFixtureActivity"
             android:exported="true"
             android:theme="@style/Theme.Harold" />
+
+        <!-- Loopback debug control plane. Debug variants only. -->
+        <provider
+            android:name=".debug.ProbeInitializer"
+            android:authorities="${applicationId}.harold-probe"
+            android:exported="false"
+            android:initOrder="100" />
     </application>
 
 </manifest>

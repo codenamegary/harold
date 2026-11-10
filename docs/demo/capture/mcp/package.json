@@ -1,0 +1,19 @@
+{
+  "name": "harold-probe-mcp",
+  "private": true,
+  "type": "module",
+  "description": "MCP control plane for the Harold debug app. Wraps the on-device probe in agent-callable tools.",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "poc": "bun run src/poc.ts",
+    "smoke": "bun run src/smoke.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

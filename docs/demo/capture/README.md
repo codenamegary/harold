@@ -11,6 +11,7 @@ from plan to draft PR. The detailed setup spec is in [setup.md](./setup.md).
 | `capture.sh`                 | The whole run: fake host, emulator, app install, SSH setup, feed, slices, build                                     |
 | `drive_phone.py`             | Walk the app from add-host through plan, question, build, usage, changes, worktrees, and draft PR                   |
 | `build_capture.py`           | Re-encode the slices, attach the taps, and write `capture.json`                                                     |
+| `mcp/`                       | MCP control plane: drive the debug app by tag and intent instead of uidumps, plus the proof-of-concept run          |
 | `push_assets.sh`             | Push the demo photos, `cat-mode.md`, and `cat-diary.txt` onto the factory-reset emulator                            |
 | `fixtures/cat-screensaver/`  | The seed project copied into the fake host repository                                                               |
 | `../fake-host/`              | Docker SSH host, fake agent transcripts, fixed host key, and seeded `~/.harold` state                               |

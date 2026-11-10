@@ -26,6 +26,7 @@ class ConnectionsEntryProvider @Inject constructor() : FeatureEntryProvider {
         scope.entry<SshSetup> {
             val viewModel: SshSetupViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            SshSetupProbeEffect(viewModel)
             SshSetupScreen(
                 uiState = uiState,
                 onBack = viewModel::onBack,

@@ -58,6 +58,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import harold.android.ui.debug.probeTag
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -179,7 +180,7 @@ fun HaroldTextField(
                 .fillMaxWidth()
                 .then(
                     if (fieldTestTag != null) {
-                        Modifier.testTag(fieldTestTag)
+                        Modifier.probeTag(fieldTestTag, enabled)
                     } else {
                         Modifier
                     },
@@ -272,7 +273,7 @@ fun HaroldPasswordField(
                 .fillMaxWidth()
                 .then(
                     if (fieldTestTag != null) {
-                        Modifier.testTag(fieldTestTag)
+                        Modifier.probeTag(fieldTestTag, enabled)
                     } else {
                         Modifier
                     },
@@ -455,7 +456,7 @@ fun HaroldCheckboxRow(
                 onCheckedChange = onCheckedChange,
                 enabled = enabled,
                 modifier = if (checkboxTestTag != null) {
-                    Modifier.testTag(checkboxTestTag)
+                    Modifier.probeTag(checkboxTestTag, enabled)
                 } else {
                     Modifier
                 },

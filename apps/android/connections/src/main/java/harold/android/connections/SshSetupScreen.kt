@@ -84,6 +84,7 @@ import harold.android.ui.components.HaroldSegmentOption
 import harold.android.ui.components.HaroldSegmentedControl
 import harold.android.ui.components.HaroldSelectableCard
 import harold.android.ui.components.HaroldTextField
+import harold.android.ui.debug.probeTag
 
 private enum class AuthTabSelection {
     Saved,
@@ -606,7 +607,7 @@ fun SshSetupScreen(
                     variant = HaroldButtonVariant.Secondary,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("ssh_test_button"),
+                        .probeTag("ssh_test_button", uiState.canTest),
                 )
             }
 
@@ -664,7 +665,7 @@ fun SshSetupScreen(
                 variant = HaroldButtonVariant.Primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("ssh_save_button"),
+                    .probeTag("ssh_save_button", uiState.canSave),
             )
 
             Spacer(modifier = Modifier.height(8.dp))
