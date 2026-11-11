@@ -4,6 +4,7 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
+import harold.android.chat.ChatAttachmentFixtures
 
 /**
  * Starts the debug control plane on process start.
@@ -16,6 +17,9 @@ class ProbeInitializer : ContentProvider() {
     override fun onCreate(): Boolean {
         val app = context?.applicationContext ?: return false
         ProbeServer.start(app)
+        // The fixture source lives in the chat module's debug variant, so the
+        // capture driver can attach the pushed demo pair without a system picker.
+        ChatAttachmentFixtures.install(app)
         return true
     }
 

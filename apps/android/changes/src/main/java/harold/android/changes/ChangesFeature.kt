@@ -43,6 +43,22 @@ class ChangesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 )
             }
             ResumeChanges(viewModel)
+            ChangesProbeEffect(
+                viewModel = viewModel,
+                onOpenFile = { file ->
+                    // Read the selected worktree and scope at call time, not at
+                    // install time, so the probe never opens a stale diff.
+                    val current = viewModel.uiState.value
+                    navigator.openFileDiff(
+                        connectionId = route.connectionId,
+                        worktreePath = current.selectedWorktreePath,
+                        scope = current.scope,
+                        filePath = file.path,
+                        oldPath = file.oldPath,
+                    )
+                },
+                onBack = { navigator.goBack() },
+            )
             ChangesScreen(
                 uiState = uiState,
                 onBack = { navigator.goBack() },
@@ -84,6 +100,10 @@ class ChangesEntryProvider @Inject constructor() : FeatureEntryProvider {
                     oldPath = route.oldPath,
                 )
             }
+            FileDiffProbeEffect(
+                viewModel = viewModel,
+                onBack = { navigator.goBack() },
+            )
             FileDiffScreen(
                 uiState = uiState,
                 onBack = { navigator.goBack() },

@@ -115,6 +115,8 @@ def update_session(
     append_role: str | None = None,
     append_text: str | None = None,
     cwd: str | None = None,
+    pending_question: dict | None = None,
+    usage: dict | None = None,
 ) -> dict | None:
     sessions = load_sessions(agent)
     session = next(
@@ -131,9 +133,21 @@ def update_session(
         history = session.setdefault("history", [])
         history.append({"role": append_role, "text": append_text or ""})
         session["history"] = history[-40:]
+    if pending_question is not None:
+        session["pendingQuestion"] = pending_question
+    if usage is not None:
+        session["usage"] = usage
     session["updatedAt"] = now()
     save_sessions(agent, sessions)
     return session
+
+
+def clear_pending_question(agent: str, session_id: str) -> None:
+    sessions = load_sessions(agent)
+    for session in sessions:
+        if session.get("sessionId") == session_id:
+            session.pop("pendingQuestion", None)
+    save_sessions(agent, sessions)
 
 
 CONFIG_OPTIONS = [
@@ -179,6 +193,11 @@ class FakeAgent:
     def __init__(self, agent: str) -> None:
         self.agent = agent
         self.prompt_turns: dict[str, dict] = {}
+        # A question the agent has asked and not yet had answered, per session.
+        # A real agent keeps its prompt open across a client reconnect; the demo
+        # app drops the live stream whenever the phone sleeps, so the question is
+        # re-issued on the next `session/load` instead of being lost.
+        self.open_questions: dict[str, dict] = {}
         self.next_request_id = 9000
         self.config = json.loads(json.dumps(CONFIG_OPTIONS))
 
@@ -224,10 +243,18 @@ class FakeAgent:
             {"sessionId": session_id, "update": payload},
         )
 
-    def text_chunk(self, session_id: str, text: str, *, thought: bool = False) -> None:
+    def text_chunk(
+        self,
+        session_id: str,
+        text: str,
+        *,
+        thought: bool = False,
+        chunked: bool = True,
+    ) -> None:
         kind = "agent_thought_chunk" if thought else "agent_message_chunk"
-        for index in range(0, len(text), CHUNK):
-            piece = text[index : index + CHUNK]
+        size = CHUNK if chunked else max(len(text), 1)
+        for index in range(0, len(text), size):
+            piece = text[index : index + size]
             self.update(
                 session_id,
                 {
@@ -235,7 +262,8 @@ class FakeAgent:
                     "content": {"type": "text", "text": piece},
                 },
             )
-            time.sleep(CHAR_DELAY)
+            if chunked:
+                time.sleep(CHAR_DELAY)
 
     def tool(self, session_id: str, tool_id: str, title: str, kind: str) -> None:
         self.update(
@@ -261,16 +289,19 @@ class FakeAgent:
         )
         time.sleep(TOOL_DELAY * 0.5)
 
+    USAGE = {
+        "sessionUpdate": "usage_update",
+        "used": 64200,
+        "size": 1000000,
+        "cost": {"amount": 0.016, "currency": "USD"},
+    }
+
     def usage(self, session_id: str) -> None:
-        self.update(
-            session_id,
-            {
-                "sessionUpdate": "usage_update",
-                "used": 64200,
-                "size": 1000000,
-                "cost": {"amount": 0.016, "currency": "USD"},
-            },
-        )
+        self.update(session_id, self.USAGE)
+        # The context line is state, not a message: the app drops it when it
+        # rebuilds a session from `session/load`, and the phone loses the stream
+        # on every screen sleep, so the figure has to travel with the session.
+        update_session(self.agent, session_id, usage=self.USAGE)
 
     def title(self, session_id: str, title: str) -> None:
         self.update(
@@ -344,6 +375,8 @@ class FakeAgent:
             return
         self.prompt_turns.pop("question", None)
         session_id = turn["sessionId"]
+        self.open_questions.pop(session_id, None)
+        clear_pending_question(self.agent, session_id)
         answer = ""
         if isinstance(result, dict):
             content = result.get("content")
@@ -354,7 +387,9 @@ class FakeAgent:
             session_id,
             "Settings toggle it is. I will keep the change small and test it.",
         )
-        self.respond(turn["promptId"], {"stopReason": "end_turn"})
+        prompt_id = turn.get("promptId")
+        if prompt_id is not None:
+            self.respond(prompt_id, {"stopReason": "end_turn"})
 
     def session_new(self, request_id, params: dict) -> None:
         cwd = str(params.get("cwd") or HOME)
@@ -425,13 +460,35 @@ class FakeAgent:
                     },
                 )
             elif role == "thought":
-                self.text_chunk(session_id, text, thought=True)
+                self.text_chunk(session_id, text, thought=True, chunked=False)
             elif role == "tool":
                 tool_id = entry.get("id") or "seed-tool"
                 self.tool(session_id, tool_id, text, entry.get("kind") or "execute")
                 self.complete_tool(session_id, tool_id)
             else:
-                self.text_chunk(session_id, text)
+                # One chunk per replayed message: the client asks to load the
+                # same session more than once, and two chunked replays running
+                # at once interleave into one transcript row.
+                self.text_chunk(session_id, text, chunked=False)
+        stored_usage = session.get("usage")
+        if isinstance(stored_usage, dict):
+            self.update(session_id, stored_usage)
+        # A question that is still open belongs to the session, not to the
+        # connection that first carried it: re-ask it so a client that dropped
+        # its stream comes back to the same card instead of a silent dead turn.
+        # It is read back from the session file because the app also closes this
+        # process when it goes to the background, so memory would be enough to
+        # lose the question on every screen sleep.
+        body = self.open_questions.get(session_id) or session.get("pendingQuestion")
+        if body is not None:
+            self.open_questions[session_id] = body
+            question_id = self.request("elicitation/create", body)
+            self.prompt_turns["question"] = {
+                "requestId": question_id,
+                "promptId": None,
+                "sessionId": session_id,
+            }
+            log(f"restored question {question_id} session={session_id}")
         log(f"session/load {session_id}")
         self.respond(request_id, {"configOptions": self.config})
 
@@ -507,6 +564,15 @@ class FakeAgent:
         self.tool(session_id, "tool-plan-read", "Read cat-mode.md", "read")
         self.complete_tool(session_id, "tool-plan-read")
         self.text_chunk(session_id, PLAN_TEXT)
+        # Persist the plan so a reloaded session replays it. The app rebuilds its
+        # transcript from `session/load`, so a plan held only in this process's
+        # memory would vanish from the phone after any reconnect.
+        update_session(
+            self.agent,
+            session_id,
+            append_role="assistant",
+            append_text=PLAN_TEXT,
+        )
         body = {
             "sessionId": session_id,
             "toolCallId": "tool-plan-question",
@@ -527,6 +593,12 @@ class FakeAgent:
                 "required": ["mode"],
             },
         }
+        self.open_questions[session_id] = body
+        update_session(
+            self.agent,
+            session_id,
+            pending_question=body,
+        )
         question_id = self.request("elicitation/create", body)
         self.prompt_turns["question"] = {
             "requestId": question_id,

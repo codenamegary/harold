@@ -1,22 +1,54 @@
-import { loadFont as loadMono } from "@remotion/google-fonts/IBMPlexMono"
-import { loadFont as loadSans } from "@remotion/google-fonts/IBMPlexSans"
-import { loadFont as loadDisplay } from "@remotion/google-fonts/LilitaOne"
+import { useEffect, useState } from "react"
+import { continueRender, delayRender, staticFile } from "remotion"
 
-const sans = loadSans("normal", {
-  weights: ["400", "500", "600"],
-  subsets: ["latin"],
-})
+// Geist and Geist Mono, both OFL, copied into public/fonts from
+// docs/store-android/src/fonts. They are variable fonts (STAT / HVAR present),
+// so one file covers the whole weight range.
+const SANS = "Geist"
+const MONO = "Geist Mono"
 
-const mono = loadMono("normal", {
-  weights: ["400", "500", "600"],
-  subsets: ["latin"],
-})
+const FACES = [
+  { family: SANS, file: "fonts/geist-latin.woff2" },
+  { family: MONO, file: "fonts/geist-mono-latin.woff2" },
+]
 
-const display = loadDisplay("normal", {
-  weights: ["400"],
-  subsets: ["latin"],
-})
+export const sansFamily = `"${SANS}", system-ui, sans-serif`
+export const monoFamily = `"${MONO}", ui-monospace, monospace`
 
-export const sansFamily = sans.fontFamily
-export const monoFamily = mono.fontFamily
-export const displayFamily = display.fontFamily
+// The type scale. Large display type is tracked tight; machine-readable text is
+// always mono and never tracked.
+export const type = {
+  display: 112,
+  headline: 86,
+  title: 62,
+  lead: 40,
+  body: 28,
+  label: 21,
+  mono: 38,
+  monoSmall: 24,
+} as const
+
+/**
+ * Loads both faces before the first frame renders. Mount once, inside the
+ * composition.
+ */
+export const FontLoader: React.FC = () => {
+  const [handle] = useState(() => delayRender("Loading Geist"))
+  useEffect(() => {
+    const loading = FACES.map(async (face) => {
+      const font = new FontFace(face.family, `url("${staticFile(face.file)}") format("woff2")`, {
+        weight: "100 900",
+        display: "block",
+      })
+      await font.load()
+      document.fonts.add(font)
+    })
+    Promise.all(loading)
+      .then(() => continueRender(handle))
+      .catch((error: unknown) => {
+        console.error(error)
+        continueRender(handle)
+      })
+  }, [handle])
+  return null
+}

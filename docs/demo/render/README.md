@@ -1,253 +1,238 @@
 # Demo render
 
-A 115.2 second cut, 1920x1080 at 30 fps (3456 frames). The phone screen is real
+A 113.0 second cut at 1920x1080, 30 fps, 3390 frames. The phone screen is real
 emulator capture; the capture is raw material and the edit lives in
-`timeline.ts`. [`../script.md`](../script.md) is the script, and it is the only
-one.
+[`timeline.ts`](src/timeline.ts). [`../script.md`](../script.md) is the script and
+the only source for scene order, copy, stage, camera and sound.
 
-> **Status: the cut described below is superseded.** It was built before the
-> current `script.md` and does not follow it. It opens cold on the host form with
-> no intro slide, where the script now opens on the logo and the subtitle. The
-> beat table further down describes that older cut. Rewrite it against the
-> script rather than copying it forward.
+The cut follows the script's twelve scenes, its stage, its camera vocabulary and
+its copy. There is no cold open and no promise card.
 
-`capture.json` and `public/slices/` hold 15 slices from the MCP-driven capture
-pipeline: 135.4 s of CFR 60, 1080x2400, with the exact time of every tap, every
-keystroke, and every named mark. That footage is good, and a rebuild reuses it
-rather than re-recording.
+## Footage
 
-| Slice           | Used for                                                      |
-| --------------- | ------------------------------------------------------------- |
-| `connect_empty` | the phone rising onto the empty SSH host form                  |
-| `connect_key`   | the generated `ssh-ed25519` key, cropped                       |
-| `connect_fill`  | typing the host field; then the filled form, read out          |
-| `connect_test`  | the test tap; then the SHA256 fingerprint, cropped              |
-| `connect_trust` | the trust tick                                                 |
-| `connect_save`  | the save tap                                                   |
-| `landing`       | the chat landing, then the achievement hinge on the same clip  |
-| `new_session`   | the session menu, the workspace pick, `Start Session`          |
-| `plan`          | the 338-character plan prompt, three real windows              |
-| `question`      | the agent's question card, cropped; then the sheet             |
+`public/capture.json` and `public/slices/` hold 15 slices from the MCP capture
+pipeline: 135.4 s of CFR 60, 1080x2400, with the exact time of every tap
+(`taps[]`), every keystroke (`keys[]`) and every named mark (`marks[]`). Nothing
+is re-recorded here.
+
+| Slice           | Used for                                                     |
+| --------------- | ------------------------------------------------------------ |
+| `connect_empty` | the empty SSH host form, as the phone arrives                 |
+| `connect_key`   | the generated public key                                      |
+| `connect_fill`  | the host field being typed; then the filled form              |
+| `connect_test`  | the test tap; then the host fingerprint                       |
+| `connect_trust` | the trust tick                                                |
+| `connect_save`  | the save tap                                                  |
+| `landing`       | the chat landing, then the achievement on the same recording  |
+| `new_session`   | the session menu, the new session form, the chat opening       |
+| `plan`          | the 338-character plan prompt, four real windows               |
+| `question`      | the plan reply, the question card, the answer sheet            |
 | `build`         | the 251-character build prompt, then the settled reply         |
-| `usage`         | the context and cost line, cropped                             |
-| `changes`       | the empty scope, the branch list, then the `settings.js` diff  |
-| `worktrees`     | the worktree sheet                                             |
-| `pr`            | the PR prompt, the URL, and the close spotlight                |
+| `usage`         | the context and cost line                                     |
+| `changes`       | the empty scope, the branch list, the diff                     |
+| `worktrees`     | the worktree sheet                                            |
+| `pr`            | the PR prompt, the URL, and the close                          |
 
-## The beats
+## The scenes
 
-`BEATS` in `timeline.ts` is the shape of the film. The boundaries are authored
-in frames and the seconds are derived, so a retime cannot drift the total off
-3456 behind a float.
+The cut is 3390 frames. That is 113.0 s at 30 fps. Every scene holds one light
+state, and a state change eases over 1.2 s before it holds.
 
-| Beat          | Window        | Frames      |
-| ------------- | ------------- | ----------- |
-| `coldOpen`    | 0.0 – 2.4     | 0 – 72      |
-| `key`         | 2.4 – 5.4     | 72 – 162    |
-| `fill`        | 5.4 – 9.8     | 162 – 294   |
-| `test`        | 9.8 – 13.0    | 294 – 390   |
-| `trust`       | 13.0 – 15.8   | 390 – 474   |
-| `save`        | 15.8 – 17.4   | 474 – 522   |
-| `landing`     | 17.4 – 19.0   | 522 – 570   |
-| `achievement` | 19.0 – 22.0   | 570 – 660   |
-| `newSession`  | 22.0 – 31.0   | 660 – 930   |
-| `plan`        | 31.0 – 47.4   | 930 – 1422  |
-| `question`    | 47.4 – 53.0   | 1422 – 1590 |
-| `build`       | 53.0 – 71.8   | 1590 – 2154 |
-| `usage`       | 71.8 – 76.0   | 2154 – 2280 |
-| `changes`     | 76.0 – 91.6   | 2280 – 2748 |
-| `worktrees`   | 91.6 – 96.8   | 2748 – 2904 |
-| `pr`          | 96.8 – 110.0  | 2904 – 3300 |
-| `outro`       | 110.0 – 115.2 | 3300 – 3456 |
+| Scene         | Frames | Range   | Seconds | Light     | Footage                                                                 | Copy                                                     |
+| ------------- | ------ | ------- | ------- | --------- | ----------------------------------------------------------------------- | -------------------------------------------------------- |
+| `intro`       | 105    | 1-105   | 3.5     | `alone`   | none                                                                    | slide: logo, subtitle, CTA                               |
+| `ssh`         | 600    | 106-705 | 20.0    | `arrival` | `connect_empty`, `connect_key`, `connect_fill` x2, `connect_test` x2, `connect_trust`, `connect_save`, `landing` | `[CARD place=stage]` Harold over SSH to your agent hosts |
+| `achievement` | 225    | 706-930 | 7.5     | `reward`  | `landing` (tail, continuous)                                            | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
+| `newSession`  | 180    | 931-1110 | 6.0    | `work`    | `new_session` x3                                                        | `[NOTE]` Start something new                             |
+| `plan`        | 420    | 1111-1530 | 14.0   | `work`    | `plan` x4                                                               | `[CALLOUT]` Plan, Attachments                            |
+| `question`    | 180    | 1531-1710 | 6.0    | `work`    | `question` x3                                                           | `[CALLOUT]` Agent question                               |
+| `build`       | 450    | 1711-2160 | 15.0   | `work`    | `build` x5                                                              | `[CALLOUT]` Build                                        |
+| `usage`       | 150    | 2161-2310 | 5.0    | `work`    | `usage`                                                                 | `[CALLOUT]` Usage                                        |
+| `changes`     | 360    | 2311-2670 | 12.0   | `work`    | `changes` x6                                                            | `[CALLOUT]` Changes, Changes                             |
+| `worktrees`   | 105    | 2671-2775 | 3.5    | `work`    | `worktrees` x2                                                          | `[CALLOUT]` Worktrees                                    |
+| `pr`          | 465    | 2776-3240 | 15.5   | `full`    | `pr` x5                                                                 | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
+| `outro`       | 150    | 3241-3390 | 5.0    | `alone`   | none                                                                    | slide: logo, subtitle, CTA, site                         |
+| **Total**     | **3390** | **1-3390** | **113.0** |      |                                                                         |                                                          |
 
-`STEPS` holds the shots. Each one names a slice, a render start, an in-point, a
-rate, and how long it plays. Most beats are several shots on the same slice: a
-short window of real typing, then a cut ahead to the frame that matters.
+The achievement sits third, right after the SSH scene, while the cost of setup is
+still fresh. It is the film's only `[POP]` and only `[CF]`.
 
-## The question retime
+## The stage
 
-`question` used to stretch 6.05 s of capture across 14.4 s: the middle ran at
-0.40x and the tail at 0.28x. It now plays at **1.0x** on a **1.15-5.45 s
-window**, in 168 frames (5.6 s), with two deliberate freezes (0.9 s on the open
-sheet, 0.4 s before the build). The 264 reclaimed frames went to `build`
-(+168, now 18.8 s) and `changes` (+96, now 15.6 s). The total is still 3456
-frames.
+Four layers, back to front, in [`stage.ts`](src/stage.ts) and
+[`stage-view.tsx`](src/stage-view.tsx):
 
-## The hinge
+- **back**: wall, floor, the seam between them, a vignette. Always the darkest.
+- **pool**: the lit ellipse where the floor meets the wall, plus a bloom ring.
+  The rim is broken up by seeded lumps of light, so the edge reads as light on a
+  rough floor and not as a drawn plate.
+- **phone**: the handset, between the pool and the haze. It carries a lit edge on
+  the side that faces the pool.
+- **haze**: the foreground shaft and 64 seeded dust motes. The nearest layer, so
+  it passes over the phone.
 
-`achievement` is the hinge: the promise lands early and the rest of the film
-proves it. It reuses the `landing` recording, split at **source 2.40 s** — the
-landing plays 1.60 → 2.40, the hinge picks the tail up at 2.40 and holds to 3.90.
+Five light states, in [`stage.ts`](src/stage.ts:44): `alone`, `arrival`,
+`reward`, `work`, `full`. Each is a full shape — radius, centre, intensity, haze,
+flare — and a change eases over 1.2 s and then holds exactly until the next one.
+`lightAt` is the only place a state becomes pixels; the tests assert that every
+scene holds the shape its state names.
 
-At 19.0 s the phone pushes in to `screenWidth 700`, `centerX 1460`,
-`top -314.5`, leaving the left third of the stage empty. The spotlight card
-slides in from the left at 19.4 s (frame 582) with the script's own copy:
+The confetti is lit by the pool. `poolLit` returns how lit a stage point is, and
+`confetti.tsx` multiplies every particle's opacity by it, so the shower falls *in*
+the light and catches the pool instead of dropping onto a flat black field.
 
-```
-kicker: Achievement unlocked
-title: Work from Couch
-```
+### Parallax
 
-The kicker renders in sentence case. `spotlight.tsx` never uppercases it. The
-pop fires at 19.6 s (frame 588) and the confetti with it. This is the only pop
-and the only confetti in the film, and it is silent: the spotlight's own ping is
-the only sound. The close ends on `The whole loop / From plan to PR` with a
-spotlight and no pop.
-
-`celebration.test.ts` pins the contract: one celebration, at frame 588, with
-`confetti: true`, 96 particles, inside the achievement beat, and none in `pr`.
-
-## Two shots: device and screen
-
-`STAGE_MOVES` parks the whole handset. Two equal moves 0.05 s apart are a cut; a
-lone pair is a move. `FRAMING_MOVES` decides whether the frame is the device at
-all:
-
-- **device** — the whole phone, bezel and all, docked to one side with the copy
-  column opposite. The app renders at 470/1080 of its captured size, so a 28 px
-  label in the app lands at **~12 px** on stage. Fine for shape, hopeless for
-  reading.
-- **screen** — no bezel, no body, no dock. The video is the frame, cropped to a
-  window and scaled until that window is the full stage width, with the copy
-  demoted to a lower third over a scrim.
-
-The magnification is the window width, not a lens: a window `w` of the screen
-width is drawn `1920 / (w * 1080)` times life size. The six moments that carry
-the argument are cropped, each with a measured window:
-
-| Beat      | Moment            | Window                          | Scale | 28 px label |
-| --------- | ----------------- | ------------------------------- | ----- | ----------- |
-| `key`     | the public key    | `{x 0.5, y 0.55, width 0.92}`   | 1.93x | ~54 px      |
-| `test`    | the fingerprint   | `{x 0.5, y 0.79, width 0.75}`   | 2.37x | ~66 px      |
-| `question`| the question card | `{x 0.5, y 0.784, width 0.95}`  | 1.87x | ~52 px      |
-| `usage`   | the cost line     | `{x 0.5, y 0.148, width 1}`     | 1.78x | ~50 px      |
-| `changes` | the `settings.js` diff | `{x 0.5, y 0.28, width 1}` | 1.78x | ~50 px      |
-| `pr`      | the draft PR URL  | `{x 0.5, y 0.762, width 1}`     | 1.78x | ~50 px      |
-
-The full-width windows are deliberate: clipping the left edge of a line of code
-or a URL is worse than the magnification a narrower window buys. Crop geometry
-comes from `capture.json`'s `width`/`height`, and the window is clamped inside
-the screen, so a crop that asks for the bottom edge slides up instead of showing
-the stage behind the app.
-
-The lower third sits on solid ink, not on a long fade: `hero.tsx` holds the
-gradient opaque to 76% of the bar's height and fades above it, so a caption over
-live pixels is the only thing you can read there. The bar is content tall, so a
-hero can also name `scrimFrom`, the stage line where solid ink starts. `usage`
-sets it to `0.505` and the diff in `changes` to `0.713`, which covers the half
-line of transcript each crop used to leave above the copy. The fade above that
-edge is only 24 px, so the ink reads as a band rather than a long wash.
-
-## Typing cadence
-
-The capture types at ~12 characters a second, which reads robotic, and the plan
-prompt is 338 characters: played at a human cadence it would cost 45 s of screen
-time. Each long prompt is therefore a short real window at 0.55 rate, then a cut
-ahead:
-
-| Prompt    | Source windows (s)                    | On-screen cadence | Beat  |
-| --------- | ------------------------------------- | ----------------- | ----- |
-| `plan`    | 0.90–4.75, 26.0–28.2, 28.2–30.7       | 6.6 cps           | 16.4 s |
-| `build`   | 0.85–4.92, 19.6–21.47, 21.5–22.94, 22.58–24.5 | 6.6 cps    | 18.8 s |
-| `pr`      | 0.88–3.08, 6.3–7.73, 7.8–8.79          | 6.5 cps           | 13.2 s |
-| `fill`    | 0.78–1.83, 8.62–9.85                   | 6.7 cps           | 4.4 s  |
-
-No window is a hand-declared typing animation: every character drawn is a
-character the capture drew. `question` is not in the table because it is not a
-typing beat: it plays at 1.0x.
-
-## Sound and taps are not invented
-
-`buildSounds` reads `taps[].atSec` and `keys[].atSec` out of the capture and maps
-them into render time with the inverse of `clipFrame`:
-
-```
-render = shot.at + (sourceSec - shot.startSec) / shot.rate
+```ts
+export const PARALLAX = { back: 0.08, pool: 0.4, phone: 1, haze: 1.8 }
 ```
 
-`clipFrame` is the only place a source second becomes a frame:
-`startSec + (sec - from) * rate`. Because both directions use the same rate, a
-keystroke sound always fires on the frame where the phone draws that character.
-There is no interpolation across a hand-declared typing window, and no hardcoded
-keystroke loop.
+The camera drifts at 1.0. The pool drifts slower than the camera, the haze faster,
+the wall barely at all: no two layers share a speed, so movement always slides the
+phone across the light. The drift rate is authored per scene in percent of frame
+width per second, and every scene is between 1 and 2. The accumulator restarts on
+every cut, so a shot pans at one constant rate and the cut absorbs the reset.
 
-Only four taps fall inside a shot: the host field, the test button, the trust
-tick and the save button. Those four are the four ripples and the four tap
-sounds; the taps the cut-aheads skip are not sounded because they are not on
-screen.
+## The phone as a character
 
-The key bed is thinned. At 0.55 rate a 12 cps burst is a 0.15 s gap, which reads
-as a rattle, so any key inside `KEY_CROWD_SEC` (0.16 s) of one that already
-sounded is dropped. The survivors are still real keystrokes at their real source
-times.
+[`body.ts`](src/body.ts) holds the body language as poses: `x`, `y`, `rotateZ`,
+`rotateY`, `rotateX`, `scale`. `poseAt` eases between cues, and every scene with
+footage states its pose on the cut.
 
-The music bed is normalised against the effects, not the other way round.
-`music.mp3` measures **-10.43 LUFS integrated with a +0.80 dBTP peak**.
-`MUSIC_VOLUME = 0.16` puts it at **-26.3 LUFS / -15.1 dBTP**, a measured 11 dB
-below a tap at 0.9.
+- `ssh` enters with the waddle: a damped roll, a bob, and a turn that rings down
+  over 1.5 s, while the camera docks from 0.34 to 0.5 and the pool tightens.
+- `plan` leans in — turned towards the camera, scaled up, pushed towards the light.
+- `question` sits back — turned away, pushed back, smaller.
+- `build` holds still and watches.
+- `usage` tilts its top towards the camera to present the header.
+- `changes` turns to present its screen, ten degrees at the cut, level within 0.8 s.
+- `achievement` turns to camera as the light blooms.
 
-## Files
+A slow idle sway rides on top of every held pose, so a hold is never a still
+image. The waddle is additive, not a one-off: it is the same body language the
+rest of the film uses.
 
-| File             | Role                                                                 |
-| ---------------- | -------------------------------------------------------------------- |
-| `timeline.ts`    | The edit: beats, shots, stage, framing, sounds, overlays, from JSON   |
-| `Demo.tsx`       | Stage assembly: phone, confetti, overlays, sound sequences, outro     |
-| `phone.tsx`      | Device frame and screen crop, clip playback, scaled tap ripples       |
-| `hero.tsx`       | Copy column, or the lower-third bar used on cropped beats             |
-| `spotlight.tsx`  | The kicker/rule/title card, used twice: the hinge and the close        |
-| `confetti.tsx`   | 96 seeded particles for the hinge, deterministic frame by frame        |
-| `celebration.ts` | One damped squash, on the hinge only                                  |
-| `ledger.tsx`     | Live read-out of the typed values                                     |
-| `slides.tsx`     | The outro card                                                        |
-| `callout.tsx`    | Lime tag with a bracket over the control it names                     |
-| `ssh-data.ts`    | The key, the fingerprint, the address, the cost line, the PR URL       |
-| `theme.ts`       | Brand tokens, same values as `Color.kt`                               |
-| `fonts.ts`       | Geist and Geist Mono (OFL), loaded from `public/fonts`                |
+## Layouts and camera
+
+Two layouts: `[L1 phone]` one column, phone centred, copy off; `[L2C copy|phone]`
+two columns, copy left, phone right (`dock` 0.68). The achievement is the only
+`[L2C]`.
+
+Camera presets, in [`camera.ts`](src/camera.ts:31), describe framing and never a
+feature:
+
+| Preset                | Scale | Focus          | Dock |
+| --------------------- | ----- | -------------- | ---- |
+| `full`                | 1     | 0.5, 0.5       | 0.5  |
+| `right-full`          | 1     | 0.5, 0.5       | 0.72 |
+| `top-two-thirds`      | 2     | 0.5, 0.25      | 0.5  |
+| `center-two-thirds`   | 2     | 0.5, 0.5       | 0.5  |
+| `lower-center`        | 1.7   | 0.5, 0.78      | 0.5  |
+| `lower-right`         | 2.6   | 0.78, 0.8      | 0.5  |
+| `upper-center`        | 1.6   | 0.5, 0.22      | 0.5  |
+
+`scale` is magnification against 1x, where 1x is the whole handset standing on
+the stage at `PHONE_FIT` (0.82) of the stage height — 398 x 886 px. At 1x the app
+is small: that is the wide shot, and it is why the film can show a phone standing
+in a pool of light at all. Readability comes from the pushes the script asks for.
+`focus` is a point on the phone screen, and the camera puts it at the centre of
+the frame, clamped so the stage can never show through the phone.
+
+The `usage` scene honours the script's override exactly:
+
+```ts
+{ at: 0, preset: "upper-center", scale: 2.2, focus: { x: 0.5, y: 0.08 } }
+```
+
+That is 2.2x, framed on the header: the cost line lands at roughly 23 px on stage,
+about twice the 1x device framing, and sharp.
+
+A camera state holds until the next one. A preset change is a cut; nothing eases
+between states.
+
+## Copy primitives
+
+[`copy.tsx`](src/copy.tsx) implements what the scenes call:
+
+| Primitive   | Behaviour                                                                 | Used |
+| ----------- | ------------------------------------------------------------------------- | ---- |
+| `[CARD]`    | white card; `place=stage` sits it beside the phone, otherwise inside the screen and it tracks the camera | 1 |
+| `[CALLOUT]` | lime tag, drawn leader line, pulsing target, `compact placement=edge`, `connector=T` | 9 |
+| `[SPOTLIGHT]` | mono kicker, lime rule, display title, sentence case as written          | 2 |
+| `[NOTE]`    | paper note with a lime tape, slides out from behind the phone and back    | 1 |
+| `[BOX]`     | lime box that moves between controls, card text swaps                     | 0 |
+| `[CAP]`     | bottom caption, fallback only                                            | 0 |
+
+No scene uses `[BOX]` or `[CAP]`; both are implemented because the vocabulary
+names them, and the tests assert the film uses neither.
+
+**The callout anchor rule.** A callout anchors to the first tap of its shot. If
+the callout names `targetX`/`targetY`, that point wins. In this capture the taps
+stop at `connect_save`, and no scene with a callout plays a slice with taps, so
+every callout in the film uses the override — and every override was measured off
+the captured frames (the mode chip at `0.79, 0.703`, the question card at
+`0.5, 0.69`, the send control at `0.872, 0.78`, and so on). The rule itself is
+tested against a shot that does ship taps.
+
+Copy strings are the script's, verbatim, including `Use your agent’s plan mode`
+with its curly apostrophe and `Pretty diffs!` with its exclamation mark.
+
+## Sound
+
+- One ping per copy primitive, at the frame it lands.
+- One tap sound and one ripple per recorded `[TAP]` that survives a cut: four in
+  total (host field, test, trust tick, save).
+- One key sound per recorded keystroke the cut actually draws, thinned so a
+  12 cps burst does not read as a rattle. Keystrokes are never interpolated.
+- `[POP]` and `[CF]` are silent.
+- The music bed is measured, not dialled: `MUSIC_VOLUME = 0.16` puts `music.mp3`
+  at -26.3 LUFS, a measured 11 dB under a tap.
+
+Taps and keys are mapped through the inverse of `clipFrame`, so a keystroke sound
+fires on the frame where the phone draws that character.
+
+## Pacing
+
+- `question` plays at 1.0x throughout: 1.15-5.45 s of a 6.05 s capture, with a
+  short hold on the open sheet. Nothing on that scene is slowed.
+- No shot is slower than 0.5x.
+- The long prompts play a real window at 6-8 characters a second and then cut
+  ahead: `plan` 14.0 s, `build` 15.0 s, `pr` 15.5 s, all from capture that would
+  otherwise run 45 s at a human cadence.
 
 ## Working on it
 
 ```sh
 bun install
-
 bun run dev        # studio, scrub the timeline
-bun test src       # capture contract, beats, cadence, framing, copy, hinge
+bun test src       # scenes, light, parallax, body, camera, copy, sound, pacing
 bun run lint       # eslint + tsc
 ```
 
 One still, without a full render:
 
 ```sh
-bunx remotion bundle --out-dir=../work/render/bundle
-bunx remotion still ../work/render/bundle HaroldDemo ../work/render/qa-final-story/f-600.png --frame=600
+bunx remotion bundle --out-dir=../work/render/bundle-v2
+bunx remotion still ../work/render/bundle-v2 HaroldDemo ../work/render/qa-v2/f-740.png --frame=740
 ```
- 
-The review set is one still per scene plus one per screen crop, written to
-`../work/render/qa-final-story/` as `f-<frame>.png`. Render from the bundle, not
-the entry point, or every still pays for its own bundle.
 
-`bun run render` produces the finished cut at `../harold.mp4`. It renders a
-high-quality master to `../work/render/harold-master.mp4`, then runs `ffmpeg` to
-compress it to H.264 CRF 26 with 96 kbps AAC and faststart.
+The review set lives in `../work/render/qa-v5/`: twelve stills at frames 45, 400,
+760, 980, 1200, 1600, 1800, 2240, 2400, 2700, 3000 and 3300, all 1920x1080.
 
 ## What this cut cannot fix
 
-- **The calibration blink reloads a session.** Every slice opens with a short
-  sleep/wake blink so the sync can be measured. After the plan beat the wake
-  reloads the app onto a session, so `question` and `build` do not start on the
-  exact transcript the plan left. The cut never pretends they are one take.
-- **The crops are upscales.** A 1080 wide capture is drawn at 1.8–2.4x. Pause on
-  the key or the fingerprint and the app's text is soft. Fixing that needs a
-  capture at the target size, not a better upscale.
-- **The plan and build prompts are cut ahead.** The viewer sees the start and the
-  end of each prompt, not every character. The alternative was 45 s of typing.
-- **No taps after `landing`.** Those slices ship no `taps[]`, so their taps have
-  no ripples and no tap sounds. Only the typing in `plan`, `build` and `pr` is
-  sounded.
-- **The system pickers are never filmed.** `Attach photo` and `Attach files` open
-  Android UI. The cut shows the chips landing in the composer, not the pickers.
-- **`plan`'s mode chip reads BUILD.** The capture was taken with the chip in
-  build mode, so the PLAN tag brackets the composer instead of the chip. The copy
-  is the script's and the bracket is honest.
-- **The host-side line is an overlay.** The authorize command on the key beat is
-  drawn from `ssh-data.ts`. That step genuinely happened off camera during the
-  pre-roll, so there is no footage of it.
+- **Most of the film is the wide shot.** At 1x the app renders at 0.37 life size,
+  so the diff, the plan text and the PR URL are small. The script only asks for
+  matches on `achievement` and `usage`; everywhere else the phone is an object in
+  the light and the copy carries the meaning. Readability would need a second,
+  tighter preset per scene, which the script does not ask for.
+- **The taps that open each screen are off camera.** The capture has no taps
+  after `connect_save` and the system pickers were never filmed, so `Attach
+  photo`, `Add (1)`, `Attach files`, `Against main`, `settings.js`, `Dismiss` and
+  friends are described by the copy, not shown as taps.
+- **The calibration blink reloads a session.** `question` and `build` do not start
+  on the exact transcript `plan` left.
+- **`plan`'s mode chip reads BUILD.** The capture's chip is in build mode, so the
+  PLAN tag brackets the chip pointing at the right control with the wrong word.
+- **The clips are upscales above 1x.** `usage` at 2.2x is a mild upscale of a
+  1080-wide capture. Sharp at the numbers, soft at the edges.

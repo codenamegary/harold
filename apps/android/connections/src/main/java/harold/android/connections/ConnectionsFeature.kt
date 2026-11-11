@@ -44,7 +44,6 @@ class ConnectionsEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSave = viewModel::save,
                 onCredentialSelected = viewModel::onCredentialSelected,
                 onCredentialNameChanged = viewModel::onCredentialNameChanged,
-                onSaveCredentialForReuseChanged = viewModel::onSaveCredentialForReuseChanged,
                 onDeleteCredential = viewModel::onDeleteCredential,
             )
         }

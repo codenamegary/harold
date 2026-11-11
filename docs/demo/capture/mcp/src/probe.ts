@@ -3,33 +3,68 @@
  *
  * The app speaks plain JSON over loopback. MCP lives here on the host, so no
  * protocol code ships in the APK and no listener exists in a release build.
+ *
+ * Every payload is parsed with Zod before it reaches the driver: the device is a
+ * trust boundary, and a silent shape change must fail loudly here instead of
+ * becoming a wrong tap coordinate three calls later.
  */
 
-export type ProbeControl = {
-  tag: string
-  left: number
-  top: number
-  right: number
-  bottom: number
-  x: number
-  y: number
-  enabled: boolean
-}
+import { z } from "zod"
 
-export type ProbeMark = {
-  nanos: number
-  kind: string
-}
+export const probeControlSchema = z.object({
+  tag: z.string(),
+  left: z.number(),
+  top: z.number(),
+  right: z.number(),
+  bottom: z.number(),
+  x: z.number(),
+  y: z.number(),
+  enabled: z.boolean(),
+})
 
-export type ScreenSnapshot = {
-  screen: string | null
-  settled: boolean
-  actions: string[]
-  facts: Record<string, string>
-  controls: ProbeControl[]
-  marksCount: number
-  anchorNanos: number
-}
+export type ProbeControl = z.infer<typeof probeControlSchema>
+
+/**
+ * One event on the device clock. `nanos` is `SystemClock.elapsedRealtimeNanos()`,
+ * converted to host time through `harold_anchor`.
+ */
+export const probeMarkSchema = z.object({
+  nanos: z.number(),
+  kind: z.string(),
+})
+
+export type ProbeMark = z.infer<typeof probeMarkSchema>
+
+export const screenSnapshotSchema = z.object({
+  screen: z.string().nullable(),
+  settled: z.boolean(),
+  actions: z.array(z.string()),
+  facts: z.record(z.string(), z.string()),
+  controls: z.array(probeControlSchema),
+  marksCount: z.number(),
+  anchorNanos: z.number(),
+})
+
+export type ScreenSnapshot = z.infer<typeof screenSnapshotSchema>
+
+export const intentResultSchema = screenSnapshotSchema.extend({
+  ok: z.boolean(),
+  action: z.string(),
+  marks: z.array(probeMarkSchema),
+})
+
+export type IntentResult = z.infer<typeof intentResultSchema>
+
+export const healthSchema = z.object({
+  ok: z.boolean(),
+  screen: z.string().nullable(),
+})
+
+export type ProbeHealth = z.infer<typeof healthSchema>
+
+export const anchorPayloadSchema = z.object({
+  anchorNanos: z.number(),
+})
 
 export type ProbeConfig = {
   baseUrl: string
@@ -63,27 +98,28 @@ async function call(
   return text.length === 0 ? null : JSON.parse(text)
 }
 
-export async function health(config: ProbeConfig): Promise<{ ok: boolean; screen: string | null }> {
-  return (await call(config, "/health")) as { ok: boolean; screen: string | null }
+export async function health(config: ProbeConfig): Promise<ProbeHealth> {
+  return healthSchema.parse(await call(config, "/health"))
 }
 
 export async function screen(config: ProbeConfig): Promise<ScreenSnapshot> {
-  return (await call(config, "/screen")) as ScreenSnapshot
+  return screenSnapshotSchema.parse(await call(config, "/screen"))
 }
 
 export async function intent(
   config: ProbeConfig,
   action: string,
   args: Record<string, string> = {},
-): Promise<ScreenSnapshot & { ok: boolean; action: string; marks: ProbeMark[] }> {
-  return (await call(config, "/intent", {
+): Promise<IntentResult> {
+  const payload = await call(config, "/intent", {
     method: "POST",
     body: JSON.stringify({ action, args }),
-  })) as ScreenSnapshot & { ok: boolean; action: string; marks: ProbeMark[] }
+  })
+  return intentResultSchema.parse(payload)
 }
 
 export async function marks(config: ProbeConfig, since = 0): Promise<ProbeMark[]> {
-  return (await call(config, `/marks?since=${since}`)) as ProbeMark[]
+  return z.array(probeMarkSchema).parse(await call(config, `/marks?since=${since}`))
 }
 
 export async function clearMarks(config: ProbeConfig): Promise<void> {
@@ -91,8 +127,7 @@ export async function clearMarks(config: ProbeConfig): Promise<void> {
 }
 
 export async function anchor(config: ProbeConfig): Promise<number> {
-  const payload = (await call(config, "/anchor", { method: "POST" })) as { anchorNanos: number }
-  return payload.anchorNanos
+  return anchorPayloadSchema.parse(await call(config, "/anchor", { method: "POST" })).anchorNanos
 }
 
 export function control(snapshot: ScreenSnapshot, tag: string): ProbeControl {

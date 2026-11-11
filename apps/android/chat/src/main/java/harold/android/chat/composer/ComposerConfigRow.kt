@@ -69,6 +69,7 @@ import kotlinx.coroutines.delay
 import harold.android.chat.R
 import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.SelectOption
+import harold.android.ui.debug.probeTag
 import harold.android.ui.theme.Body
 import harold.android.ui.theme.Dim
 import harold.android.ui.theme.Lime
@@ -117,7 +118,7 @@ fun ComposerConfigRow(
     }
 
     Box(
-        modifier = modifier.testTag("composer_config_row"),
+        modifier = modifier.probeTag("composer_config_row"),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -231,7 +232,7 @@ fun ComposerConfigRow(
                                 .semantics {
                                     this.contentDescription = modelDescription
                                 }
-                                .testTag("composer_config_model_chip"),
+                                .probeTag("composer_config_model_chip"),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
@@ -289,7 +290,7 @@ fun ComposerConfigRow(
                                 .semantics {
                                     this.contentDescription = modeDescription
                                 }
-                                .testTag("composer_config_mode_chip"),
+                                .probeTag("composer_config_mode_chip"),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(

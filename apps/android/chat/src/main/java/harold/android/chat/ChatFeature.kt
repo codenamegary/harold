@@ -35,6 +35,25 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
             val viewModel: ChatViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             ResumeChat(viewModel)
+            ChatProbeEffect(
+                viewModel = viewModel,
+                onNewSession = navigator::openCreateSession,
+                onSeeAllSessions = navigator::openSessions,
+                onOpenChanges = {
+                    // Read the selected session at call time, not at install
+                    // time, so the probe never opens stale changes.
+                    viewModel.uiState.value.selectedSession?.let { session ->
+                        navigator.openChanges(
+                            connectionId = session.connectionId,
+                            agentId = session.agentId,
+                            sessionId = session.sessionId,
+                            cwd = session.cwd,
+                            worktreePath = session.worktreePath,
+                        )
+                    }
+                },
+                onBack = navigator::goBack,
+            )
             ChatScreen(
                 uiState = uiState,
                 composerState = viewModel.composerState,
@@ -138,6 +157,10 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
         scope.entry<CreateSession> {
             val viewModel: CreateSessionViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            CreateSessionProbeEffect(
+                viewModel = viewModel,
+                onBack = { navigator.goBack() },
+            )
             CreateSessionScreen(
                 createState = uiState,
                 onBack = { navigator.goBack() },

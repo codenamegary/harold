@@ -15,6 +15,10 @@ const REST: CelebrationStyle = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotate: 0 }
 
 // [POP] a damped squash and shake. One beat, no CSS animation, so it renders
 // the same frame by frame.
+//
+// The film allows exactly one of these, at the achievement hinge, and the same
+// celebration carries the only confetti burst (see `confetti.tsx`). The close
+// ends on a spotlight alone.
 export const celebrationStyle = (celebrations: Celebration[], sec: number): CelebrationStyle => {
   const active = celebrations.find(
     (celebration) => sec >= celebration.at && sec <= celebration.at + celebration.hold,

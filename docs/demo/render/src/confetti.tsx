@@ -1,139 +1,118 @@
-import { interpolate, useVideoConfig } from "remotion"
-import { type Celebration } from "./timeline"
+import { AbsoluteFill, useVideoConfig } from "remotion"
+import { dim, lime, mute, paper } from "./theme"
+import { poolLit, type LightShape } from "./stage"
+import { type Confetti } from "./timeline"
 
-const CONFETTI_SEC = 3.2
-const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
+const COLORS = [lime, paper, mute, dim]
 
-const COLORS = ["#B6F36B", "#F2F5F8", "#8F7CFF", "#56B8FF", "#FF8A5B", "#FFD166", "#FF6FA8"]
-
-type Shape = "rect" | "circle" | "streamer"
+// A tiny seeded generator. Particles must be identical on every render of the
+// same frame, so nothing here may call Math.random.
+const mulberry32 = (seed: number) => {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 type Particle = {
-  startX: number
-  startY: number
+  left: number
+  top: number
   size: number
-  shape: Shape
+  rotate: number
+  scaleY: number
   color: string
-  delay: number
-  fall: number
-  gravity: number
-  drift: number
-  sway: number
-  frequency: number
-  phase: number
-  spin: number
-  rotation: number
   opacity: number
+  square: boolean
 }
 
-const hash = (value: number) => {
-  const result = Math.sin(value * 12.9898 + 78.233) * 43758.5453
-  return result - Math.floor(result)
-}
-
-const makeParticle = (index: number): Particle => {
-  const random = (salt: number) => hash(index * 19.19 + salt * 73.31)
-  const size = 7 + random(1) * 11
-  const shapeRoll = random(2)
-  const shape: Shape = shapeRoll > 0.74 ? "circle" : shapeRoll > 0.38 ? "streamer" : "rect"
-
-  return {
-    startX: random(3),
-    startY: -0.18 + random(4) * 0.5,
-    size,
-    shape,
-    color: COLORS[Math.floor(random(5) * COLORS.length)],
-    delay: random(6) * 0.35,
-    fall: 140 + random(7) * 220,
-    gravity: 220 + random(8) * 160,
-    drift: (random(9) - 0.5) * 220,
-    sway: 8 + random(10) * 26,
-    frequency: 4 + random(11) * 6,
-    phase: random(12) * Math.PI * 2,
-    spin: (random(13) - 0.5) * 720,
-    rotation: random(14) * 360,
-    opacity: 0.7 + random(15) * 0.3,
-  }
-}
-
-const PARTICLES = Array.from({ length: 96 }, (_, index) => makeParticle(index))
-
-const particleSize = (particle: Particle) => {
-  if (particle.shape === "streamer") {
-    return { width: particle.size * 0.42, height: particle.size * 2.1, radius: 2 }
-  }
-  if (particle.shape === "circle") {
-    return { width: particle.size, height: particle.size, radius: 999 }
-  }
-  return { width: particle.size, height: particle.size * 0.55, radius: 2 }
-}
-
-// [CONFETTI] a full-stage paper shower. It starts on a celebration beat and
-// runs on wall-clock seconds, independent of the phone pop length.
-export const Confetti: React.FC<{ celebrations: Celebration[]; sec: number }> = ({
-  celebrations,
-  sec,
-}) => {
-  const { width, height } = useVideoConfig()
-  const active = celebrations.filter(
-    (celebration) =>
-      celebration.confetti &&
-      sec >= celebration.at &&
-      sec <= celebration.at + CONFETTI_SEC + 0.4,
-  )
-  if (active.length === 0) {
+const particleAt = (
+  index: number,
+  burst: Confetti,
+  sec: number,
+  stageW: number,
+  stageH: number,
+): Particle | null => {
+  const rand = mulberry32(Math.imul(index + 1, 0x9e3779b1) ^ 0x5f356495)
+  const delay = rand() * 0.5
+  const life = Math.max(0.4, burst.hold - delay)
+  const t = (sec - burst.at - delay) / life
+  if (t < 0 || t > 1) {
     return null
   }
 
-  return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        overflow: "hidden",
-        pointerEvents: "none",
-      }}
-    >
-      {active.map((celebration) =>
-        PARTICLES.map((particle, index) => {
-          const since = sec - celebration.at - particle.delay
-          if (since < 0 || since > CONFETTI_SEC) {
-            return null
-          }
-          const size = particleSize(particle)
-          const x =
-            particle.startX * width +
-            particle.drift * since +
-            Math.sin(since * particle.frequency + particle.phase) * particle.sway
-          const y =
-            particle.startY * height + particle.fall * since + 0.5 * particle.gravity * since * since
-          const rotation = particle.rotation + particle.spin * since
-          const opacity = interpolate(
-            since,
-            [0, 0.12, CONFETTI_SEC - 0.8, CONFETTI_SEC],
-            [0, particle.opacity, particle.opacity, 0],
-            clamp,
-          )
+  const spin = (rand() - 0.5) * 1080
+  const phase = rand() * Math.PI * 2
+  const x0 = rand() * stageW
+  const drift = (rand() - 0.5) * 360
+  const fall = stageH + 200
+  const size = 8 + rand() * 14
+  const color = COLORS[Math.floor(rand() * COLORS.length)] ?? lime
+  const square = rand() > 0.35
+  // The shower has body on its first visible frame, not 0.4 s later.
+  const drop = rand() * stageH * 0.3
 
-          return (
+  return {
+    left: x0 + drift * t + Math.sin(t * Math.PI * 3 + phase) * 24,
+    top: -90 + drop + fall * t,
+    size,
+    rotate: spin * t + phase * 12,
+    scaleY: Math.abs(Math.cos(t * 9 + phase)) * 0.85 + 0.15,
+    color,
+    opacity: t > 0.85 ? Math.max(0, (1 - t) / 0.15) : 1,
+    square,
+  }
+}
+
+/**
+ * [CF] the film's only confetti burst, on the achievement.
+ *
+ * The shower falls *in* the light: every particle is dimmed by how far outside
+ * the pool it is, so the confetti catches the pool instead of dropping onto a
+ * flat black field. Silent and deterministic.
+ */
+export const ConfettiLayer: React.FC<{ bursts: Confetti[]; sec: number; light: LightShape }> = ({
+  bursts,
+  sec,
+  light,
+}) => {
+  const { width, height } = useVideoConfig()
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
+      {bursts.map((burst) => {
+        const particles: React.ReactNode[] = []
+        for (let index = 0; index < burst.count; index += 1) {
+          const particle = particleAt(index, burst, sec, width, height)
+          if (particle === null || particle.opacity <= 0) {
+            continue
+          }
+          const lit = poolLit(light, particle.left / width, particle.top / height)
+          const opacity = particle.opacity * (0.06 + 0.94 * lit)
+          if (opacity <= 0.01) {
+            continue
+          }
+          particles.push(
             <div
-              key={`${celebration.at}-${index}`}
+              key={index}
               style={{
                 position: "absolute",
-                left: 0,
-                top: 0,
-                width: size.width,
-                height: size.height,
-                borderRadius: size.radius,
+                left: particle.left,
+                top: particle.top,
+                width: particle.size,
+                height: particle.size * 1.5,
                 background: particle.color,
+                borderRadius: particle.square ? 2 : particle.size,
                 opacity,
-                translate: `${x}px ${y}px`,
-                rotate: `${rotation}deg`,
+                transform: `rotate(${particle.rotate}deg) scaleY(${particle.scaleY})`,
               }}
-            />
+            />,
           )
-        }),
-      )}
-    </div>
+        }
+        return <AbsoluteFill key={burst.at}>{particles}</AbsoluteFill>
+      })}
+    </AbsoluteFill>
   )
 }

@@ -154,7 +154,7 @@ export function registerProbeTools(server: McpServer, config: ProbeConfig): void
         "Run a named non-gesture action on the current screen, for example test_connection, save, trust, auth_mode.",
       inputSchema: {
         action: z.string(),
-        args: z.record(z.string()).optional(),
+        args: z.record(z.string(), z.string()).optional(),
       },
     },
     async ({ action, args }) => json(await intent(config, action, args ?? {})),

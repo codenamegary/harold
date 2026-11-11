@@ -191,14 +191,12 @@ fun HaroldAppearanceEditor(
     endpointSubtitle: String? = null,
     previewAtEnd: Boolean = false,
 ) {
-    val activeColor = haroldColorOption(colorId)
-
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (!previewAtEnd) {
-            AppearancePreview(
+            HaroldAppearancePreview(
                 name = name,
                 colorId = colorId,
                 iconId = iconId,
@@ -213,6 +211,46 @@ fun HaroldAppearanceEditor(
             fieldTestTag = nameFieldTag,
         )
 
+        HaroldAppearancePicker(
+            colorId = colorId,
+            iconId = iconId,
+            onColorSelected = onColorSelected,
+            onIconSelected = onIconSelected,
+            colorLabel = colorLabel,
+            iconLabel = iconLabel,
+            colorTagPrefix = colorTagPrefix,
+            iconTagPrefix = iconTagPrefix,
+        )
+
+        if (previewAtEnd) {
+            HaroldAppearancePreview(
+                name = name,
+                colorId = colorId,
+                iconId = iconId,
+                endpointSubtitle = endpointSubtitle,
+            )
+        }
+    }
+}
+
+@Composable
+fun HaroldAppearancePicker(
+    colorId: String,
+    iconId: String,
+    onColorSelected: (String) -> Unit,
+    onIconSelected: (String) -> Unit,
+    colorLabel: String,
+    iconLabel: String,
+    colorTagPrefix: String,
+    iconTagPrefix: String,
+    modifier: Modifier = Modifier,
+) {
+    val activeColor = haroldColorOption(colorId)
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = colorLabel,
@@ -330,31 +368,23 @@ fun HaroldAppearanceEditor(
                 }
             }
         }
-
-        if (previewAtEnd) {
-            AppearancePreview(
-                name = name,
-                colorId = colorId,
-                iconId = iconId,
-                endpointSubtitle = endpointSubtitle,
-            )
-        }
     }
 }
 
 @Composable
-private fun AppearancePreview(
+fun HaroldAppearancePreview(
     name: String,
     colorId: String,
     iconId: String,
     endpointSubtitle: String?,
+    modifier: Modifier = Modifier,
 ) {
     val activeColor = haroldColorOption(colorId)
 
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .border(
                 width = 1.dp,

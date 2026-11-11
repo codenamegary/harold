@@ -6,7 +6,6 @@
       "name": "demo",
       "dependencies": {
         "@remotion/cli": "4.0.534",
-        "@remotion/google-fonts": "4.0.534",
         "react": "19.2.3",
         "react-dom": "19.2.3",
         "remotion": "4.0.534",
@@ -204,8 +203,6 @@
     "@remotion/elevenlabs": ["@remotion/elevenlabs@4.0.534", "", { "dependencies": { "@remotion/captions": "4.0.534", "zod": "4.5.4" } }, "sha512-TPd1XFSUfausKxeIljPqWOslJpeYARAeZFT2TSmvrmQBpz3i8yoG96gk3qXkqj7ebzQAqzv75bzd8jegwRU1Gw=="],
 
     "@remotion/eslint-config-flat": ["@remotion/eslint-config-flat@4.0.534", "", { "dependencies": { "typescript-eslint": "8.21.0" }, "peerDependencies": { "eslint": ">=9" } }, "sha512-ERw/E9+gLk7+PYMaGP1yIPJ1I8jV9ZSJCXni3Ms271AZ/AjC0Bppx9ozhztItJtZF+91WmEdstB3wZAIEA8iBg=="],
-
-    "@remotion/google-fonts": ["@remotion/google-fonts@4.0.534", "", { "dependencies": { "remotion": "4.0.534" } }, "sha512-bgXF3QJ5Mkjmnaz1ROm1UfeP0jCJpkv4y6EPoisIVtexqVgwk9Zmp1dMemE81ok38zDLHTqM0/+5msBKWuhg3A=="],
 
     "@remotion/licensing": ["@remotion/licensing@4.0.534", "", {}, "sha512-pNP8OfY+vbDbjNBLYGoxGyE0SsReRy85G/QTF17mQC86dt2+pzsYlOkG2mq6R4tkt27xaQv8O5EFiJfYYfVkkw=="],
 

@@ -6,13 +6,18 @@
   "scripts": {
     "start": "bun run src/server.ts",
     "poc": "bun run src/poc.ts",
-    "smoke": "bun run src/smoke.ts"
+    "smoke": "bun run src/smoke.ts",
+    "walk": "bun run src/walk.ts",
+    "slices": "bun run src/slices.ts --names",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
-    "zod": "^3.25.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.4",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0"
   }

@@ -21,6 +21,12 @@ DOCUMENTS=(
 )
 PHOTOS_DIR="${PHOTOS_DIR:-/sdcard/DCIM/Camera}"
 DOCUMENTS_DIR="${DOCUMENTS_DIR:-/sdcard/Download}"
+# The probe's `attach_fixture` seam has a documented permission-free fallback
+# that reads the pair out of the app's own external files directory. Download/
+# and the photo library both need a grant this emulator image does not carry for
+# a factory-reset app, so the same two files are deployed there as well.
+PACKAGE="${HAROLD_PACKAGE:-harold.android.debug}"
+FIXTURES_DIR="${FIXTURES_DIR:-/sdcard/Android/data/$PACKAGE/files/harold-fixtures}"
 EXTRACT_DIR="$WORK/photos"
 
 die() { echo "push_assets.sh: $*" >&2; exit 1; }
@@ -89,13 +95,24 @@ unzip -ojq "$ARCHIVE" -d "$EXTRACT_DIR"
 
 adb -s "$SERIAL" shell mkdir -p "$(shell_quote "$PHOTOS_DIR")" >/dev/null
 adb -s "$SERIAL" shell mkdir -p "$(shell_quote "$DOCUMENTS_DIR")" >/dev/null
+adb -s "$SERIAL" shell mkdir -p "$(shell_quote "$FIXTURES_DIR")" >/dev/null
 
+FIRST_PHOTO=""
 while IFS= read -r -d '' source; do
   push_file "$source" "$PHOTOS_DIR"
+  [[ -n "$FIRST_PHOTO" ]] || FIRST_PHOTO="$source"
 done < <(find "$EXTRACT_DIR" -type f -print0 | sort -z)
 for document in "${DOCUMENTS[@]}"; do
   push_file "$document" "$DOCUMENTS_DIR"
 done
+
+# The probe's permission-free fallback pair. The photo is the same one the photo
+# library holds, so a build that can read neither MediaStore nor Download/ still
+# attaches a real photo and the real spec instead of refusing the scene.
+if [[ -n "$FIRST_PHOTO" ]]; then
+  push_file "$FIRST_PHOTO" "$FIXTURES_DIR"
+fi
+push_file "${SPEC_SOURCE:-$ASSETS/cat-mode.md}" "$FIXTURES_DIR"
 
 # Rescan even when nothing was pushed: an earlier run may have copied the
 # files but failed before the scan landed.

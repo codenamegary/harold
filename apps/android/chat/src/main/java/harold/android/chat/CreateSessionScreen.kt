@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
+import harold.android.ui.debug.probeTag
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -60,7 +61,7 @@ fun CreateSessionScreen(
                         onClick = onBack,
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("create_session_back"),
+                            .probeTag("create_session_back"),
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -76,7 +77,7 @@ fun CreateSessionScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(16.dp)
-                .testTag("create_session_screen"),
+                .probeTag("create_session_screen"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             WorkspaceDropdown(
@@ -96,7 +97,7 @@ fun CreateSessionScreen(
                 Text(
                     text = createState.error,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("create_session_error"),
+                    modifier = Modifier.probeTag("create_session_error"),
                 )
             }
 
@@ -111,7 +112,7 @@ fun CreateSessionScreen(
                 variant = HaroldButtonVariant.Primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("create_session_submit"),
+                    .probeTag("create_session_submit"),
             )
         }
     }
@@ -150,7 +151,7 @@ private fun WorkspaceDropdown(
                         colorId = selectedWorkspace.connectionColorId,
                         iconId = selectedWorkspace.connectionIconId,
                         size = 22.dp,
-                        modifier = Modifier.testTag("create_session_workspace_badge"),
+                        modifier = Modifier.probeTag("create_session_workspace_badge"),
                     )
                 }
             } else {
@@ -160,7 +161,7 @@ private fun WorkspaceDropdown(
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth()
-                .testTag("create_session_workspace"),
+                .probeTag("create_session_workspace"),
         )
 
         ExposedDropdownMenu(
@@ -187,7 +188,7 @@ private fun WorkspaceDropdown(
                     expanded = false
                     onNewWorkspaceClick()
                 },
-                modifier = Modifier.testTag("create_session_new_workspace"),
+                modifier = Modifier.probeTag("create_session_new_workspace"),
             )
 
             if (workspaces.isNotEmpty()) {
@@ -249,7 +250,7 @@ private fun WorkspaceDropdown(
                         onWorkspaceChanged(workspace.id)
                         expanded = false
                     },
-                    modifier = Modifier.testTag("create_session_workspace_option_${workspace.id}"),
+                    modifier = Modifier.probeTag(createSessionWorkspaceOptionTag(workspace.id)),
                 )
             }
         }
@@ -280,7 +281,7 @@ private fun AgentDropdown(
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth()
-                .testTag("create_session_agent"),
+                .probeTag("create_session_agent"),
         )
 
         ExposedDropdownMenu(
@@ -294,6 +295,7 @@ private fun AgentDropdown(
                         onAgentChanged(agent.id)
                         expanded = false
                     },
+                    modifier = Modifier.probeTag(createSessionAgentOptionTag(agent.id)),
                 )
             }
         }

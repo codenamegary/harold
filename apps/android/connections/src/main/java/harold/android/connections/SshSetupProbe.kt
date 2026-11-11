@@ -102,6 +102,9 @@ internal class SshSetupProbe(
             "password" -> SshAuthMode.Password
             else -> return false
         }
+        // The dropdown and the probe both mean "use this new method", so a
+        // previously selected saved credential must be cleared first.
+        viewModel.onCredentialSelected(null)
         viewModel.onAuthModeChanged(next)
         return true
     }

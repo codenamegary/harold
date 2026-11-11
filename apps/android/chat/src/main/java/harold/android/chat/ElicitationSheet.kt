@@ -50,6 +50,7 @@ import harold.android.live.OTHER_OPTION_VALUE
 import harold.android.live.analyzeElicitationUrl
 import harold.android.live.answerSummary
 import harold.android.live.isQuestionValid
+import harold.android.ui.debug.probeTag
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -210,7 +211,7 @@ private fun FormSheet(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .testTag("elicitation_sheet"),
+            .probeTag("elicitation_sheet"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SheetHeader(
@@ -382,7 +383,7 @@ private fun SheetHeader(
                 onClick = onClose,
                 modifier = Modifier
                     .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                    .testTag("elicitation_sheet_close"),
+                    .probeTag("elicitation_sheet_close"),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
@@ -428,7 +429,7 @@ private fun QuestionField(
             Text(
                 text = question.title,
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.testTag("elicitation_question_title"),
+                modifier = Modifier.probeTag("elicitation_question_title"),
             )
             if (question.required) {
                 Text(
@@ -634,7 +635,7 @@ private fun SelectableRow(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp)
-            .testTag(testTag),
+            .probeTag(testTag),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -735,7 +736,7 @@ private fun FormFooter(
             enabled = !state.submitting,
             modifier = Modifier
                 .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                .testTag("elicitation_decline"),
+                .probeTag("elicitation_decline"),
         ) {
             Text(text = "Decline")
         }
@@ -746,7 +747,7 @@ private fun FormFooter(
             enabled = if (isSubmit) submitEnabled else !state.submitting,
             modifier = Modifier
                 .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                .testTag(if (isSubmit) "elicitation_submit" else "elicitation_next"),
+                .probeTag(if (isSubmit) "elicitation_submit" else "elicitation_next"),
         ) {
             Text(
                 text = when {
@@ -777,7 +778,7 @@ private fun UrlSheet(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .testTag("elicitation_sheet"),
+            .probeTag("elicitation_sheet"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SheetHeader(

@@ -1,6 +1,6 @@
 import { Composition, staticFile } from "remotion"
 import { Demo } from "./Demo"
-import { FPS, totalSec, type CaptureSlice } from "./timeline"
+import { DURATION_IN_FRAMES, FPS, type CaptureSlice } from "./timeline"
 
 type CaptureFile = {
   width: number
@@ -13,7 +13,7 @@ export const MyComposition = () => {
     <Composition
       id="HaroldDemo"
       component={Demo}
-      durationInFrames={FPS * 30}
+      durationInFrames={DURATION_IN_FRAMES}
       fps={FPS}
       width={1920}
       height={1080}
@@ -28,8 +28,10 @@ export const MyComposition = () => {
           throw new Error("Missing public/capture.json. Run docs/demo/capture/capture.sh first.")
         }
         const capture = (await response.json()) as CaptureFile
+        // capture.json supplies the assets and the phone dimensions. The cut
+        // length is authored, not derived: 1800 frames of fixed beats.
         return {
-          durationInFrames: Math.max(1, Math.round(totalSec(capture.slices) * FPS)),
+          durationInFrames: DURATION_IN_FRAMES,
           props: {
             slices: capture.slices,
             videoWidth: capture.width,

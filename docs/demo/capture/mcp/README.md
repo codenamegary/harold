@@ -107,6 +107,77 @@ Wiring check with no device:
 bun run src/smoke.ts
 ```
 
+## The capture walk
+
+[`src/walk.ts`](./src/walk.ts) is the driver `capture.sh` uses now. It records
+the connect act as one `screenrecord` file per beat and writes the artifacts
+`build_capture.py` already reads.
+
+```sh
+bun run src/walk.ts --list                    # the beat plan
+bun run src/walk.ts --self-test               # stub only, no device, no adb
+bun run src/walk.ts --only connect_fill       # one slice
+bun run src/walk.ts                           # every on-camera beat
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--list` | print the beat plan and exit |
+| `--only <a,b>` | record these slices only. Repeatable |
+| `--self-test` | run every beat against an in-memory stub |
+| `--out <dir>` | where the artifacts go. Default `docs/demo/work/capture` |
+| `--emulator-serial <sn>` | adb serial to drive |
+
+### The token comes from logcat
+
+The debug APK prints its port and token when the probe starts. The walk reads
+the token from the environment, and `capture.sh` fills it in:
+
+```sh
+adb forward tcp:7391 tcp:7391
+export HAROLD_PROBE_TOKEN=$(adb logcat -d -s HaroldProbe:I \
+  | sed -n 's/.*token=\([0-9a-f]*\).*/\1/p' | tail -n 1)
+```
+
+`connectProbe` refuses to start without a token, so a stale shell fails at once
+instead of collecting a page of 401s.
+
+### What one slice writes
+
+1. `harold_clear_marks`, so the ledger holds only this slice
+2. an anchor sample before the head blink
+3. `screenrecord` on `/data/local/tmp/harold-demo-NNN-<name>.mp4`
+4. the head blink, then the beat, then another anchor
+5. the tail blink, then the recorder stops
+6. an anchor after the tail blink
+7. the device marks, converted and merged into `marks.log`
+8. the mp4 pulled to `<out>/slices/NNN-<name>.mp4`
+
+`<out>/slices.json` holds `{index, name, file, remote, started, ended}`.
+`<out>/walk-report.json` holds every step, every raw device mark, and every
+slice's anchors and clock fit.
+
+### Anchors turn device marks into host time
+
+Marks use `SystemClock.elapsedRealtimeNanos()`. The host needs host seconds.
+Each `harold_anchor` call is paired with a host `performance.now()` taken
+immediately before it, and the driver fits a line from device seconds to host
+seconds. Two samples is the minimum, three is normal, and bad anchors abort the
+slice by name:
+
+| Guard | Limit |
+| --- | --- |
+| anchor round trip | under 500 ms |
+| fitted slope | inside (0.99, 1.01) |
+| fit residual | under 50 ms |
+| mark order | must never go backwards |
+| mark range | inside the anchor bracket plus 2 s |
+| mark window | inside the slice start and end plus 2 s |
+
+The POC left this out. Its `report.json` holds raw `nanos`. The walk converts
+every mark before it writes a row, so `marks.log` stays in host time and
+`build_capture.py` needs no change.
+
 ## What the POC showed
 
 Same connect flow the old driver took four hundred and fifty five seconds to
@@ -136,7 +207,7 @@ There is no uidump anywhere in that path.
 - The renderer's ripple layer still needs `taps[].x/.y`. `harold_tap` returns the
   coordinates it used so they can be written into `capture.json`.
 - Marks are on the device clock. Convert with `harold_anchor` paired against a
-  host timestamp, exactly as the calibration blink does today. The POC records
-  raw marks and does not convert them.
+  host timestamp. The POC records raw marks and stops there. `walk.ts` does the
+  conversion and writes host time rows.
 - A loopback listener exists only in debug source. `Probe.enabled` starts false
   and only `ProbeInitializer`, which is in the debug manifest, turns it on.

@@ -1,7 +1,35 @@
 import { Easing } from "remotion"
-import { connectedSegs, fingerprintSegs, type TermItem } from "./terminal-data"
+import {
+  poseAt,
+  resolveBodyCue,
+  type BodyCue,
+  type BodyCueSpec,
+  type Pose,
+  type Waddle,
+} from "./body"
+import {
+  PRESETS,
+  cameraAt,
+  resolveCameraCue,
+  type CameraCue,
+  type CameraCueSpec,
+  type CameraState,
+  type Point,
+} from "./camera"
+import { LIGHTS, type LightCue, type LightState } from "./stage"
+
+// --- Capture contract -------------------------------------------------------
+//
+// capture.json is raw material: one video per action, with the exact time of
+// every tap, every keystroke and every named mark inside that video. This file is
+// the edit. Nothing here re-captures anything.
+//
+// docs/demo/script.md is the authority. Scene order, copy, stage, camera and
+// sound come from it and from nowhere else.
 
 export type CaptureTap = { x: number; y: number; atSec: number }
+export type CaptureKey = { atSec: number }
+export type CaptureMark = { name: string; atSec: number }
 
 export type CaptureSlice = {
   name: string
@@ -11,6 +39,8 @@ export type CaptureSlice = {
   height: number
   still?: boolean
   taps?: CaptureTap[]
+  keys?: CaptureKey[]
+  marks?: CaptureMark[]
 }
 
 export type DemoProps = {
@@ -20,638 +50,732 @@ export type DemoProps = {
 }
 
 export const FPS = 30
-export const OUTRO_SEC = 4.2
 
-// --- Edit timeline ----------------------------------------------------------
-//
-// capture.json is raw material: one video per action, with tap positions and
-// the time each tap landed inside its slice. This file is the edit. Adjust a
-// shot's rate, duration, hold, caption, or typing and the rest of the walk
-// shifts with it. Nothing here requires a re-capture.
+// --- Scenes -----------------------------------------------------------------
 
-const PHONE_IN_AT = 9.0
-const SETUP_ZOOM_AT = 14.0
-const SETUP_ZOOM_SEC = 0.5
-const REcede_AT = 29.1
-const WALK_START = 33.9
-const STORY_ZOOM_SEC = 0.56
-const STORY_OUT_SEC = 0.8
+export type SceneSlug =
+  | "intro"
+  | "ssh"
+  | "achievement"
+  | "newSession"
+  | "plan"
+  | "question"
+  | "build"
+  | "usage"
+  | "changes"
+  | "worktrees"
+  | "pr"
+  | "outro"
 
-type TypingWindow = { text: string; fromSec: number; toSec: number }
+/** The script's scene order. The achievement sits third, right after the SSH. */
+export const SCENE_ORDER: readonly SceneSlug[] = [
+  "intro",
+  "ssh",
+  "achievement",
+  "newSession",
+  "plan",
+  "question",
+  "build",
+  "usage",
+  "changes",
+  "worktrees",
+  "pr",
+  "outro",
+] as const
 
-// [SPOTLIGHT] a full-stage feature beat. The phone docks to one side, the
-// terminal leaves, and this copy fills the other side in display type. It is
-// the large, editorial sibling of [CAP], for milestones and headline features.
-export type Spotlight = {
-  at: number
-  hold: number
-  side: "left" | "right"
-  kicker: string
-  title: string
+const SCENE_FRAMES: Record<SceneSlug, number> = {
+  intro: 105,
+  ssh: 600,
+  achievement: 225,
+  newSession: 180,
+  plan: 420,
+  question: 180,
+  build: 450,
+  usage: 150,
+  changes: 360,
+  worktrees: 105,
+  pr: 465,
+  outro: 150,
 }
 
-type SpotlightSpec = {
-  at?: number
-  hold?: number
-  side?: "left" | "right"
-  kicker: string
-  title: string
+/** 3390 frames at 30 fps: 113.0 s. Derived from the beats, not fixed. */
+export const DURATION_IN_FRAMES: number = SCENE_ORDER.reduce(
+  (sum, slug) => sum + SCENE_FRAMES[slug],
+  0,
+)
+export const DURATION_SEC = DURATION_IN_FRAMES / FPS
+
+// --- Layouts ----------------------------------------------------------------
+
+export type LayoutId = "L1" | "L2C"
+
+export type Layout = {
+  id: LayoutId
+  columns: "one" | "two"
+  /** Copy column, or off. */
+  copy: "off" | "left"
+  phoneDock: number
 }
 
-// [CALLOUT] a feature tag attached to the phone. The first tap of the shot is
-// the anchor, so the tag points at the control the user is about to press.
-export type Callout = {
+export const LAYOUTS: Record<LayoutId, Layout> = {
+  L1: { id: "L1", columns: "one", copy: "off", phoneDock: 0.5 },
+  L2C: { id: "L2C", columns: "two", copy: "left", phoneDock: 0.68 },
+}
+
+// --- Copy primitives --------------------------------------------------------
+
+export type CopySide = "left" | "right"
+
+/** Where a callout points, in phone-screen fractions. */
+export type Anchor =
+  | { mode: "firstTap" }
+  | { mode: "point"; x: number; y: number }
+
+type CopyTimes = { /** Scene-relative seconds. */ at: number; hold: number }
+
+export type CopySpec =
+  | ({ kind: "card"; title: string; place: "stage" | "screen" } & CopyTimes)
+  | ({
+      kind: "callout"
+      title: string
+      eyebrow?: string
+      hint?: string
+      /** Left unset means the tag sits on the side its target is nearest. */
+      side?: CopySide
+      compact?: boolean
+      placement?: "target" | "edge"
+      connector?: "string" | "t"
+      anchor?: Anchor
+    } & CopyTimes)
+  | ({ kind: "spotlight"; side: CopySide; kicker: string; title: string } & CopyTimes)
+  | ({ kind: "note"; title: string; label: string } & CopyTimes)
+  | ({
+      kind: "box"
+      steps: { title: string; at: number; x: number; y: number }[]
+    } & CopyTimes)
+  | ({ kind: "cap"; text: string } & CopyTimes)
+
+export type CardItem = {
+  kind: "card"
   at: number
   hold: number
+  title: string
+  place: "stage" | "screen"
+}
+
+export type CalloutItem = {
+  kind: "callout"
+  at: number
+  hold: number
+  title: string
   eyebrow?: string
-  title: string
   hint?: string
-  side: "left" | "right"
-  targetX: number
-  targetY: number
+  side: CopySide
   compact: boolean
   placement: "target" | "edge"
   connector: "string" | "t"
-  span?: { y: number; h: number }
+  target: Point
+  anchoredBy: "tap" | "point"
 }
 
-type CalloutSpec = {
-  at?: number
-  hold?: number
-  eyebrow?: string
-  title: string
-  hint?: string
-  side?: "left" | "right"
-  targetX?: number
-  targetY?: number
-  compact?: boolean
-  placement?: "target" | "edge"
-  connector?: "string" | "t"
-  span?: { y: number; h: number }
-}
-
-// [CARDS] a fan of paper cards that spreads out from behind the phone. Use it
-// for list or history beats where the story is a collection, not one control.
-export type CardFan = {
+export type SpotlightItem = {
+  kind: "spotlight"
   at: number
   hold: number
-  eyebrow: string
+  side: CopySide
+  kicker: string
   title: string
-  hint?: string
 }
 
-type CardFanSpec = {
-  at?: number
-  hold?: number
-  eyebrow: string
-  title: string
-  hint?: string
-}
-
-// [NOTE] one paper note with a lime tape and rule. It slides out from behind
-// the phone carrying a single line. No extra copy, no typing.
-export type Note = {
+export type NoteItem = {
+  kind: "note"
   at: number
   hold: number
+  title: string
   label: string
-  title: string
 }
 
-type NoteSpec = {
-  at?: number
-  hold?: number
-  label: string
-  title: string
-}
+export type BoxStep = { title: string; at: number; x: number; y: number }
 
-// [BOX] one continuous annotation across a run of controls. A white card sits
-// in the empty phone area, a lime box frames the first control, then the box
-// slides to the next control and the card text swaps.
-export type AnnotationRect = { x: number; y: number; w: number; h: number }
+export type BoxItem = { kind: "box"; at: number; hold: number; steps: BoxStep[] }
 
-export type Annotation = {
-  at: number
-  moveAt?: number
-  endAt: number
-  title: string
-  nextTitle?: string
-  target: AnnotationRect
-  nextTarget?: AnnotationRect
-}
+export type CapItem = { kind: "cap"; at: number; hold: number; text: string }
 
-type AnnotationSpec = {
-  at?: number
-  hold?: number
-  title: string
-  nextTitle?: string
-  nextSlice?: string
-  endSlice?: string
-  target?: AnnotationRect
-  nextTarget?: AnnotationRect
-}
+export type CopyItem = CardItem | CalloutItem | SpotlightItem | NoteItem | BoxItem | CapItem
 
-// [CARD] one white caption card inside the phone screen. Use it when the
-// caption belongs in an empty part of the app rather than beside the phone.
-export type PhoneCaption = {
-  at: number
-  hold: number
-  title: string
-  top: number
-  height: number
-}
+// --- Shots ------------------------------------------------------------------
 
-type PhoneCaptionSpec = {
-  at?: number
-  hold?: number
-  title: string
-  top?: number
-  height?: number
-}
-
-// [CARD] one white caption card placed on the stage. `x` and `y` are the
-// normalized center of the card. Use it when the phone is off screen or the
-// copy belongs beside the phone rather than inside it.
-export type StageCard = {
-  at: number
-  hold: number
-  title: string
-  x: number
-  y: number
-  width: number
-  height: number
-  fontSize: number
-}
-
-// [POP] one short squash, shake, and settle on the phone. `at` is seconds
-// after the shot starts. Use it when the app reaches a happy state.
-// `confetti` drops a full-stage shower from the same beat.
-export type Celebration = {
-  at: number
-  hold: number
-  strength: number
-  confetti: boolean
-}
-
-type CelebrationSpec = {
-  at?: number
-  hold?: number
-  strength?: number
-  confetti?: boolean
-}
-
-// [ZOOM] push the camera into the phone for a feature beat. `x`/`y` are
-// screen fractions of the point to frame; they default to the shot's first
-// tap. `drift` pans the focus down by that fraction over the shot, for
-// reading a reply. Consecutive shots with a focus hold the zoom; a shot with
-// none pulls back out.
-export type Focus = { scale: number; x?: number; y?: number; drift?: number }
-
-type Step = {
+type ShotSpec = {
   slice: string
-  at?: number
-  startSec?: number
-  rate?: number
-  duration?: number
-  hold?: number
-  required?: boolean
-  caption?: { text: string; at?: number; hold?: number }
-  callout?: CalloutSpec
-  cards?: CardFanSpec
-  note?: NoteSpec
-  annotation?: AnnotationSpec
-  phoneCaption?: PhoneCaptionSpec
-  spotlight?: SpotlightSpec
-  celebrate?: CelebrationSpec
-  typing?: TypingWindow | TypingWindow[]
-  focus?: Focus
+  /** Scene-relative start, frames, so every cut lands on a whole frame. */
+  at: number
+  /** First source frame of the slice, seconds. */
+  startSec: number
+  /** Playback rate. Below 1 slows the capture down. */
+  rate: number
+  /** Render frames the capture actually plays. The rest of the slot is a hold. */
+  play: number
 }
 
-const COMPOSER: Focus = { scale: 2.4, x: 0.5, y: 0.81 }
-const PROMPT_TYPE_FOCUS: Focus = { scale: 1.32, x: 0.5, y: 0.34 }
-const REPLY_READ: Focus = { scale: 1.6, x: 0.5, y: 0.45, drift: 0.22 }
-const HEADER: Focus = { scale: 1.45, x: 0.5, y: 0.1 }
-const DIFF: Focus = { scale: 1.35, x: 0.5, y: 0.45 }
-
-export const PLAN_PROMPT =
-  "Read the attached spec and the photo of Mia. Plan only; do not edit files. Plan a small cat mode for this screensaver. Do not build yet. Use your question tool exactly once, for one question only: should cat mode be a settings toggle or automatic? The options must be exactly Settings toggle and Automatic. Do not ask about anything else."
-export const BUILD_PROMPT =
-  "Settings toggle. Implement only the plan now. Put the toggle in src/settings.js, put the cat behavior in src/cat-mode.js, add tests, and commit every change on feat/cat-mode so the worktree is clean. Do not add unrelated features and do not open a PR."
-export const PR_PROMPT =
-  "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL."
-
-export const MODE_TARGET: AnnotationRect = { x: 0.67, y: 0.776, w: 0.19, h: 0.06 }
-export const THINKING_TARGET: AnnotationRect = { x: 0.83, y: 0.776, w: 0.14, h: 0.06 }
-
-// The setup act is interleaved with the terminal stage, so its shots keep
-// fixed render starts. Gaps between them become holds on the previous frame.
-// The terminal stays honest: it is the SSH host, not a Harold daemon.
-const SETUP_STEPS: Step[] = [
-  { slice: "home_idle", at: 9.4 },
-  {
-    slice: "add_host_tap",
-    at: 14.2,
-    startSec: 2.4,
-    duration: 1.2,
-    callout: {
-      at: 0.1,
-      hold: 2.2,
-      eyebrow: "ADD A HOST",
-      title: "Just SSH",
-      hint: "No daemon, no port, no hub.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.5,
-      targetY: 0.91,
-      span: { y: 0.86, h: 0.1 },
-    },
-  },
-  { slice: "setup_top", at: 15.4, rate: 1.5, duration: 1.5 },
-  {
-    slice: "setup_host",
-    at: 16.9,
-    startSec: 12,
-    rate: 8,
-    duration: 3.2,
-    typing: { text: "gary@127.0.0.1:2223", fromSec: 14.0, toSec: 30.0 },
-  },
-  { slice: "setup_auth", at: 20.1, startSec: 7.5, rate: 2, duration: 1.5 },
-  {
-    slice: "setup_password",
-    at: 21.6,
-    startSec: 4.5,
-    rate: 2,
-    duration: 1.3,
-    typing: { text: "••••••", fromSec: 4.8, toSec: 5.6 },
-  },
-  {
-    slice: "setup_test",
-    at: 22.9,
-    startSec: 6,
-    rate: 2,
-    duration: 3.0,
-  },
-  {
-    slice: "setup_trust",
-    at: 25.9,
-    startSec: 2,
-    rate: 12,
-    duration: 3.2,
-    hold: 0.2,
-  },
-  {
-    slice: "connected",
-    at: 29.3,
-    spotlight: {
-      at: 1.2,
-      hold: 3.2,
-      kicker: "Direct SSH",
-      title: "Your host, your agents",
-    },
-    celebrate: { at: 1.7, hold: 1.2, confetti: true },
-  },
-]
-
-// The story starts after the connected home. Every shot starts where the
-// previous one ends plus its hold, so changing one duration moves the rest.
-// The walk is one real job: new session, plan, attachments, question, build,
-// usage, changes, worktrees, and a draft PR.
-const STORY_STEPS: Step[] = [
-  {
-    slice: "session_menu_open",
-    startSec: 2.4,
-    rate: 2,
-    duration: 2.2,
-    hold: 0.8,
-    cards: {
-      eyebrow: "SESSIONS",
-      title: "One list across agents",
-      hint: "History stays with the agent.",
-    },
-  },
-  {
-    slice: "new_session",
-    startSec: 2.4,
-    rate: 2,
-    duration: 1.2,
-    hold: 0.4,
-    note: {
-      at: 0.35,
-      hold: 4.8,
-      label: "NEW SESSION",
-      title: "Start something new",
-    },
-  },
-  { slice: "workspace_open", startSec: 2.6, rate: 1.2, duration: 1.7, hold: 0.3 },
-  {
-    slice: "workspace_pick",
-    startSec: 1.8,
-    rate: 1,
-    duration: 1.4,
-    hold: 0.3,
-    callout: {
-      at: 0.2,
-      hold: 2.0,
-      eyebrow: "WORKSPACE",
-      title: "Pick a repo",
-      hint: "Any folder on the host.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.5,
-      targetY: 0.28,
-      span: { y: 0.18, h: 0.2 },
-    },
-  },
-  { slice: "agent_open", startSec: 2.0, rate: 1.2, duration: 1.8, hold: 0.3 },
-  {
-    slice: "agent_pick",
-    startSec: 1.8,
-    rate: 1,
-    duration: 1.3,
-    hold: 0.4,
-    callout: {
-      at: 0.2,
-      hold: 2.0,
-      eyebrow: "AGENT",
-      title: "Any ACP agent",
-      hint: "OpenCode, Claude, Codex.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.5,
-      targetY: 0.42,
-      span: { y: 0.32, h: 0.2 },
-    },
-  },
-  { slice: "start_session", startSec: 1.8, rate: 1.2, duration: 2.0, hold: 0.2 },
-  { slice: "session_create_wait", rate: 3, duration: 1.0, hold: 0.3 },
-  {
-    slice: "mode_plan",
-    startSec: 6.0,
-    rate: 1.2,
-    duration: 2.0,
-    hold: 1.2,
-    annotation: {
-      at: 0.2,
-      title: "Plan it first",
-      target: MODE_TARGET,
-    },
-    focus: COMPOSER,
-  },
-  {
-    slice: "prompt_focus",
-    startSec: 2.5,
-    rate: 2,
-    duration: 0.6,
-    hold: 0.2,
-    phoneCaption: {
-      at: 0.2,
-      hold: 2.6,
-      title: "Send a text prompt",
-      top: 0.12,
-      height: 150,
-    },
-    focus: PROMPT_TYPE_FOCUS,
-  },
-  {
-    slice: "prompt_type",
-    startSec: 0.2,
-    rate: 3,
-    duration: 4.2,
-    typing: { text: PLAN_PROMPT, fromSec: 0.4, toSec: 12.6 },
-    hold: 0.8,
-    focus: PROMPT_TYPE_FOCUS,
-  },
-  { slice: "photo_add", startSec: 2.6, rate: 2, duration: 1.2, hold: 0.3 },
-  { slice: "file_open", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
-  {
-    slice: "file_pick",
-    startSec: 2.7,
-    rate: 2,
-    duration: 1.8,
-    hold: 0.6,
-    callout: {
-      at: 0.3,
-      hold: 2.0,
-      eyebrow: "ATTACHMENTS",
-      title: "Give it the spec",
-      hint: "A markdown file and a photo of Mia.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.22,
-      targetY: 0.56,
-      span: { y: 0.42, h: 0.22 },
-    },
-    focus: PROMPT_TYPE_FOCUS,
-  },
-  {
-    slice: "send",
-    startSec: 2.8,
-    rate: 2,
-    duration: 1.3,
-    hold: 0.2,
-    focus: { scale: 1.32, x: 0.5, y: 0.42 },
-  },
-  { slice: "plan_wait", rate: 3.5, duration: 1.7, hold: 0.3 },
-  {
-    slice: "plan_reply",
-    duration: 2.6,
-    hold: 1.8,
-    focus: { scale: 1.35, x: 0.5, y: 0.58 },
-    callout: {
-      at: 0.2,
-      hold: 3.6,
-      eyebrow: "AGENT QUESTION",
-      title: "Get grilled",
-      hint: "Interactive question tooling.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.5,
-      targetY: 0.72,
-      span: { y: 0.64, h: 0.14 },
-    },
-  },
-  { slice: "elicitation_open", startSec: 6.0, rate: 1.5, duration: 2.5, hold: 0.3 },
-  { slice: "elicitation_pick", startSec: 2.6, rate: 1.5, duration: 0.9, hold: 0.4 },
-  { slice: "elicitation_submit", startSec: 3.0, rate: 10, duration: 1.9, hold: 1.0 },
-  {
-    slice: "mode_build",
-    startSec: 4.5,
-    rate: 1.5,
-    duration: 1.5,
-    hold: 1.2,
-    focus: COMPOSER,
-  },
-  {
-    slice: "build_prompt",
-    startSec: 2.5,
-    rate: 3.8,
-    duration: 3.6,
-    typing: { text: BUILD_PROMPT, fromSec: 3.1, toSec: 16.0 },
-    hold: 0.6,
-    focus: PROMPT_TYPE_FOCUS,
-  },
-  {
-    slice: "build_send",
-    startSec: 2.5,
-    rate: 2,
-    duration: 1.2,
-    hold: 0.2,
-    focus: { scale: 1.32, x: 0.5, y: 0.42 },
-  },
-  { slice: "build_wait", rate: 4, duration: 2.6, hold: 0.3 },
-  {
-    slice: "build_reply",
-    duration: 3.2,
-    hold: 2.2,
-    focus: REPLY_READ,
-  },
-  {
-    slice: "usage",
-    duration: 2.6,
-    hold: 1.4,
-    focus: HEADER,
-    callout: {
-      at: 0.2,
-      hold: 2.8,
-      eyebrow: "USAGE",
-      title: "Know what it cost",
-      hint: "Tokens and dollars, in the header.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.45,
-      targetY: 0.1,
-      span: { y: 0.05, h: 0.1 },
-    },
-  },
-  {
-    slice: "changes_open",
-    startSec: 2.5,
-    rate: 2,
-    duration: 1.1,
-    hold: 0.5,
-    callout: {
-      at: 0.15,
-      hold: 2.4,
-      eyebrow: "CHANGES",
-      title: "Review the code",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.82,
-      targetY: 0.18,
-      span: { y: 0.08, h: 0.22 },
-    },
-  },
-  { slice: "changes_branch", startSec: 2.5, rate: 2, duration: 1.1, hold: 0.5 },
-  {
-    slice: "changes_file",
-    startSec: 2.5,
-    rate: 2,
-    duration: 1.8,
-    hold: 1.0,
-    focus: DIFF,
-    callout: {
-      at: 0.4,
-      hold: 2.2,
-      eyebrow: "CHANGES",
-      title: "Pretty diffs!",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.5,
-      targetY: 0.46,
-      span: { y: 0.25, h: 0.38 },
-    },
-  },
-  { slice: "changes_back", startSec: 2.5, rate: 2, duration: 1.1, hold: 0.4 },
-  {
-    slice: "worktrees_open",
-    startSec: 2.5,
-    rate: 2,
-    duration: 1.6,
-    hold: 0.8,
-    callout: {
-      at: 0.3,
-      hold: 1.9,
-      eyebrow: "WORKTREES",
-      title: "Auto-detect, or choose",
-      hint: "Pick the worktree to inspect.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.5,
-      targetY: 0.82,
-      span: { y: 0.68, h: 0.24 },
-    },
-  },
-  { slice: "worktrees_close", startSec: 0.1, rate: 1.5, duration: 0.8, hold: 0.3 },
-  {
-    slice: "pr_prompt",
-    startSec: 2.5,
-    rate: 2,
-    duration: 1.0,
-    hold: 0.2,
-    focus: PROMPT_TYPE_FOCUS,
-  },
-  {
-    slice: "pr_send",
-    startSec: 0.2,
-    rate: 3.5,
-    duration: 3.6,
-    typing: { text: PR_PROMPT, fromSec: 0.4, toSec: 12.0 },
-    hold: 0.4,
-    focus: PROMPT_TYPE_FOCUS,
-    callout: {
-      at: 0.2,
-      hold: 3.4,
-      eyebrow: "DRAFT PR",
-      title: "Just like always",
-      hint: "The agent pushes and opens it.",
-      side: "right",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.87,
-      targetY: 0.52,
-      span: { y: 0.36, h: 0.26 },
-    },
-  },
-  { slice: "pr_wait", rate: 4, duration: 2.5, hold: 0.3 },
-  {
-    slice: "pr_reply",
-    duration: 3.2,
-    hold: 4.0,
-    spotlight: {
-      at: 1.0,
-      hold: 3.2,
-      side: "left",
-      kicker: "The whole loop",
-      title: "From plan to PR",
-    },
-  },
-]
-
-type Shot = Step & {
+export type Shot = {
+  scene: SceneSlug
+  slice: string
+  /** Render start, seconds, absolute. */
   at: number
+  /** End of this shot's slot: the next shot, or the end of the scene. */
+  until: number
   startSec: number
   rate: number
   duration: number
+  /** Drift rate for this shot, percent of frame width per second. */
+  drift: number
   data: CaptureSlice
 }
+
+type SceneSpec = {
+  slug: SceneSlug
+  light: LightState
+  layout: LayoutId
+  /** Percent of frame width per second. Sign alternates between scenes. */
+  drift: number
+  camera: CameraCueSpec[]
+  body: BodyCueSpec[]
+  waddle?: { at: number; duration: number }
+  shots: ShotSpec[]
+  copy: CopySpec[]
+}
+
+// --- The cut ----------------------------------------------------------------
+//
+// Every scene names its light state, its layout, its camera, what the phone does
+// in the light, and the copy its beats call for. Shot `at` is in frames; every
+// other scene-relative time is in seconds.
+
+const SCENE_SPECS: SceneSpec[] = [
+  // -- intro ----------------------------------------------------------------
+  {
+    slug: "intro",
+    light: "alone",
+    layout: "L1",
+    drift: 1.8,
+    camera: [{ at: 0, preset: "full" }],
+    body: [],
+    shots: [],
+    copy: [],
+  },
+
+  // -- SSH Host Connection ---------------------------------------------------
+  //
+  // The intro slide fades out and the app on the phone moves into the light with
+  // a waddle, lit from one side, and settles just off centre. The camera then
+  // zooms so the phone fits the frame vertically, centred horizontally.
+  {
+    slug: "ssh",
+    light: "arrival",
+    layout: "L1",
+    drift: -1.6,
+    camera: [
+      { at: 0, preset: "full", scale: 0.88, dock: 0.34 },
+      { at: 1.8, preset: "full", dock: 0.5 },
+    ],
+    body: [
+      { at: 0, pose: { rotateZ: -5, rotateY: 12, y: 34, scale: 0.94 } },
+      { at: 0.7, pose: { rotateZ: 3, rotateY: 6 } },
+      { at: 1.5, pose: { rotateY: 3 } },
+      { at: 2.6, pose: {} },
+    ],
+    waddle: { at: 0, duration: 1.5 },
+    shots: [
+      // The app's own order: the empty form, the public key it generates, the
+      // form filled, the test, the trust tick, the save, the home screen.
+      { slice: "connect_empty", at: 0, startSec: 0.88, rate: 1, play: 66 },
+      { slice: "connect_key", at: 66, startSec: 0.83, rate: 0.6, play: 72 },
+      { slice: "connect_fill", at: 138, startSec: 0.9, rate: 0.55, play: 66 },
+      { slice: "connect_fill", at: 204, startSec: 8.62, rate: 0.5, play: 78 },
+      { slice: "connect_test", at: 282, startSec: 2.0, rate: 0.7, play: 66 },
+      { slice: "connect_test", at: 348, startSec: 3.42, rate: 0.6, play: 66 },
+      { slice: "connect_trust", at: 414, startSec: 0.9, rate: 1, play: 60 },
+      { slice: "connect_save", at: 474, startSec: 1.1, rate: 1, play: 60 },
+      { slice: "landing", at: 534, startSec: 1.1, rate: 0.75, play: 66 },
+    ],
+    copy: [
+      {
+        kind: "card",
+        at: 1.4,
+        hold: 3.4,
+        title: "Harold over SSH to your agent hosts",
+        place: "stage",
+      },
+    ],
+  },
+
+  // -- achievement -----------------------------------------------------------
+  //
+  // The hinge. Pool blooms to the full stage, the haze flares, the camera pushes
+  // in with the phone, and the confetti falls in the light. One pop, one
+  // confetti, both silent.
+  {
+    slug: "achievement",
+    light: "reward",
+    layout: "L2C",
+    drift: 1.7,
+    camera: [{ at: 0, preset: "center-two-thirds", dock: 0.66 }],
+    body: [
+      { at: 0, pose: { rotateY: -9, scale: 0.97 } },
+      { at: 1, pose: {} },
+    ],
+    shots: [{ slice: "landing", at: 0, startSec: 2.75, rate: 0.6, play: 110 }],
+    copy: [
+      {
+        kind: "spotlight",
+        at: 0.5,
+        hold: 6,
+        side: "left",
+        kicker: "Achievement unlocked",
+        title: "Work from Couch",
+      },
+    ],
+  },
+
+  // -- new-session -----------------------------------------------------------
+  //
+  // The phone returns to centre. The session menu opens on the cat history, the
+  // new session form enlarges the phone, and the chat opening pulls it back.
+  {
+    slug: "newSession",
+    light: "work",
+    layout: "L1",
+    drift: -1.6,
+    camera: [
+      { at: 0, preset: "full" },
+      // The form is on screen from source 2.0 to 3.8: push in when it opens and
+      // pull back when the chat takes over.
+      { at: 1.9, preset: "center-two-thirds" },
+      { at: 3.6, preset: "full" },
+    ],
+    body: [
+      { at: 0, pose: { x: -26 } },
+      { at: 1.2, pose: { rotateY: -5, scale: 1.01 } },
+      { at: 3.2, pose: {} },
+    ],
+    shots: [
+      { slice: "new_session", at: 0, startSec: 0.9, rate: 1, play: 66 },
+      { slice: "new_session", at: 66, startSec: 3.1, rate: 1, play: 48 },
+      { slice: "new_session", at: 114, startSec: 4.7, rate: 1, play: 30 },
+    ],
+    copy: [
+      // The note lands while the session menu is open, and slides back before
+      // the form replaces it.
+      { kind: "note", at: 0.6, hold: 2.4, title: "Start something new", label: "NEW SESSION" },
+    ],
+  },
+
+  // -- plan ------------------------------------------------------------------
+  //
+  // The composer shows the model and mode chips. The phone leans in towards the
+  // light while the prompt is typed: two real windows at 6.6 characters a
+  // second, then cut ahead rather than slow the capture down.
+  {
+    slug: "plan",
+    light: "work",
+    layout: "L1",
+    drift: 1.8,
+    camera: [{ at: 0, preset: "full" }],
+    body: [
+      { at: 0, pose: {} },
+      { at: 1.6, pose: { rotateY: -7, rotateX: 3, scale: 1.03, y: 8 } },
+    ],
+    shots: [
+      { slice: "plan", at: 0, startSec: 0.85, rate: 0.55, play: 126 },
+      { slice: "plan", at: 126, startSec: 26.0, rate: 0.55, play: 120 },
+      { slice: "plan", at: 246, startSec: 28.2, rate: 0.5, play: 90 },
+      { slice: "plan", at: 336, startSec: 29.7, rate: 0.6, play: 60 },
+    ],
+    copy: [
+      {
+        kind: "callout",
+        at: 0.4,
+        hold: 2.6,
+        eyebrow: "PLAN",
+        title: "Use your agent’s plan mode",
+        side: "right",
+        anchor: { mode: "point", x: 0.79, y: 0.72 },
+      },
+      {
+        kind: "callout",
+        at: 9.2,
+        hold: 2.4,
+        eyebrow: "ATTACHMENTS",
+        title: "Give it the spec",
+        hint: "A markdown file and a photo of Mia.",
+        side: "right",
+        compact: true,
+        placement: "edge",
+        connector: "t",
+        // The attached-files row in the composer, not the blank space above it.
+        anchor: { mode: "point", x: 0.5, y: 0.757 },
+      },
+    ],
+  },
+
+  // -- question --------------------------------------------------------------
+  //
+  // Played at 1.0x, the capture's own speed. The sheet opening is a short hold,
+  // not a slow motion.
+  {
+    slug: "question",
+    light: "work",
+    layout: "L1",
+    drift: -1,
+    camera: [{ at: 0, preset: "full" }],
+    body: [
+      { at: 0, pose: { rotateY: 5, rotateX: -2, scale: 0.985, y: -8 } },
+      { at: 3.2, pose: {} },
+    ],
+    shots: [
+      { slice: "question", at: 0, startSec: 1.15, rate: 1, play: 60 },
+      { slice: "question", at: 60, startSec: 3.15, rate: 1, play: 40 },
+      { slice: "question", at: 100, startSec: 4.45, rate: 1, play: 30 },
+    ],
+    copy: [
+      {
+        kind: "callout",
+        at: 0.4,
+        hold: 2.8,
+        eyebrow: "AGENT QUESTION",
+        title: "Get grilled",
+        hint: "Interactive question tooling.",
+        // The tag sits on the side the dot lands on, so its leader crosses one
+        // bezel. The dot is at the left end of the question row.
+        side: "left",
+        // The question panel, not the transcript above it. The dot lands on the
+        // left end of the "How should cat mode turn on?" row, clear of the
+        // "Required" label at the right end.
+        anchor: { mode: "point", x: 0.22, y: 0.775 },
+      },
+    ],
+  },
+
+  // -- build -----------------------------------------------------------------
+  //
+  // The phone holds still and watches the work happen. Two real typing windows,
+  // then the send and the settled reply.
+  {
+    slug: "build",
+    light: "work",
+    layout: "L1",
+    drift: 1.8,
+    camera: [{ at: 0, preset: "full" }],
+    body: [{ at: 0, pose: { rotateX: 2, scale: 1.01 } }],
+    shots: [
+      { slice: "build", at: 0, startSec: 0.85, rate: 0.55, play: 135 },
+      { slice: "build", at: 135, startSec: 18.5, rate: 0.55, play: 120 },
+      { slice: "build", at: 255, startSec: 20.7, rate: 0.55, play: 90 },
+      { slice: "build", at: 345, startSec: 22.4, rate: 0.7, play: 80 },
+      { slice: "build", at: 425, startSec: 24.3, rate: 0.6, play: 25 },
+    ],
+    copy: [
+      {
+        kind: "callout",
+        at: 0.4,
+        hold: 2.6,
+        eyebrow: "BUILD",
+        title: "Execute the plan",
+        side: "right",
+        anchor: { mode: "point", x: 0.79, y: 0.76 },
+      },
+    ],
+  },
+
+  // -- usage -----------------------------------------------------------------
+  //
+  // The pool tightens to the top of the phone. The script's own framing: the
+  // upper-centre preset with scale and focus overridden onto the cost line.
+  {
+    slug: "usage",
+    light: "work",
+    layout: "L1",
+    drift: -1.6,
+    camera: [
+      { at: 0, preset: "upper-center", scale: 2.2, focus: { x: 0.5, y: 0.08 } },
+    ],
+    body: [{ at: 0, pose: { rotateX: 7, y: 6 } }],
+    shots: [{ slice: "usage", at: 0, startSec: 0.88, rate: 0.55, play: 150 }],
+    copy: [
+      {
+        kind: "callout",
+        at: 0.4,
+        hold: 3.6,
+        eyebrow: "USAGE",
+        title: "Know what it cost",
+        hint: "Tokens and dollars, in the header.",
+        side: "left",
+        compact: true,
+        placement: "edge",
+        connector: "t",
+        anchor: { mode: "point", x: 0.5, y: 0.1325 },
+      },
+    ],
+  },
+
+  // -- changes ---------------------------------------------------------------
+  //
+  // The phone turns slightly to present its screen. The empty scope, the branch
+  // scope, then the settings.js diff at the full framing the script asks for.
+  {
+    slug: "changes",
+    light: "work",
+    layout: "L1",
+    drift: 1.7,
+    camera: [{ at: 0, preset: "full" }],
+    body: [
+      { at: 0, pose: { rotateY: -10 } },
+      { at: 0.8, pose: {} },
+    ],
+    shots: [
+      { slice: "changes", at: 0, startSec: 0.9, rate: 1, play: 60 },
+      { slice: "changes", at: 60, startSec: 2.9, rate: 1, play: 60 },
+      { slice: "changes", at: 120, startSec: 4.9, rate: 0.8, play: 60 },
+      { slice: "changes", at: 180, startSec: 7.3, rate: 0.6, play: 108 },
+      { slice: "changes", at: 288, startSec: 9.46, rate: 0.8, play: 36 },
+      { slice: "changes", at: 324, startSec: 10.42, rate: 1, play: 20 },
+    ],
+    copy: [
+      {
+        kind: "callout",
+        at: 0.3,
+        hold: 2.4,
+        eyebrow: "CHANGES",
+        title: "Review the code",
+        side: "left",
+        anchor: { mode: "point", x: 0.25, y: 0.088 },
+      },
+      {
+        kind: "callout",
+        at: 6.2,
+        hold: 2.4,
+        eyebrow: "CHANGES",
+        title: "Pretty diffs!",
+        side: "right",
+        compact: true,
+        placement: "edge",
+        connector: "t",
+        anchor: { mode: "point", x: 0.5, y: 0.3 },
+      },
+    ],
+  },
+
+  // -- worktrees -------------------------------------------------------------
+  //
+  // The Changes list is back. The pool holds and the haze drifts through the
+  // light while the sheet lists main and feat/cat-mode.
+  {
+    slug: "worktrees",
+    light: "work",
+    layout: "L1",
+    drift: -1.7,
+    camera: [{ at: 0, preset: "full" }],
+    body: [{ at: 0, pose: {} }],
+    shots: [
+      { slice: "worktrees", at: 0, startSec: 0.8, rate: 1, play: 36 },
+      { slice: "worktrees", at: 90, startSec: 2.1, rate: 1, play: 15 },
+    ],
+    copy: [
+      {
+        kind: "callout",
+        at: 0.4,
+        hold: 2.4,
+        eyebrow: "WORKTREES",
+        title: "Auto-detect, or choose",
+        hint: "Pick the worktree to inspect.",
+        side: "right",
+        compact: true,
+        placement: "edge",
+        connector: "t",
+        anchor: { mode: "point", x: 0.5, y: 0.75 },
+      },
+    ],
+  },
+
+  // -- pr --------------------------------------------------------------------
+  //
+  // The pool opens wide and the phone sits small in a large lit field. The last
+  // thing it does has room, and the film closes on the script's own spotlight.
+  {
+    slug: "pr",
+    light: "full",
+    layout: "L1",
+    drift: 1.7,
+    camera: [{ at: 0, preset: "full" }],
+    body: [{ at: 0, pose: {} }],
+    shots: [
+      { slice: "pr", at: 0, startSec: 0.88, rate: 0.55, play: 120 },
+      { slice: "pr", at: 120, startSec: 5.4, rate: 0.55, play: 120 },
+      { slice: "pr", at: 240, startSec: 7.6, rate: 0.55, play: 75 },
+      { slice: "pr", at: 315, startSec: 8.98, rate: 0.7, play: 75 },
+      { slice: "pr", at: 390, startSec: 10.7, rate: 0.6, play: 40 },
+    ],
+    copy: [
+      {
+        kind: "callout",
+        at: 0.4,
+        hold: 2.6,
+        eyebrow: "DRAFT PR",
+        title: "Just like always",
+        hint: "The agent pushes and opens it.",
+        side: "right",
+        compact: true,
+        placement: "edge",
+        connector: "t",
+        anchor: { mode: "point", x: 0.872, y: 0.78 },
+      },
+      {
+        kind: "spotlight",
+        at: 10.5,
+        hold: 5,
+        side: "left",
+        kicker: "The whole loop",
+        title: "From plan to PR",
+      },
+    ],
+  },
+
+  // -- outro -----------------------------------------------------------------
+  {
+    slug: "outro",
+    light: "alone",
+    layout: "L1",
+    drift: -1.7,
+    camera: [{ at: 0, preset: "full" }],
+    body: [],
+    shots: [],
+    copy: [],
+  },
+]
+
+// --- The prompt text --------------------------------------------------------
+//
+// [KR] text, verbatim from the script. Nothing renders these strings: the typing
+// on screen is the capture's own keystrokes. They are kept so the cut can prove
+// it played the prompt the script asked for, and that it cut ahead of the rest
+// instead of slowing it down.
+
+export const KEYBURSTS = {
+  plan: "Read the attached spec and the photo of Mia. Plan only; do not edit files. Plan a small cat mode for this screensaver. Do not build yet. Use your question tool exactly once, for one question only: should cat mode be a settings toggle or automatic? The options must be exactly Settings toggle and Automatic. Do not ask about anything else.",
+  build:
+    "Settings toggle. Implement only the plan now. Put the toggle in src/settings.js, put the cat behavior in src/cat-mode.js, add tests, and commit every change on feat/cat-mode so the worktree is clean. Do not add unrelated features and do not open a PR.",
+  pr: "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL.",
+} as const
+
+// --- Shots ------------------------------------------------------------------
+
+export type Scene = {
+  slug: SceneSlug
+  from: number
+  to: number
+  frames: number
+  light: LightState
+  layout: LayoutId
+  drift: number
+}
+
+const buildScenes = (): Scene[] => {
+  let cursor = 0
+  return SCENE_ORDER.map((slug) => {
+    const spec = SCENE_SPECS.find((entry) => entry.slug === slug)
+    if (spec === undefined) {
+      throw new Error(`scene ${slug} has no spec`)
+    }
+    const frames = SCENE_FRAMES[slug]
+    const scene: Scene = {
+      slug,
+      from: cursor / FPS,
+      to: (cursor + frames) / FPS,
+      frames,
+      light: spec.light,
+      layout: spec.layout,
+      drift: spec.drift,
+    }
+    cursor += frames
+    return scene
+  })
+}
+
+export const SCENES: Scene[] = buildScenes()
+
+export const sceneAt = (scenes: Scene[], sec: number): Scene => {
+  let current = scenes[0]
+  for (const scene of scenes) {
+    if (sec < scene.from) {
+      break
+    }
+    current = scene
+  }
+  return current
+}
+
+const buildShots = (slices: CaptureSlice[]): Shot[] => {
+  const byName = new Map(slices.map((slice) => [slice.name, slice]))
+  const shots: Shot[] = []
+  for (const spec of SCENE_SPECS) {
+    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    if (scene === undefined) {
+      continue
+    }
+    for (let index = 0; index < spec.shots.length; index += 1) {
+      const shotSpec = spec.shots[index]
+      const data = byName.get(shotSpec.slice)
+      if (data === undefined) {
+        // A slice the capture does not have drops its shot; the cut still builds.
+        continue
+      }
+      const next = spec.shots[index + 1]
+      const at = scene.from + shotSpec.at / FPS
+      const until = next === undefined ? scene.to : scene.from + next.at / FPS
+      const rate = shotSpec.rate
+      const startSec = data.still ? 0 : shotSpec.startSec
+      const remaining = Math.max(0.05, data.durationSec - startSec)
+      const available = data.still ? data.durationSec : remaining / rate
+      const duration = Math.max(0.05, Math.min(shotSpec.play / FPS, available))
+      shots.push({
+        scene: spec.slug,
+        slice: shotSpec.slice,
+        at,
+        until,
+        startSec,
+        rate,
+        duration,
+        drift: spec.drift,
+        data,
+      })
+    }
+  }
+  return shots.sort((a, b) => a.at - b.at)
+}
+
+// --- Drift ------------------------------------------------------------------
+//
+// The camera drifts at a constant rate, authored as a percentage of frame width
+// per second. The accumulator restarts on every cut, so a shot pans at one speed
+// and the cut absorbs the reset. The pool and the haze are offset from this same
+// value at different parallax factors, never at the camera's own speed.
+
+export const driftAt = (scenes: Scene[], shots: Shot[], sec: number, stageWidth: number): Point => {
+  const scene = sceneAt(scenes, sec)
+  let origin = scene.from
+  for (const shot of shots) {
+    if (sec >= shot.at && sec < shot.until) {
+      origin = shot.at
+      break
+    }
+  }
+  return {
+    x: ((scene.drift / 100) * stageWidth * (sec - origin)),
+    y: 0,
+  }
+}
+
+// --- Phone clips ------------------------------------------------------------
 
 export type PhoneClip =
   | {
@@ -664,116 +788,12 @@ export type PhoneClip =
     }
   | { kind: "hold"; file: string; from: number; duration: number; atSec: number }
 
-const DEFAULT_SHOT_SEC = 2.0
-
-const shotDuration = (step: Step, data: CaptureSlice): number => {
-  const rate = step.rate ?? 1
-  const startSec = step.startSec ?? 0
-  const remaining = Math.max(0.05, data.durationSec - startSec)
-  const available = data.still ? data.durationSec : remaining / rate
-  const fallback = data.still ? Math.min(available, 1.5) : Math.min(available, DEFAULT_SHOT_SEC)
-  return Math.max(0.05, Math.min(step.duration ?? fallback, available))
-}
-
-const buildShots = (slices: CaptureSlice[]): { setup: Shot[]; story: Shot[] } => {
-  const byName = new Map(slices.map((slice) => [slice.name, slice]))
-  const resolve = (step: Step): Shot => {
-    const data = byName.get(step.slice)
-    if (data === undefined) {
-      throw new Error(
-        `capture.json is missing slice "${step.slice}". Re-run docs/demo/capture/capture.sh.`,
-      )
-    }
-    return {
-      ...step,
-      at: step.at ?? 0,
-      startSec: data.still ? 0 : (step.startSec ?? 0),
-      rate: step.rate ?? 1,
-      duration: shotDuration(step, data),
-      data,
-    }
-  }
-
-  const setup = SETUP_STEPS.map((step) => resolve(step))
-  const story: Shot[] = []
-  let at = WALK_START
-  for (const step of STORY_STEPS) {
-    if (!byName.has(step.slice)) {
-      if (step.required === false) {
-        continue
-      }
-      resolve(step)
-    }
-    const shot = resolve(step)
-    shot.at = at
-    story.push(shot)
-    at += shot.duration + (shot.hold ?? 0)
-  }
-  return { setup, story }
-}
-
-const buildPhoneStage = (story: Shot[]): PhoneStage => {
-  const newSession = story.find((shot) => shot.slice === "new_session")
-  const startShot = story.find((shot) => shot.slice === "start_session")
-  const prReply = story.find((shot) => shot.slice === "pr_reply")
-  if (newSession === undefined || startShot === undefined) {
-    throw new Error("the story needs new_session and start_session shots to place the phone")
-  }
-  // Enlarge when the new session form opens, hold through workspace and agent
-  // selection, and pull back when Start Session is tapped.
-  const zoomAt = newSession.at
-  const outAt = Math.max(zoomAt + STORY_ZOOM_SEC, tapRenderSec(startShot) ?? startShot.at)
-  // The final spotlight needs the phone out of the copy's side.
-  // Dock when the PR spotlight starts, not when the reply clip lands, so the
-  // hold before the spotlight stays readable in place.
-  const spotlightLead = prReply?.spotlight?.at ?? 1.0
-  const dockAt = prReply !== undefined ? prReply.at + spotlightLead - 0.2 : outAt + STORY_OUT_SEC
-  return {
-    width: [
-      ...SETUP_PHONE_WIDTH,
-      [zoomAt, 450],
-      [zoomAt + STORY_ZOOM_SEC, 760],
-      [outAt, 760],
-      [outAt + STORY_OUT_SEC, 450],
-      [dockAt, 450],
-      [dockAt + STORY_ZOOM_SEC, 760],
-    ],
-    centerX: [
-      ...SETUP_PHONE_CENTER_X,
-      [zoomAt, 960],
-      [zoomAt + STORY_ZOOM_SEC, 1460],
-      [outAt, 1460],
-      [outAt + STORY_OUT_SEC, 960],
-      [dockAt, 960],
-      [dockAt + STORY_ZOOM_SEC, 1460],
-    ],
-    top: [
-      ...SETUP_PHONE_TOP,
-      [zoomAt, 30],
-      [zoomAt + STORY_ZOOM_SEC, 0],
-      [outAt, 0],
-      [outAt + STORY_OUT_SEC, 30],
-      [dockAt, 30],
-      [dockAt + STORY_ZOOM_SEC, -314.5],
-    ],
-  }
-}
-
 const buildClips = (shots: Shot[]): PhoneClip[] => {
   const clips: PhoneClip[] = []
-  const ordered = [...shots].sort((a, b) => a.at - b.at)
-  for (let index = 0; index < ordered.length; index += 1) {
-    const shot = ordered[index]
-    const nextAt = ordered[index + 1]?.at ?? shot.at + shot.duration + (shot.hold ?? 0)
-    const playDuration = Math.max(0, Math.min(shot.duration, nextAt - shot.at))
+  for (const shot of shots) {
+    const playDuration = Math.max(0, Math.min(shot.duration, shot.until - shot.at))
     if (shot.data.still) {
-      clips.push({
-        kind: "hold",
-        file: shot.data.file,
-        from: shot.at,
-        duration: playDuration,
-        atSec: 0,
-      })
+      clips.push({ kind: "hold", file: shot.data.file, from: shot.at, duration: playDuration, atSec: 0 })
     } else {
       clips.push({
         kind: "play",
@@ -785,12 +805,12 @@ const buildClips = (shots: Shot[]): PhoneClip[] => {
       })
     }
     const holdStart = shot.at + playDuration
-    if (nextAt > holdStart + 0.001) {
+    if (shot.until > holdStart + 0.001) {
       clips.push({
         kind: "hold",
         file: shot.data.file,
         from: holdStart,
-        duration: nextAt - holdStart,
+        duration: shot.until - holdStart,
         atSec: shot.data.still
           ? 0
           : Math.min(shot.data.durationSec, shot.startSec + playDuration * shot.rate),
@@ -811,6 +831,7 @@ export const activeClip = (clips: PhoneClip[], sec: number): PhoneClip | null =>
   return current
 }
 
+/** The one place a source second becomes a render second. */
 export const clipFrame = (clip: PhoneClip, sec: number): number => {
   if (clip.kind === "hold") {
     return clip.atSec
@@ -818,14 +839,17 @@ export const clipFrame = (clip: PhoneClip, sec: number): number => {
   return Math.max(0, clip.startSec + (sec - clip.from) * clip.rate)
 }
 
-// --- Keyframe channels ------------------------------------------------------
+// --- Keyframes --------------------------------------------------------------
 
 export type Keyframes = [number, number][]
 
-const ease = Easing.bezier(0.16, 1, 0.3, 1)
+const keyframeEase = Easing.bezier(0.16, 1, 0.3, 1)
 
 /** Value of a keyframe channel at `sec`, eased between keyframes, clamped. */
 export const channel = (keyframes: Keyframes, sec: number): number => {
+  if (keyframes.length === 0) {
+    return 0
+  }
   if (sec <= keyframes[0][0]) {
     return keyframes[0][1]
   }
@@ -833,495 +857,317 @@ export const channel = (keyframes: Keyframes, sec: number): number => {
     const [to, valueTo] = keyframes[index]
     if (sec <= to) {
       const [from, valueFrom] = keyframes[index - 1]
-      const progress = (sec - from) / (to - from)
-      return valueFrom + (valueTo - valueFrom) * ease(progress)
+      const progress = (to - from) <= 0 ? 1 : (sec - from) / (to - from)
+      return valueFrom + (valueTo - valueFrom) * keyframeEase(progress)
     }
   }
   return keyframes[keyframes.length - 1][1]
 }
 
-// Terminal stage: one fixed, vertically centered box for the whole first act.
-// The close-up is a pure scale on that box; after pairing the box slides out
-// to the left. The origin sits near the top-left so the close-up keeps the
-// title bar and the prompt labels in frame.
-export const TERM_BOX = { left: 60, top: 60, width: 920, height: 960 }
-export const TERM_ORIGIN = "0% 2%"
+const OUTRO = SCENES[SCENES.length - 1]
 
-export const termScale: Keyframes = [
-  [0, 1],
-  [3.3, 1],
-  [4.0, 2.35],
-  [8.8, 2.35],
-  [9.8, 1],
-]
-export const termOpacity: Keyframes = [
-  [0, 1],
-  [REcede_AT, 1],
-  [REcede_AT + 1.2, 0],
-]
-export const termX: Keyframes = [
-  [0, 0],
-  [REcede_AT, 0],
-  [REcede_AT + 1.2, -1120],
+/** The phone fades out as the outro card fades in. */
+export const phoneFade: Keyframes = [
+  [OUTRO.from, 1],
+  [OUTRO.from + 0.45, 0],
 ]
 
-// Phone stage channels: joins at the pairing flow, to the right of the fully
-// framed terminal. The Pair tap starts a 2x close-up of the top two thirds.
-// That framing holds through the scanner and name entry. Right after the
-// confirm tap it pans up to the centered close-up, so the landing screen is
-// readable before the spotlight copy lands. The phone takes center stage when
-// the story starts.
-const SETUP_PHONE_WIDTH: Keyframes = [
-  [PHONE_IN_AT, 380],
-  [SETUP_ZOOM_AT, 380],
-  [SETUP_ZOOM_AT + SETUP_ZOOM_SEC, 640],
-  [REcede_AT, 640],
-  [WALK_START, 450],
-]
-const SETUP_PHONE_CENTER_X: Keyframes = [
-  [PHONE_IN_AT, 2440],
-  [PHONE_IN_AT + 1.7, 1460],
-  [REcede_AT, 1460],
-  [WALK_START, 960],
-]
-const SETUP_PHONE_TOP: Keyframes = [
-  [PHONE_IN_AT, 108],
-  [SETUP_ZOOM_AT, 108],
-  [SETUP_ZOOM_AT + SETUP_ZOOM_SEC, 0],
-  [19.8, 0],
-  [20.6, -280],
-  [24.0, -280],
-  [24.8, -460],
-  [25.4, -460],
-  [REcede_AT, 0],
-  [WALK_START, 30],
-]
+/** The intro slide hands the stage to the phone. */
+export const slideFade = 0.4
 
-export type PhoneStage = {
-  width: Keyframes
-  centerX: Keyframes
-  top: Keyframes
-}
+// --- Camera and body cues ---------------------------------------------------
 
-// The screen starts black and fades the app in as the phone settles.
-export const phoneBlack: Keyframes = [
-  [PHONE_IN_AT, 1],
-  [PHONE_IN_AT + 1.0, 0],
-]
-
-// --- Phone zoom -------------------------------------------------------------
-
-export type Zoom = { scale: Keyframes; x: Keyframes; y: Keyframes }
-
-const ZOOM_SEC = 0.55
-
-// Three channels driven by the shots' focus: scale, and the screen-fraction
-// point that stays framed. Zooming out keeps the last focus so the pull-back
-// is a straight line, not a swerve.
-const buildZoom = (shots: Shot[]): Zoom => {
-  const scale: Keyframes = [[0, 1]]
-  const x: Keyframes = [[0, 0.5]]
-  const y: Keyframes = [[0, 0.5]]
-  const push = (channel: Keyframes, at: number, value: number) => {
-    const last = channel[channel.length - 1]
-    if (at <= last[0] + 0.001) {
-      last[1] = value
-      return
+const buildCameraCues = (): CameraCue[] => {
+  const cues: CameraCue[] = []
+  for (const spec of SCENE_SPECS) {
+    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    if (scene === undefined) {
+      continue
     }
-    channel.push([at, value])
-  }
-  const ordered = [...shots].sort((a, b) => a.at - b.at)
-  let current: Focus = { scale: 1, x: 0.5, y: 0.5 }
-  for (let index = 0; index < ordered.length; index += 1) {
-    const shot = ordered[index]
-    const end = shot.at + shot.duration + (shot.hold ?? 0)
-    const nextAt = ordered[index + 1]?.at ?? end
-    const tap = shot.data.taps?.[0]
-    const target: Focus =
-      shot.focus === undefined
-        ? { scale: 1, x: current.x, y: current.y }
-        : {
-            scale: shot.focus.scale,
-            x: shot.focus.x ?? (tap ? tap.x / shot.data.width : current.x),
-            y: shot.focus.y ?? (tap ? tap.y / shot.data.height : current.y),
-          }
-    const same = target.scale === current.scale && target.x === current.x && target.y === current.y
-    if (!same) {
-      const landAt = Math.min(shot.at + ZOOM_SEC, nextAt)
-      push(scale, shot.at, current.scale)
-      push(x, shot.at, current.x ?? 0.5)
-      push(y, shot.at, current.y ?? 0.5)
-      push(scale, landAt, target.scale)
-      push(x, landAt, target.x ?? 0.5)
-      push(y, landAt, target.y ?? 0.5)
-    }
-    current = target
-    if (shot.focus?.drift !== undefined) {
-      const to = (target.y ?? 0.5) + shot.focus.drift
-      push(y, nextAt, to)
-      current = { ...target, y: to }
+    let previous = PRESETS.full
+    for (const cue of spec.camera) {
+      const resolved = resolveCameraCue(cue, previous)
+      cues.push({ at: scene.from + cue.at, state: resolved })
+      previous = resolved
     }
   }
-  return { scale, x, y }
+  return cues.sort((a, b) => a.at - b.at)
 }
 
-// --- Terminal transcript ----------------------------------------------------
-
-const transcript = (connectedRenderSec: number): TermItem[] => {
-  const items: TermItem[] = [
-    { kind: "command", at: 0, typeAt: 2.0, text: "ssh -p 2223 gary@127.0.0.1", cps: 14 },
-    { kind: "output", at: 4.8, segs: [{ text: "Welcome to demo-host" }] },
-    { kind: "output", at: 5.2, segs: [{ text: "Last login: from the couch", color: "dim" }] },
-    { kind: "command", at: 6.4, text: "ls sites", cps: 12 },
-    {
-      kind: "output",
-      at: 7.4,
-      segs: [{ text: "cat-screensaver  cat-screensaver-worktrees  meow  moonlit-garden" }],
-    },
-    {
-      kind: "command",
-      at: 9.0,
-      text: "git -C sites/cat-screensaver-worktrees/cat-mode status --short --branch",
-      cps: 42,
-    },
-    { kind: "output", at: 11.6, segs: [{ text: "## feat/cat-mode" }] },
-    {
-      kind: "output",
-      at: 11.9,
-      segs: [{ text: "nothing to commit, working tree clean", color: "dim" }],
-    },
-    { kind: "command", at: 13.2, text: "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub", cps: 40 },
-    ...fingerprintSegs.map((segs, index) => ({
-      kind: "output" as const,
-      at: 15.4 + index * 0.3,
-      segs,
-    })),
-    { kind: "output", at: 16.4, segs: [{ text: "" }] },
-    { kind: "output", at: 16.6, segs: [{ text: "Waiting for the phone to connect...", color: "dim" }] },
-    {
-      kind: "output",
-      at: connectedRenderSec + 0.15,
-      segs: connectedSegs,
-    },
-    { kind: "output", at: connectedRenderSec + 0.8, segs: [{ text: "" }] },
-    { kind: "command", at: connectedRenderSec + 1.2, text: "", cps: 1 },
-  ]
-  return items
+const buildBodyCues = (): BodyCue[] => {
+  const cues: BodyCue[] = []
+  for (const spec of SCENE_SPECS) {
+    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    if (scene === undefined || spec.body.length === 0) {
+      continue
+    }
+    for (const cue of spec.body) {
+      cues.push({ at: scene.from + cue.at, pose: resolveBodyCue(cue).pose })
+    }
+  }
+  return cues.sort((a, b) => a.at - b.at)
 }
 
-// --- Captions, taps, typing -------------------------------------------------
+export type WaddleCue = Waddle
 
-type CaptionSpec = { at: number; hold: number; text: string }
-export type Caption = CaptionSpec
+const buildWaddles = (): WaddleCue[] => {
+  const cues: WaddleCue[] = []
+  for (const spec of SCENE_SPECS) {
+    if (spec.waddle === undefined) {
+      continue
+    }
+    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    if (scene === undefined) {
+      continue
+    }
+    cues.push({ at: scene.from + spec.waddle.at, duration: spec.waddle.duration })
+  }
+  return cues
+}
 
-const FIXED_STAGE_CARDS: StageCard[] = [
-  {
-    at: 3.9,
-    hold: 2.6,
-    title: "One SSH hop to the machine that runs your agents",
-    x: 0.5,
-    y: 0.84,
-    width: 600,
-    height: 190,
-    fontSize: 32,
-  },
-  {
-    at: 8.3,
-    hold: 1.6,
-    title: "No daemon. No open port. Just sshd.",
-    x: 0.5,
-    y: 0.87,
-    width: 520,
-    height: 150,
-    fontSize: 32,
-  },
-  {
-    at: 10.9,
-    hold: 1.4,
-    title: "Harold connects straight to your host",
-    x: 0.51,
-    y: 0.64,
-    width: 520,
-    height: 160,
-    fontSize: 32,
-  },
-  {
-    at: 13.3,
-    hold: 1.4,
-    title: "Your keys stay on the phone",
-    x: 0.51,
-    y: 0.74,
-    width: 520,
-    height: 160,
-    fontSize: 32,
-  },
-]
+// --- Events derived from the capture ---------------------------------------
 
+export type TapEvent = { at: number; x: number; y: number; slice: string }
+export type KeyEvent = { at: number; slice: string }
 export type Ripple = { at: number; x: number; y: number }
 
 export const rippleDuration = 0.55
 export const rippleColor = "#B6F36B"
 
-const buildRipples = (shots: Shot[]): Ripple[] => {
-  const ripples: Ripple[] = []
+/** Source second inside a shot -> render second. The inverse of `clipFrame`. */
+const toRenderSec = (shot: Shot, sourceSec: number): number =>
+  shot.at + (sourceSec - shot.startSec) / shot.rate
+
+const reachesSource = (shot: Shot, sourceSec: number): boolean =>
+  sourceSec >= shot.startSec - 1e-6 &&
+  sourceSec <= shot.startSec + shot.duration * shot.rate + 1e-6
+
+const buildTaps = (shots: Shot[]): TapEvent[] => {
+  const taps: TapEvent[] = []
   for (const shot of shots) {
-    if (shot.data.still && shot.data.taps === undefined) {
-      continue
-    }
     for (const tap of shot.data.taps ?? []) {
-      if (tap.atSec < shot.startSec) {
+      if (!reachesSource(shot, tap.atSec)) {
         continue
       }
-      const sinceStart = (tap.atSec - shot.startSec) / shot.rate
-      const atSec = Math.min(shot.duration, sinceStart)
-      ripples.push({
-        at: shot.at + atSec,
+      taps.push({
+        at: toRenderSec(shot, tap.atSec),
         x: tap.x / shot.data.width,
         y: tap.y / shot.data.height,
+        slice: shot.slice,
       })
     }
   }
-  return ripples.sort((a, b) => a.at - b.at)
+  return taps.sort((a, b) => a.at - b.at)
 }
 
-const buildCaptions = (shots: Shot[]): CaptionSpec[] => {
-  const captions: CaptionSpec[] = []
+const buildKeys = (shots: Shot[]): KeyEvent[] => {
+  const keys: KeyEvent[] = []
   for (const shot of shots) {
-    if (shot.caption === undefined) {
+    for (const key of shot.data.keys ?? []) {
+      if (!reachesSource(shot, key.atSec)) {
+        continue
+      }
+      keys.push({ at: toRenderSec(shot, key.atSec), slice: shot.slice })
+    }
+  }
+  return keys.sort((a, b) => a.at - b.at)
+}
+
+// --- Copy -------------------------------------------------------------------
+//
+// A callout anchors to the first tap of its shot. Where the footage ships no
+// taps — every slice after `connect_save` — the script's own `targetX`/`targetY`
+// override is used instead, measured off the captured frames.
+
+export const firstTapAnchor = (shots: Shot[], at: number): Point | null => {
+  const shot = shots.find((entry) => at >= entry.at - 1e-9 && at < entry.until - 1e-9)
+  if (shot === undefined) {
+    return null
+  }
+  const inside = (shot.data.taps ?? [])
+    .filter((tap) => reachesSource(shot, tap.atSec))
+    .sort((a, b) => a.atSec - b.atSec)
+  const first = inside[0]
+  if (first === undefined) {
+    return null
+  }
+  return { x: first.x / shot.data.width, y: first.y / shot.data.height }
+}
+
+const buildCopy = (shots: Shot[]): CopyItem[] => {
+  const items: CopyItem[] = []
+  for (const spec of SCENE_SPECS) {
+    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    if (scene === undefined) {
       continue
     }
-    captions.push({
-      at: shot.at + (shot.caption.at ?? 0.2),
-      hold: shot.caption.hold ?? 2.4,
-      text: shot.caption.text,
-    })
-  }
-  return captions.sort((a, b) => a.at - b.at)
-}
-
-const buildStageCards = (): StageCard[] => [...FIXED_STAGE_CARDS].sort((a, b) => a.at - b.at)
-
-const buildSpotlights = (shots: Shot[]): Spotlight[] => {
-  const spotlights: Spotlight[] = []
-  for (const shot of shots) {
-    if (shot.spotlight === undefined) {
-      continue
-    }
-    spotlights.push({
-      at: shot.at + (shot.spotlight.at ?? 0.2),
-      hold: shot.spotlight.hold ?? 3.0,
-      side: shot.spotlight.side ?? "left",
-      kicker: shot.spotlight.kicker,
-      title: shot.spotlight.title,
-    })
-  }
-  return spotlights.sort((a, b) => a.at - b.at)
-}
-
-const buildCallouts = (shots: Shot[]): Callout[] => {
-  const callouts: Callout[] = []
-  for (const shot of shots) {
-    if (shot.callout === undefined) {
-      continue
-    }
-    const tap = shot.data.taps?.[0]
-    callouts.push({
-      at: shot.at + (shot.callout.at ?? 0.2),
-      hold: shot.callout.hold ?? 2.4,
-      eyebrow: shot.callout.eyebrow,
-      title: shot.callout.title,
-      hint: shot.callout.hint,
-      side: shot.callout.side ?? "right",
-      targetX: shot.callout.targetX ?? (tap ? tap.x / shot.data.width : 0.5),
-      targetY: shot.callout.targetY ?? (tap ? tap.y / shot.data.height : 0.5),
-      compact: shot.callout.compact ?? false,
-      placement: shot.callout.placement ?? "target",
-      connector: shot.callout.connector ?? "string",
-      span: shot.callout.span,
-    })
-  }
-  return callouts.sort((a, b) => a.at - b.at)
-}
-
-const buildCardFans = (shots: Shot[]): CardFan[] => {
-  const fans: CardFan[] = []
-  for (const shot of shots) {
-    if (shot.cards === undefined) {
-      continue
-    }
-    fans.push({
-      at: shot.at + (shot.cards.at ?? 0.2),
-      hold: shot.cards.hold ?? 3,
-      eyebrow: shot.cards.eyebrow,
-      title: shot.cards.title,
-      hint: shot.cards.hint,
-    })
-  }
-  return fans.sort((a, b) => a.at - b.at)
-}
-
-const buildNotes = (shots: Shot[]): Note[] => {
-  const notes: Note[] = []
-  for (const shot of shots) {
-    if (shot.note === undefined) {
-      continue
-    }
-    notes.push({
-      at: shot.at + (shot.note.at ?? 0.2),
-      hold: shot.note.hold ?? 2.6,
-      label: shot.note.label,
-      title: shot.note.title,
-    })
-  }
-  return notes.sort((a, b) => a.at - b.at)
-}
-
-const buildAnnotations = (shots: Shot[]): Annotation[] => {
-  const bySlice = new Map(shots.map((shot) => [shot.slice, shot]))
-  const annotations: Annotation[] = []
-  for (const shot of shots) {
-    if (shot.annotation === undefined) {
-      continue
-    }
-    const hasNext = shot.annotation.nextSlice !== undefined
-    const next = hasNext ? bySlice.get(shot.annotation.nextSlice!) : undefined
-    const end = shot.annotation.endSlice ? bySlice.get(shot.annotation.endSlice) : shot
-    if (hasNext && next === undefined) {
-      throw new Error(
-        `annotation on "${shot.slice}" is missing "${shot.annotation.nextSlice}"`,
-      )
-    }
-    const endAt =
-      shot.annotation.hold !== undefined
-        ? shot.at + (shot.annotation.at ?? 0.2) + shot.annotation.hold
-        : (end?.at ?? shot.at) + (end?.duration ?? shot.duration) + (end?.hold ?? 0) - 0.2
-    annotations.push({
-      at: shot.at + (shot.annotation.at ?? 0.2),
-      moveAt: next ? next.at + 0.2 : undefined,
-      endAt,
-      title: shot.annotation.title,
-      nextTitle: shot.annotation.nextTitle,
-      target: shot.annotation.target ?? MODE_TARGET,
-      nextTarget: shot.annotation.nextTarget,
-    })
-  }
-  return annotations.sort((a, b) => a.at - b.at)
-}
-
-const buildPhoneCaptions = (shots: Shot[]): PhoneCaption[] => {
-  const captions: PhoneCaption[] = []
-  for (const shot of shots) {
-    if (shot.phoneCaption === undefined) {
-      continue
-    }
-    captions.push({
-      at: shot.at + (shot.phoneCaption.at ?? 0.2),
-      hold: shot.phoneCaption.hold ?? 2.0,
-      title: shot.phoneCaption.title,
-      top: shot.phoneCaption.top ?? 0.5,
-      height: shot.phoneCaption.height ?? 190,
-    })
-  }
-  return captions.sort((a, b) => a.at - b.at)
-}
-
-const buildCelebrations = (shots: Shot[]): Celebration[] => {
-  const celebrations: Celebration[] = []
-  for (const shot of shots) {
-    if (shot.celebrate === undefined) {
-      continue
-    }
-    celebrations.push({
-      at: shot.at + (shot.celebrate.at ?? shot.duration),
-      hold: shot.celebrate.hold ?? 1.3,
-      strength: shot.celebrate.strength ?? 1,
-      confetti: shot.celebrate.confetti ?? false,
-    })
-  }
-  return celebrations.sort((a, b) => a.at - b.at)
-}
-
-// --- Sounds -----------------------------------------------------------------
-
-export type SoundName = "key" | "enter" | "tap" | "ping"
-
-export type Sound = { at: number; name: SoundName; volume: number }
-
-const buildSounds = (
-  shots: Shot[],
-  captions: CaptionSpec[],
-  ripples: Ripple[],
-  spotlights: Spotlight[],
-  callouts: Callout[],
-  cardFans: CardFan[],
-  notes: Note[],
-  annotations: Annotation[],
-  phoneCaptions: PhoneCaption[],
-  stageCards: StageCard[],
-): Sound[] => {
-  const sounds: Sound[] = []
-  // [KR] every keystroke, a separate sound for Enter.
-  for (let index = 0; index < 23; index += 1) {
-    sounds.push({ at: 2.0 + index / 15, name: "key", volume: 1 })
-  }
-  sounds.push({ at: 3.7, name: "enter", volume: 1 })
-  for (let index = 0; index < 5; index += 1) {
-    sounds.push({ at: 6.4 + index / 8, name: "key", volume: 1 })
-  }
-  sounds.push({ at: 7.1, name: "enter", volume: 1 })
-  for (let index = 0; index < 70; index += 1) {
-    sounds.push({ at: 9.0 + index / 35, name: "key", volume: 1 })
-  }
-  sounds.push({ at: 11.2, name: "enter", volume: 1 })
-  // [KR] on the phone, spread across the typing slice.
-  for (const shot of shots) {
-    const windows =
-      shot.typing === undefined ? [] : Array.isArray(shot.typing) ? shot.typing : [shot.typing]
-    for (const typing of windows) {
-      const fromSec = Math.max(shot.startSec, typing.fromSec)
-      const toSec = Math.min(shot.startSec + shot.duration * shot.rate, typing.toSec)
-      const at = shot.at + (fromSec - shot.startSec) / shot.rate
-      const duration = Math.max(0, toSec - fromSec) / shot.rate
-      const step = duration / Math.max(1, typing.text.length - 1)
-      for (let index = 0; index < typing.text.length; index += 1) {
-        sounds.push({ at: at + index * step, name: "key", volume: 0.8 })
+    for (const item of spec.copy) {
+      const at = scene.from + item.at
+      switch (item.kind) {
+        case "card":
+          items.push({ ...item, at })
+          break
+        case "note":
+          items.push({ ...item, at })
+          break
+        case "cap":
+          items.push({ ...item, at })
+          break
+        case "spotlight":
+          items.push({ ...item, at })
+          break
+        case "box":
+          items.push({
+            ...item,
+            at,
+            steps: item.steps.map((step) => ({ ...step, at: at + step.at })),
+          })
+          break
+        case "callout": {
+          const anchor = item.anchor ?? { mode: "firstTap" }
+          const tapped = anchor.mode === "firstTap" ? firstTapAnchor(shots, at) : null
+          const target =
+            anchor.mode === "point"
+              ? { x: anchor.x, y: anchor.y }
+              : (tapped ?? { x: 0.5, y: 0.5 })
+          items.push({
+            kind: "callout",
+            at,
+            hold: item.hold,
+            title: item.title,
+            eyebrow: item.eyebrow,
+            hint: item.hint,
+            // A tag sits on the side of the phone its target is on, so the
+            // leader line crosses the nearest bezel and never the whole screen.
+            side: item.side ?? (target.x > 0.5 ? "right" : "left"),
+            compact: item.compact ?? false,
+            placement: item.placement ?? "target",
+            connector: item.connector ?? "string",
+            target,
+            anchoredBy: anchor.mode === "point" ? "point" : tapped === null ? "point" : "tap",
+          })
+          break
+        }
       }
     }
   }
-  // [TAP] one pop per tap, at the tap.
-  for (const ripple of ripples) {
-    sounds.push({ at: ripple.at, name: "tap", volume: 0.9 })
+  return items.sort((a, b) => a.at - b.at)
+}
+
+export const callouts = (items: CopyItem[]): CalloutItem[] =>
+  items.filter((item): item is CalloutItem => item.kind === "callout")
+
+export const spotlights = (items: CopyItem[]): SpotlightItem[] =>
+  items.filter((item): item is SpotlightItem => item.kind === "spotlight")
+
+export const cards = (items: CopyItem[]): CardItem[] =>
+  items.filter((item): item is CardItem => item.kind === "card")
+
+export const notes = (items: CopyItem[]): NoteItem[] =>
+  items.filter((item): item is NoteItem => item.kind === "note")
+
+export const boxes = (items: CopyItem[]): BoxItem[] =>
+  items.filter((item): item is BoxItem => item.kind === "box")
+
+export const caps = (items: CopyItem[]): CapItem[] =>
+  items.filter((item): item is CapItem => item.kind === "cap")
+
+// --- Celebration ------------------------------------------------------------
+
+export type Celebration = {
+  at: number
+  hold: number
+  strength: number
+  confetti: boolean
+  confettiHold: number
+}
+
+export type Confetti = { at: number; hold: number; count: number }
+
+const ACHIEVEMENT = SCENES[2]
+
+// The film's only pop and its only confetti. Both silent.
+export const CELEBRATION_AT = ACHIEVEMENT.from + 0.6
+
+const CELEBRATIONS: Celebration[] = [
+  { at: CELEBRATION_AT, hold: 1.5, strength: 1, confetti: true, confettiHold: 4.6 },
+]
+
+const buildConfetti = (celebrations: Celebration[]): Confetti[] =>
+  celebrations
+    .filter((celebration) => celebration.confetti)
+    .map((celebration) => ({ at: celebration.at, hold: celebration.confettiHold, count: 96 }))
+
+// --- Light ------------------------------------------------------------------
+
+const LIGHT_BY_SCENE: Record<SceneSlug, LightState> = SCENE_SPECS.reduce(
+  (table, spec) => ({ ...table, [spec.slug]: spec.light }),
+  {} as Record<SceneSlug, LightState>,
+)
+
+const buildLightCues = (): LightCue[] =>
+  SCENES.map((scene) => ({ at: scene.from, state: LIGHT_BY_SCENE[scene.slug] }))
+
+export const LIGHT_CUES: LightCue[] = buildLightCues()
+
+export const LIGHT_SHAPES = LIGHTS
+
+// --- Sounds -----------------------------------------------------------------
+//
+// Three sources only: a ping for every copy primitive, the real taps, and the
+// real keystrokes. [POP] and [CF] are silent by design.
+//
+// The bed is normalised against these, not the other way round. music.mp3
+// measures -10.43 LUFS integrated with a +0.80 dBTP peak, so MUSIC_VOLUME lands
+// it at -26.3 LUFS, a measured 11 dB below a tap.
+
+export type SoundName = "key" | "tap" | "ping"
+export type Sound = { at: number; name: SoundName; volume: number }
+
+export const MUSIC_VOLUME = 0.16
+
+/** Two keys closer together than this are one keystroke too many. */
+const KEY_CROWD_SEC = 0.16
+
+const pingVolume = (kind: CopyItem["kind"]): number => {
+  switch (kind) {
+    case "spotlight":
+      return 0.7
+    case "card":
+      return 0.6
+    case "callout":
+      return 0.55
+    case "note":
+      return 0.5
+    case "box":
+      return 0.55
+    case "cap":
+      return 0.45
   }
-  // [CAP] a soft ping when a caption appears.
-  for (const caption of captions) {
-    sounds.push({ at: caption.at, name: "ping", volume: 0.55 })
-  }
-  // [SPOTLIGHT] the same ping, a little louder, when the big copy lands.
-  for (const spotlight of spotlights) {
-    sounds.push({ at: spotlight.at, name: "ping", volume: 0.7 })
-  }
-  // [CALLOUT] a soft ping when the tag lands.
-  for (const callout of callouts) {
-    sounds.push({ at: callout.at, name: "ping", volume: 0.65 })
-  }
-  // [CARDS] the same ping when the fan spreads.
-  for (const fan of cardFans) {
-    sounds.push({ at: fan.at, name: "ping", volume: 0.65 })
-  }
-  // [NOTE] and again when the paper note lands.
-  for (const note of notes) {
-    sounds.push({ at: note.at, name: "ping", volume: 0.65 })
-  }
-  // [BOX] a pair of soft pings as the box lands and moves.
-  for (const annotation of annotations) {
-    sounds.push({ at: annotation.at, name: "ping", volume: 0.65 })
-    if (annotation.moveAt !== undefined) {
-      sounds.push({ at: annotation.moveAt, name: "ping", volume: 0.65 })
+}
+
+const buildSounds = (taps: TapEvent[], keys: KeyEvent[], copy: CopyItem[]): Sound[] => {
+  const sounds: Sound[] = []
+  let lastKept = Number.NEGATIVE_INFINITY
+  for (const key of keys) {
+    if (key.at - lastKept <= KEY_CROWD_SEC) {
+      continue
     }
+    const fresh = key.at - lastKept > 0.6
+    lastKept = key.at
+    sounds.push({ at: key.at, name: "key", volume: fresh ? 0.78 : 0.58 })
   }
-  // [CARD] a soft ping when the in-phone or stage card lands.
-  for (const caption of [...phoneCaptions, ...stageCards]) {
-    sounds.push({ at: caption.at, name: "ping", volume: 0.65 })
+  for (const tap of taps) {
+    sounds.push({ at: tap.at, name: "tap", volume: 0.9 })
+  }
+  for (const item of copy) {
+    if (item.kind === "box") {
+      for (const step of item.steps) {
+        sounds.push({ at: step.at, name: "ping", volume: pingVolume("box") })
+      }
+      continue
+    }
+    sounds.push({ at: item.at, name: "ping", volume: pingVolume(item.kind) })
   }
   return sounds.sort((a, b) => a.at - b.at)
 }
@@ -1329,85 +1175,85 @@ const buildSounds = (
 // --- Timeline ---------------------------------------------------------------
 
 export type Timeline = {
-  terminal: TermItem[]
+  scenes: Scene[]
+  shots: Shot[]
   clips: PhoneClip[]
+  taps: TapEvent[]
+  keys: KeyEvent[]
   ripples: Ripple[]
-  captions: Caption[]
-  callouts: Callout[]
-  cardFans: CardFan[]
-  notes: Note[]
-  annotations: Annotation[]
-  phoneCaptions: PhoneCaption[]
-  stageCards: StageCard[]
-  spotlights: Spotlight[]
+  copy: CopyItem[]
   celebrations: Celebration[]
+  confetti: Confetti[]
   sounds: Sound[]
-  zoom: Zoom
-  phoneStage: PhoneStage
+  lights: LightCue[]
+  cameras: CameraCue[]
+  bodies: BodyCue[]
+  waddles: WaddleCue[]
+  poseAt: (sec: number) => Pose
+  cameraAt: (sec: number) => CameraState
+  driftAt: (sec: number, stageWidth: number) => Point
+  sceneAt: (sec: number) => Scene
   endSec: number
 }
 
-const tapRenderSec = (shot: Shot | undefined): number | null => {
-  const tap = shot?.data.taps?.[0]
-  if (shot === undefined || tap === undefined) {
-    return null
-  }
-  return shot.at + Math.max(0, (tap.atSec - shot.startSec) / shot.rate)
-}
+/** The drifts that skip a shot that could not be drawn still alternate. */
+const CAMERA_CUES = buildCameraCues()
+const BODY_CUES = buildBodyCues()
+const WADDLES = buildWaddles()
 
 /**
- * The whole cut, derived from the captured slices.
+ * The whole cut, derived from the captured slices. Never throws: a slice that is
+ * missing from the capture drops its shot and the rest of the edit stands.
  */
 export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
-  const { setup, story } = buildShots(slices)
-  const shots = [...setup, ...story].sort((a, b) => a.at - b.at)
-  const clips = buildClips(shots)
-  const ripples = buildRipples(shots)
-  const captions = buildCaptions(shots)
-  const callouts = buildCallouts(shots)
-  const cardFans = buildCardFans(shots)
-  const notes = buildNotes(shots)
-  const annotations = buildAnnotations(shots)
-  const phoneCaptions = buildPhoneCaptions(shots)
-  const stageCards = buildStageCards()
-  const spotlights = buildSpotlights(shots)
-  const celebrations = buildCelebrations(shots)
-  const sounds = buildSounds(
-    shots,
-    captions,
-    ripples,
-    spotlights,
-    callouts,
-    cardFans,
-    notes,
-    annotations,
-    phoneCaptions,
-    stageCards,
-  )
-  const connectedRenderSec =
-    tapRenderSec(setup.find((shot) => shot.slice === "setup_trust")) ??
-    setup.find((shot) => shot.slice === "connected")?.at ??
-    24.6
-  const last = story[story.length - 1]
-  const endSec = last.at + last.duration + (last.hold ?? 0)
+  const shots = buildShots(slices)
+  const taps = buildTaps(shots)
+  const keys = buildKeys(shots)
+  const copy = buildCopy(shots)
   return {
-    terminal: transcript(connectedRenderSec),
-    clips,
-    ripples,
-    captions,
-    callouts,
-    cardFans,
-    notes,
-    annotations,
-    phoneCaptions,
-    stageCards,
-    spotlights,
-    celebrations,
-    sounds,
-    zoom: buildZoom(shots),
-    phoneStage: buildPhoneStage(story),
-    endSec,
+    scenes: SCENES,
+    shots,
+    clips: buildClips(shots),
+    taps,
+    keys,
+    copy,
+    ripples: taps.map((tap) => ({ at: tap.at, x: tap.x, y: tap.y })),
+    celebrations: CELEBRATIONS,
+    confetti: buildConfetti(CELEBRATIONS),
+    sounds: buildSounds(taps, keys, copy),
+    lights: LIGHT_CUES,
+    cameras: CAMERA_CUES,
+    bodies: BODY_CUES,
+    waddles: WADDLES,
+    poseAt: (sec: number) => poseAt(BODY_CUES, sec),
+    cameraAt: (sec: number) => cameraAt(CAMERA_CUES, sec),
+    driftAt: (sec: number, stageWidth: number) => driftAt(SCENES, shots, sec, stageWidth),
+    sceneAt: (sec: number) => sceneAt(SCENES, sec),
+    endSec: DURATION_SEC,
   }
 }
 
-export const totalSec = (slices: CaptureSlice[]): number => buildTimeline(slices).endSec + OUTRO_SEC
+// --- Capture contract -------------------------------------------------------
+
+const editSlices = (): string[] => {
+  const names: string[] = []
+  for (const spec of SCENE_SPECS) {
+    for (const shot of spec.shots) {
+      if (names.indexOf(shot.slice) === -1) {
+        names.push(shot.slice)
+      }
+    }
+  }
+  return names
+}
+
+/** Every slice the edit asks for. Tests assert this against capture.json. */
+export const EDIT_SLICES: string[] = editSlices()
+
+export const missingSlices = (slices: CaptureSlice[]): string[] => {
+  const have = new Set(slices.map((slice) => slice.name))
+  return EDIT_SLICES.filter((name) => !have.has(name))
+}
+
+/** Frames a scene holds the stage. Used by the tests and the README table. */
+export const sceneFrames = (slug: SceneSlug): number => SCENE_FRAMES[slug]

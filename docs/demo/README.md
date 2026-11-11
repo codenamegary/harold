@@ -87,20 +87,14 @@ To rebuild `capture.json` from slices already pulled, without a device:
 python3 docs/demo/capture/build_capture.py
 ```
 
-## The 115.2 second cut
+## The 113.0 second cut
 
-> **Status: superseded.** The cut on disk was built before the current
-> [`script.md`](./script.md) and does not tell the story written there. It is
-> kept as a reference until the rebuild lands. Do not read its beat table as the
-> script.
-
-[`render/`](./render) builds a 1920x1080, 30 fps, **3456 frame** video from the
-15 recorded slices: 115.2 s exactly, H.264 master at CRF 18, then a compressed
-cut at CRF 26 with 96 kbps AAC and faststart. `capture.json` supplies the pixels
-and the timings. `timeline.ts` is the edit, and a retime there never re-records
-anything. The `question` beat now plays its capture at 1.0x instead of stretching
-it, and the frames it gave back went to `build` and `changes`; the total is still
-3456.
+[`render/`](./render) builds a 1920x1080, 30 fps, **3390 frame** video from the
+15 recorded slices. That is 113.0 s exactly. The master is H.264 at CRF 18. The
+compressed cut is CRF 26 with 96 kbps AAC and faststart. `capture.json` supplies
+the pixels and the timings. `timeline.ts` is the edit, and a retime there never
+re-records anything. The `question` beat plays its capture at 1.0x. The cut
+follows the script's twelve scenes in order.
 
 ## Regenerating it end to end
 
@@ -122,10 +116,10 @@ bun run render
 
 # 4. pull the review stills out of the master, from the render project
 cd docs/demo/render
-bunx remotion bundle --out-dir=../work/render/bundle-story
-mkdir -p ../work/render/qa-final-story
-for f in 30 120 180 240 312 366 414 489 546 600 640 700 1000 1050 1320 1450 1600 1900 2210 2300 2410 2570 2690 2800 2960 3180 3260 3380; do
-  bunx remotion still ../work/render/bundle-story HaroldDemo "../work/render/qa-final-story/f-$f.png" --frame=$f
+bunx remotion bundle --out-dir=../work/render/bundle-v5
+mkdir -p ../work/render/qa-v5
+for f in 45 400 760 980 1200 1600 1800 2240 2400 2700 3000 3300; do
+  bunx remotion still ../work/render/bundle-v5 HaroldDemo "../work/render/qa-v5/f-$f.png" --frame=$f
 done
 ```
 

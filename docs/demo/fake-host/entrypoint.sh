@@ -17,8 +17,7 @@ install -d -o gary -g gary -m 0755 \
   "$HOME_DIR/git" \
   "$HOME_DIR/.harold" \
   "$HOME_DIR/.harold-demo" \
-  "$HOME_DIR/.harold-demo/agents" \
-  "$HOME_DIR/.ssh"
+  "$HOME_DIR/.harold-demo/agents"
 
 rm -rf \
   "$HOME_DIR/sites" \
@@ -30,8 +29,14 @@ install -d -o gary -g gary -m 0755 \
   "$HOME_DIR/git" \
   "$HOME_DIR/.harold" \
   "$HOME_DIR/.harold-demo" \
-  "$HOME_DIR/.harold-demo/agents" \
-  "$HOME_DIR/.ssh"
+  "$HOME_DIR/.harold-demo/agents"
+
+# Keys are injected per capture run with add-authorized-key. Every start begins
+# with no authorized keys, so a green Test connection proves this run's key.
+install -d "$HOME_DIR/.ssh"
+chown gary:gary "$HOME_DIR/.ssh"
+chmod 700 "$HOME_DIR/.ssh"
+rm -f "$HOME_DIR/.ssh/authorized_keys"
 
 log "seeding repositories"
 cp -a "$DEMO_HOME/fixture/cat-screensaver/." "$HOME_DIR/sites/cat-screensaver/"
@@ -61,6 +66,10 @@ write_repo "$HOME_DIR/sites/fish-screensaver-for-cats" \
   "README.md:# Fish Screensaver for Cats" \
   "index.html:<!doctype html><title>Fish</title><canvas id=\"fish\"></canvas>"
 
+# Rewrite the seed script each start: the previous boot chowned it to gary, and
+# fs.protected_regular refuses a root-owned shell opening another user's file in
+# a sticky directory for write.
+rm -f /tmp/seed-repos.sh
 cat >/tmp/seed-repos.sh <<'SCRIPT'
 set -euo pipefail
 cd "$HOME"
@@ -126,5 +135,7 @@ install -o root -g root -m 0755 "$DEMO_HOME/tools/gh" /usr/local/bin/gh
 chown -R gary:gary "$HOME_DIR/.ssh" "$HOME_DIR/.harold" "$HOME_DIR/.harold-demo"
 
 log "host key $(ssh-keygen -l -E sha256 -f /etc/ssh/ssh_host_ed25519_key.pub | awk '{print $2}')"
-log "ready on port 2222 as gary@demo-host"
+log "validating sshd config"
+/usr/sbin/sshd -t -f /etc/ssh/sshd_config
+log "ready on port 2222 as gary@demo-host (publickey only)"
 exec /usr/sbin/sshd -D -e -p 2222
