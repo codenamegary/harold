@@ -30,7 +30,7 @@ flowchart LR
     C -->|adb forward 7391| D[ProbeServer in debug APK]
     D --> E[Probe registry]
     E --> F[ViewModel intents and UiState]
-    B --> G[adb shell input tap and swipe]
+    B --> G[adb shell input tap, swipe, and text]
     G --> H[Emulator or device]
 ```
 
@@ -49,12 +49,13 @@ Three files, all inert unless the debug initializer runs.
 - `POST /intent` runs a named action and returns the new snapshot plus the marks
   it produced.
 - `GET /marks` and `POST /marks/clear` handle the device clock ledger.
-- `POST /anchor` samples `elapsedRealtimeNanos` for converting marks to host time.
+- `POST /anchor` still samples `elapsedRealtimeNanos`. The walk leaves that route alone.
 
-Typing runs inside the app, one character at a time, writing a `key` mark before
-each character and a `keys_done` at the end. That is the same grammar
-[`build_capture.py`](../build_capture.py) already parses, and the cadence is now
-real instead of inferred.
+The walk types with adb. It taps the field once, waits about 150 ms, then sends
+one `adb shell input text` per character. It stamps `key` on the host clock
+before each character and `keys_done` at the end of the field. On-camera text
+is that adb input. [`build_capture.py`](../build_capture.py) still reads that
+grammar.
 
 ## Tools
 
@@ -63,13 +64,12 @@ real instead of inferred.
 | `harold_screen` | screen id, facts, settled flag, controls with rects |
 | `harold_tap` | resolve a tag to its rect, issue a real adb tap |
 | `harold_scroll_to` | swipe until the tag has non-zero bounds |
-| `harold_type` | type a whole value at a fixed gap, verify what landed |
+| `harold_type` | focus a field and type it with adb, one character at a time |
 | `harold_set` | instant set, pre-roll only |
 | `harold_intent` | non-gesture actions such as `test_connection` and `save` |
 | `harold_wait` | block on a fact or on `settled`, replacing blind sleeps |
 | `harold_navigate` | reach a route by intent, for pre-roll only |
 | `harold_marks` / `harold_clear_marks` | read and reset the device ledger |
-| `harold_anchor` | device clock sample for mark conversion |
 
 Anything the video is supposed to show happening goes through `harold_tap` or
 `harold_type`. `harold_set` and `harold_navigate` are for reaching a slice, never
@@ -116,7 +116,7 @@ the connect act as one `screenrecord` file per beat and writes the artifacts
 ```sh
 bun run src/walk.ts --list                    # the beat plan
 bun run src/walk.ts --self-test               # stub only, no device, no adb
-bun run src/walk.ts --only connect_fill       # one slice
+bun run src/walk.ts --only connect            # one slice
 bun run src/walk.ts                           # every on-camera beat
 ```
 
@@ -144,39 +144,27 @@ instead of collecting a page of 401s.
 
 ### What one slice writes
 
-1. `harold_clear_marks`, so the ledger holds only this slice
-2. an anchor sample before the head blink
-3. `screenrecord` on `/data/local/tmp/harold-demo-NNN-<name>.mp4`
-4. the head blink, then the beat, then another anchor
-5. the tail blink, then the recorder stops
-6. an anchor after the tail blink
-7. the device marks, converted and merged into `marks.log`
-8. the mp4 pulled to `<out>/slices/NNN-<name>.mp4`
+1. `screenrecord` on `/data/local/tmp/harold-demo-NNN-<name>.mp4`
+2. the head blink, then the beat
+3. the tail blink, then the recorder stops
+4. closed key runs checked, then the rows appended to `marks.log`
+5. the mp4 pulled to `<out>/slices/NNN-<name>.mp4`
 
 `<out>/slices.json` holds `{index, name, file, remote, started, ended}`.
-`<out>/walk-report.json` holds every step, every raw device mark, and every
-slice's anchors and clock fit.
+`<out>/walk-report.json` holds every step and each slice's window and key count.
 
-### Anchors turn device marks into host time
+### Key rows use the host clock
 
-Marks use `SystemClock.elapsedRealtimeNanos()`. The host needs host seconds.
-Each `harold_anchor` call is paired with a host `performance.now()` taken
-immediately before it, and the driver fits a line from device seconds to host
-seconds. Two samples is the minimum, three is normal, and bad anchors abort the
-slice by name:
+The walk stamps `key` with `performance.now()` before each `adb shell input text`.
+It stamps `keys_done` when the field is done. `sync_wake` and `slice_start` use
+that same clock.
 
-| Guard | Limit |
-| --- | --- |
-| anchor round trip | under 500 ms |
-| fitted slope | inside (0.99, 1.01) |
-| fit residual | under 50 ms |
-| mark order | must never go backwards |
-| mark range | inside the anchor bracket plus 2 s |
-| mark window | inside the slice start and end plus 2 s |
+The field must already be empty. The walk reads the fact after the run and fails
+unless it equals the typed string. `composerText` is the chat fact. SSH facts are
+`host`, `user`, `port`, and `name`.
 
-The POC left this out. Its `report.json` holds raw `nanos`. The walk converts
-every mark before it writes a row, so `marks.log` stays in host time and
-`build_capture.py` needs no change.
+`build_capture.py` maps those host stamps onto the video with the calibration
+blinks. That drift math is unchanged.
 
 ## What the POC showed
 
@@ -186,7 +174,7 @@ cover, in nine and a half seconds:
 | Step | Time |
 | --- | --- |
 | navigate to the form | 0.8 s |
-| type host, user, port, name | 2.4 s total |
+| type name, host, user, port | 2.4 s total |
 | read the generated public key from facts | 2.4 s |
 | scroll and tap Test connection | 5.6 s |
 | fingerprint present | 6.2 s |
@@ -196,18 +184,14 @@ There is no uidump anywhere in that path.
 
 ## Limits, on purpose
 
-- The SSH form is the only instrumented screen. Adding one is a `ScreenProbe`
-  adapter plus tags, not a framework change.
+- Adding a screen is a `ScreenProbe` adapter plus tags.
 - Compose reports an empty rect for a fully clipped control, so a tag alone is
   not enough to tap something below the fold. `harold_scroll_to` covers it and
   `harold_tap` refuses to tap a zero-sized control rather than clicking at 0,0.
-- `harold_type` uses the hoisted Compose value, not the IME. It repaints glyph by
-  glyph, which is what the video needs, but it bypasses the keyboard. Do not use
-  it on a field with a live composition session.
+- `harold_type` taps the field and types with `adb shell input text`. The field
+  must already be empty. The walk calls the same function.
 - The renderer's ripple layer still needs `taps[].x/.y`. `harold_tap` returns the
   coordinates it used so they can be written into `capture.json`.
-- Marks are on the device clock. Convert with `harold_anchor` paired against a
-  host timestamp. The POC records raw marks and stops there. `walk.ts` does the
-  conversion and writes host time rows.
+- Key rows are host timestamps. The walk writes them while it types.
 - A loopback listener exists only in debug source. `Probe.enabled` starts false
   and only `ProbeInitializer`, which is in the debug manifest, turns it on.

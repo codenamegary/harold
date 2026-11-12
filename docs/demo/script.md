@@ -148,39 +148,42 @@ light state and what the phone does in the light.
 
 ### Scene: intro
 
-Enter: [LIGHT:alone]. Composition opens on the intro slide. The slide sits in the
-dark and catches only the edge of the pool. The camera drifts slowly right and
-the haze drifts faster.
+Enter: [LIGHT:alone]. Composition opens on the intro slide. The lockup sits in
+the shaft, in the spotlight. Near the end the lockup fades and the pool slides
+a little right, toward where the phone will enter.
 
 Beats:
 
 - Harold logo.
 - Subtitle "Hark! The Harold Agents Sing".
 - CTA `:github logo: codenamegary/harold`.
+- The lockup fades. The pool moves right.
 
 ### Scene: SSH Host Connection
 
-Enter: [LIGHT:arrival]. The intro slide fades out. Harold app on a phone slowly
-moves into the light and on to the stage, kind of animated so it appears to be
-waddling. The pool brightens under it as it arrives, so it is lit from one side.
-It settles just off centre.
+Enter: [LIGHT:arrival]. The intro slide is gone. The phone, on the empty home,
+starts small and further back. It waddles in from the right, quicker, with a
+snappier rock, and settles in the pool, lit from that side. Once it fills the
+frame it holds still. No parallax on the phone after that.
 
 Beats:
 
-- Harold app on the phone enters the light, with empty state in the app
-- [CARD "Harold over SSH to your agent hosts" place=stage]
-- The camera zooms in so the phone fits the screen vertically, centered horizontally
-- [TAP "Add Connection"]
-- Fill in the connection form
-- [TAP "Test Connection"]
-- [TAP "Save SSH Host"]
-- Phone redirects to home screen
+- The phone waddles into the light on the empty home (no connections yet)
+- [CARD "Look what I can do!" place=stage]
+- The camera eases in until the phone fills the frame vertically, centered
+- The phone stops moving
+- The camera punches in on Add connection
+- [TAP "Add connection"]
+- The camera punches back out to the full form
+- The form is filled in one run: name, host, user, port, then the phone
+  scrolls, then test, then trust
+- [TAP "Save SSH Host"] starts the achievement. The picture keeps playing.
 
 ### Scene: achievement
 
-Enter: [L2C copy|phone ~1.2s]. [LIGHT:reward].
-[PZ:center-two-thirds]. The pool blooms out to the full stage and the haze
-flares. The camera pushes in with the phone.
+Enter: [L2C copy|phone]. [LIGHT:reward]. This begins on the save tap. The pool
+blooms and the camera eases to [PZ:center-two-thirds], docked clear of the left
+copy. The form leaves and the home screen arrives inside that move.
 
 Beats:
 
@@ -189,7 +192,7 @@ Beats:
   title: Work from Couch
 - [POP]
 - [CF]
-- The phone holds the centered close-up.
+- The phone holds the close-up.
 
 ### Scene: new-session
 

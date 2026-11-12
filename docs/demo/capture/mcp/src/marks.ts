@@ -12,11 +12,9 @@
  * `<mono>` is host monotonic seconds at 3 decimal places, whitespace separated,
  * one row per line. `tap` puts the timestamp before the coordinates.
  *
- * `build_capture.py` filters rows into a slice by time, but it also walks the
- * file in order to pair every `key` run with the `keys_done` that closes it, and
- * it rejects a slice whose `marks[]` times go backwards. Rows are therefore
- * buffered per slice and written in time order: converted device marks arrive
- * after the beat that produced them, so append-as-you-go would break both.
+ * `build_capture.py` filters rows into a slice by time, and it walks the file
+ * in order to pair every `key` run with the `keys_done` that closes it. Rows
+ * for one slice are buffered and written in time order.
  */
 
 export const MONO_DIGITS = 3
@@ -93,3 +91,19 @@ export const assertClosedKeyRuns = (marks: readonly Readonly<{ nanos: number; ki
 
 export const countKeys = (marks: readonly Readonly<{ kind: string }>[]): number =>
   marks.filter((mark) => mark.kind === "key").length
+
+const keyRunKind = (text: string): string => {
+  if (text.startsWith("keys_done ")) {
+    return "keys_done"
+  }
+  if (text.startsWith("key ")) {
+    return "key"
+  }
+  return "other"
+}
+
+/** Host rows in the shape `assertClosedKeyRuns` checks. `nanos` is the row index. */
+export const keyRunMarks = (
+  rows: readonly MarkRow[],
+): readonly Readonly<{ nanos: number; kind: string }>[] =>
+  rows.map((row, index) => ({ nanos: index, kind: keyRunKind(row.text) }))

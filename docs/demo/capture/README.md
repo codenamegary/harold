@@ -41,8 +41,8 @@ bash docs/demo/capture/capture.sh
 Re-record one slice, or a few, without recording the rest:
 
 ```sh
-bash docs/demo/capture/capture.sh --only connect_fill
-bash docs/demo/capture/capture.sh --only connect_trust,connect_save
+bash docs/demo/capture/capture.sh --only connect
+bash docs/demo/capture/capture.sh --only home_empty,connect
 ```
 
 A `--only` run still drives the app to reach the named slices, records nothing
@@ -56,7 +56,7 @@ The driver also runs on its own, without the emulator bring-up:
 cd docs/demo/capture/mcp
 bun run src/walk.ts --list                      # print the beat plan
 bun run src/walk.ts --self-test                 # stub only, no device
-bun run src/walk.ts --only connect_fill         # needs a device and a token
+bun run src/walk.ts --only connect              # needs a device and a token
 ```
 
 To run it directly you need the probe token from logcat and the port
@@ -66,7 +66,7 @@ forwarded:
 adb forward tcp:7391 tcp:7391
 export HAROLD_PROBE_TOKEN=$(adb logcat -d -s HaroldProbe:I \
   | sed -n 's/.*token=\([0-9a-f]*\).*/\1/p' | tail -n 1)
-cd docs/demo/capture/mcp && bun run src/walk.ts --only connect_fill
+cd docs/demo/capture/mcp && bun run src/walk.ts --only connect
 ```
 
 `capture.sh` does both steps for you.
@@ -112,21 +112,17 @@ bun run render
 
 ## How it works
 
-The connect act has one pre-roll beat and seven recorded slices.
+The connect act has one pre-roll beat and three recorded slices.
 
-The pre-roll beat is `boot`. It waits for the probe to answer, opens the host
-form, reads the generated public key out of the form facts, authorizes that key
-on the fake host, and scrolls to the bottom of the form. It is never recorded.
+The pre-roll beat is `boot`. It waits for the probe to answer on the empty home.
+It is never recorded. The generated public key is authorised after Add
+connection opens the form, still inside the `connect` slice.
 
 | # | Slice | What the picture shows |
 | --- | --- | --- |
-| 001 | `connect_empty` | The empty host form |
-| 002 | `connect_key` | The generated public key |
-| 003 | `connect_fill` | Host, user, port and name typed one character at a time |
-| 004 | `connect_test` | Test connection, then the host key fingerprint |
-| 005 | `connect_trust` | Trust the fingerprint |
-| 006 | `connect_save` | Save the host |
-| 007 | `landing` | The app leaves the form and lands on chat |
+| 001 | `home_empty` | The empty home, no connections yet |
+| 002 | `connect` | Add connection, type the host, scroll, test, trust, save |
+| 003 | `landing` | The app leaves the form and lands on chat |
 
 [`mcp/src/slices.ts`](./mcp/src/slices.ts) is the only list of these names. The
 driver records exactly them, `verify_slices` in `capture.sh` checks the manifest
@@ -134,33 +130,34 @@ against them, and the Remotion timeline reads the same names out of
 `capture.json`.
 
 The driver is [`mcp/src/walk.ts`](./mcp/src/walk.ts). It drives the app through
-the probe's MCP tools. Every tap is a real adb tap resolved from a tag, and
-every keystroke runs inside the app. There is no uiautomator dump in the loop.
+the probe's MCP tools. Every tap is a real adb tap resolved from a tag. Every
+on-camera character is one `adb shell input text` into the focused field.
 
 Per slice the driver:
 
-1. clears the device mark ledger with `harold_clear_marks`
-2. samples the device clock with `harold_anchor`, paired with a host timestamp
-3. starts `screenrecord` for `/data/local/tmp/harold-demo-NNN-<name>.mp4`
-4. runs the head calibration blink: sleep, hold, wake, dismiss keyguard
-5. runs the beat, waiting on facts instead of sleeping
-6. samples the device clock again
-7. runs the tail blink, stops the recorder, and pulls the file
-8. converts the device marks to host time and appends them to `marks.log`
+1. starts `screenrecord` for `/data/local/tmp/harold-demo-NNN-<name>.mp4`
+2. runs the head calibration blink: sleep, hold, wake, dismiss keyguard
+3. runs the beat and waits on facts
+4. runs the tail blink, stops the recorder, and pulls the file
+5. checks that every `key` run has a `keys_done`, then appends the rows to `marks.log`
 
-Waits are on facts. `harold_wait` blocks on `fingerprint`, `trusted` or
-`settled`, and the landing beat polls the screen id. The only fixed waits are
+Waits are on facts. `harold_wait` blocks on `fingerprint`, `trusted`, or
+`settled`. The landing beat polls the screen id. The only fixed waits are
 named cosmetic holds that decide how long the picture rests on a state.
 
 The blink is the contract `build_capture.py` measures. The screen sleeps, holds
-black, wakes, and dismisses the keyguard. The driver writes
-`sync_wake <monotonic>` with the host stamp taken just before the sleep
-keyevent, exactly as the Python driver did, so `blackdetect` can find the split
-and the drift between the two blinks.
+black, wakes, and dismisses the keyguard. The driver writes `sync_wake` with
+the host stamp of the wake. `build_capture.py` uses the two blinks to map that
+host clock onto the video.
 
-Typing is per character. Each character writes a `key` mark on the device
-clock, and the end of the run writes `keys_done`. `marks.log` keeps the grammar
-the Python driver wrote, so `build_capture.py` reads it unchanged:
+Typing focuses the field with one tap, waits about 150 ms, then sends one
+character per `adb shell input text`. The driver stamps `key` on the host clock
+before each character. It stamps `keys_done` when the field is done. The field
+must already be empty. A prefilled value is cleared in pre-roll with an instant
+set. The port field starts at 22, so `boot` clears it. After the run the driver
+reads the field fact and fails unless it equals the typed string.
+
+`marks.log` keeps this grammar:
 
 ```
 tap <mono> <x> <y>
@@ -169,30 +166,18 @@ sync_wake <mono>
 <name> <mono>
 ```
 
-The driver writes those rows in host time order. Device marks arrive after the
-beat that produced them, so each slice is buffered and sorted before it is
-appended. `build_capture.py` pairs every `key` run with the `keys_done` that
-closes it, and it rejects a slice whose marks go backwards.
+The driver writes a slice's rows in host time order. `build_capture.py` pairs
+every `key` run with the `keys_done` that closes it. Four SSH fields are four
+closed runs.
 
-### Device clock to host clock
+### Host clock and the video
 
-Probe marks carry `SystemClock.elapsedRealtimeNanos()`. That number means
-nothing to the host on its own. Each slice takes at least two anchor samples.
-The driver fits a straight line from device seconds to host seconds and applies
-it to every mark in that slice. A normal slice has three anchors: one before the
-head blink, one after it, and one before the tail blink.
+`key`, `tap`, and `sync_wake` rows are host timestamps from the walk.
 
-The driver aborts the slice, and names it in the error, when:
+`build_capture.py` still maps those host stamps onto the published video. It
+measures the two calibration blinks and applies the same drift math as before.
 
-- there are fewer than two anchors, or an anchor round trip is over 500 ms
-- the fitted slope leaves (0.99, 1.01)
-- the fit residual is over 50 ms
-- a device mark goes backwards in time
-- a mark sits more than 2 s outside the anchor bracket
-- a mark maps more than 2 s outside the recorded window
-
-`work/capture/walk-report.json` records every slice's raw anchors, slope, offset
-and residual.
+`work/capture/walk-report.json` records each slice's window and key count.
 
 ### Why it is fast
 
@@ -204,14 +189,13 @@ between actions and slept instead of waiting on state.
 
 ```sh
 cd docs/demo/capture/mcp
-bun test                 # clock fit, marks rows, slice plan, beats
+bun test                 # typing escape, marks rows, slice plan, beats
 bunx tsc --noEmit        # types
 bun run src/walk.ts --self-test
 ```
 
-`--self-test` runs all eight beats against an in-memory stub of the probe,
-checks the tool sequence, converts the typed marks through anchors, and prints
-the marks row count.
+`--self-test` runs every beat against an in-memory stub of the probe. It checks
+the tool sequence and the host-stamped `marks.log` rows.
 
 ## `capture.json` v2 and sync offsets
 
@@ -254,13 +238,9 @@ The build aborts, with no clamping and no defaults, when a slice:
 - has blackdetect and signalstats disagreeing on an edge by more than 0.08 s;
 - has `syncOffsetSec` outside (0, 1.5);
 - has any `atSec` outside `[0, durationSec]`, or a published duration below 0.3 s;
-- has a `key` run that no `keys_done` mark closes;
-- would need more than 15 clicks/s to show its keys.
+- has a `key` run that no `keys_done` mark closes.
 
-That last limit is the plan's pacing policy: 2 frames between clicks at 30 fps is
-15 clicks/s, and a faster recording cannot be shown at 30 fps. Narrow the typing
-window instead of raising the rate. The build prints every typing slice's
-character count, measured cadence and shortest shot at 15 clicks/s.
+The build prints how fast each typing slice was. It does not reject a speed.
 
 Rebuild from slices already pulled, without a device:
 
@@ -283,8 +263,7 @@ python3 -m unittest discover -s docs/demo/capture -p 'test_build_capture.py' -v
 
 Pre-roll, never recorded: `boot`
 
-Recorded, in order: `connect_empty`, `connect_key`, `connect_fill`,
-`connect_test`, `connect_trust`, `connect_save`, `landing`
+Recorded, in order: `home_empty`, `connect`, `landing`
 
 The names, the order and the pre-roll or on-camera kind live in
 [`mcp/src/slices.ts`](./mcp/src/slices.ts). Ask that file, never a copy:
@@ -297,14 +276,13 @@ bun run src/slices.ts --json     # the whole plan with titles and kinds
 
 ## The old driver
 
-`drive_phone.py` is the uiautomator driver for the earlier 44 slice cut. It
-covered the whole app: connect, session start, plan, build, changes, worktrees
-and the draft PR. It is kept and marked deprecated, because that cut has no MCP
-replacement yet. The probe instruments only the SSH setup screen, so the rest
-of the app cannot be driven through MCP today. `capture.sh` no longer calls it,
-and git history holds every earlier revision.
+`drive_phone.py` is the old uiautomator driver. `capture.sh` drives the walk in
+`mcp/src/walk.ts`.
 
-Check its escape helper without a device:
+The old file still has an escape self-test. The capture uses the helper in
+`mcp/src/input.text.ts`. `bun test` in `mcp/` covers that helper.
+
+Check the old helper without a device:
 
 ```sh
 python3 docs/demo/capture/drive_phone.py --self-test

@@ -106,7 +106,8 @@ export const ConfettiLayer: React.FC<{ bursts: Confetti[]; sec: number; light: L
                 background: particle.color,
                 borderRadius: particle.square ? 2 : particle.size,
                 opacity,
-                transform: `rotate(${particle.rotate}deg) scaleY(${particle.scaleY})`,
+                rotate: `${particle.rotate}deg`,
+                scale: `1 ${particle.scaleY}`,
               }}
             />,
           )

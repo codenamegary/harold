@@ -8,7 +8,10 @@ import {
   type Waddle,
 } from "./body"
 import {
+  CAMERA_EASE_SEC,
+  ENTRANCE_SCALE,
   PRESETS,
+  VERTICAL_FIT,
   cameraAt,
   resolveCameraCue,
   type CameraCue,
@@ -16,6 +19,13 @@ import {
   type CameraState,
   type Point,
 } from "./camera"
+import {
+  INTRO_FRAMES,
+  SSH_CARD_HOLD_SEC,
+  SSH_CARD_SEC,
+  SSH_HOME_HOLD_SEC,
+  openingIdleFrozenAt,
+} from "./opening"
 import { LIGHTS, type LightCue, type LightState } from "./stage"
 
 // --- Capture contract -------------------------------------------------------
@@ -83,27 +93,14 @@ export const SCENE_ORDER: readonly SceneSlug[] = [
   "outro",
 ] as const
 
-const SCENE_FRAMES: Record<SceneSlug, number> = {
-  intro: 105,
-  ssh: 600,
-  achievement: 225,
-  newSession: 180,
-  plan: 420,
-  question: 180,
-  build: 450,
-  usage: 150,
-  changes: 360,
-  worktrees: 105,
-  pr: 465,
+/**
+ * Scenes with no phone recording. Their length is the card, not the capture.
+ * Every other scene is as long as the slices it plays.
+ */
+const GRAPHIC_FRAMES: Partial<Record<SceneSlug, number>> = {
+  intro: INTRO_FRAMES,
   outro: 150,
 }
-
-/** 3390 frames at 30 fps: 113.0 s. Derived from the beats, not fixed. */
-export const DURATION_IN_FRAMES: number = SCENE_ORDER.reduce(
-  (sum, slug) => sum + SCENE_FRAMES[slug],
-  0,
-)
-export const DURATION_SEC = DURATION_IN_FRAMES / FPS
 
 // --- Layouts ----------------------------------------------------------------
 
@@ -207,14 +204,13 @@ export type CopyItem = CardItem | CalloutItem | SpotlightItem | NoteItem | BoxIt
 
 type ShotSpec = {
   slice: string
-  /** Scene-relative start, frames, so every cut lands on a whole frame. */
-  at: number
-  /** First source frame of the slice, seconds. */
-  startSec: number
-  /** Playback rate. Below 1 slows the capture down. */
-  rate: number
-  /** Render frames the capture actually plays. The rest of the slot is a hold. */
-  play: number
+  /** Source second to start at. `"firstTap"` / `"lastTap"` cut on that slice's taps. */
+  from?: number | "firstTap" | "lastTap"
+  /** Source second to stop at, exclusive of a following shot that starts there. */
+  to?: number | "firstTap" | "lastTap"
+  /** Hold this one source frame for `holdSec` instead of playing. */
+  holdAtSec?: number
+  holdSec?: number
 }
 
 export type Shot = {
@@ -227,6 +223,8 @@ export type Shot = {
   startSec: number
   rate: number
   duration: number
+  /** A hold shows one frame. It does not replay the slice's taps or keys. */
+  hold: boolean
   /** Drift rate for this shot, percent of frame width per second. */
   drift: number
   data: CaptureSlice
@@ -235,6 +233,8 @@ export type Shot = {
 type SceneSpec = {
   slug: SceneSlug
   light: LightState
+  /** Extra light cues, scene-relative seconds. The scene still opens on `light`. */
+  lights?: { at: number; state: LightState }[]
   layout: LayoutId
   /** Percent of frame width per second. Sign alternates between scenes. */
   drift: number
@@ -253,12 +253,15 @@ type SceneSpec = {
 
 const SCENE_SPECS: SceneSpec[] = [
   // -- intro ----------------------------------------------------------------
+  //
+  // The phone is not on stage yet. The camera is already at the entrance size,
+  // so the handset is born small and further back instead of shrinking into the walk.
   {
     slug: "intro",
     light: "alone",
     layout: "L1",
     drift: 1.8,
-    camera: [{ at: 0, preset: "full" }],
+    camera: [{ at: 0, preset: "full", scale: ENTRANCE_SCALE, dock: 0.5 }],
     body: [],
     shots: [],
     copy: [],
@@ -266,44 +269,27 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- SSH Host Connection ---------------------------------------------------
   //
-  // The intro slide fades out and the app on the phone moves into the light with
-  // a waddle, lit from one side, and settles just off centre. The camera then
-  // zooms so the phone fits the frame vertically, centred horizontally.
+  // Capture cut only. Walk, punch, tap, and the pool slide live in `opening.ts`,
+  // and so do the home hold and the card times, because the walk sets them.
+  // The last camera here is the handoff into the achievement: filled frame,
+  // centred, so the next ease does not snap.
   {
     slug: "ssh",
     light: "arrival",
     layout: "L1",
     drift: -1.6,
-    camera: [
-      { at: 0, preset: "full", scale: 0.88, dock: 0.34 },
-      { at: 1.8, preset: "full", dock: 0.5 },
-    ],
-    body: [
-      { at: 0, pose: { rotateZ: -5, rotateY: 12, y: 34, scale: 0.94 } },
-      { at: 0.7, pose: { rotateZ: 3, rotateY: 6 } },
-      { at: 1.5, pose: { rotateY: 3 } },
-      { at: 2.6, pose: {} },
-    ],
-    waddle: { at: 0, duration: 1.5 },
+    camera: [{ at: 0, preset: "full", scale: VERTICAL_FIT, dock: 0.5 }],
+    body: [{ at: 0, pose: { x: 0, rotateY: 2, scale: 1 } }],
     shots: [
-      // The app's own order: the empty form, the public key it generates, the
-      // form filled, the test, the trust tick, the save, the home screen.
-      { slice: "connect_empty", at: 0, startSec: 0.88, rate: 1, play: 66 },
-      { slice: "connect_key", at: 66, startSec: 0.83, rate: 0.6, play: 72 },
-      { slice: "connect_fill", at: 138, startSec: 0.9, rate: 0.55, play: 66 },
-      { slice: "connect_fill", at: 204, startSec: 8.62, rate: 0.5, play: 78 },
-      { slice: "connect_test", at: 282, startSec: 2.0, rate: 0.7, play: 66 },
-      { slice: "connect_test", at: 348, startSec: 3.42, rate: 0.6, play: 66 },
-      { slice: "connect_trust", at: 414, startSec: 0.9, rate: 1, play: 60 },
-      { slice: "connect_save", at: 474, startSec: 1.1, rate: 1, play: 60 },
-      { slice: "landing", at: 534, startSec: 1.1, rate: 0.75, play: 66 },
+      { slice: "home_empty", holdAtSec: 0.8, holdSec: SSH_HOME_HOLD_SEC },
+      { slice: "connect", to: "lastTap" },
     ],
     copy: [
       {
         kind: "card",
-        at: 1.4,
-        hold: 3.4,
-        title: "Harold over SSH to your agent hosts",
+        at: SSH_CARD_SEC,
+        hold: SSH_CARD_HOLD_SEC,
+        title: "Look what I can do!",
         place: "stage",
       },
     ],
@@ -311,9 +297,9 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- achievement -----------------------------------------------------------
   //
-  // The hinge. Pool blooms to the full stage, the haze flares, the camera pushes
-  // in with the phone, and the confetti falls in the light. One pop, one
-  // confetti, both silent.
+  // Begins on the Save SSH host tap. The pool blooms and the camera eases into
+  // the right-hand close-up. The save recording keeps playing, so the form
+  // leaves and the home screen arrives inside the move. Then the landing hold.
   {
     slug: "achievement",
     light: "reward",
@@ -321,15 +307,15 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: 1.7,
     camera: [{ at: 0, preset: "center-two-thirds", dock: 0.66 }],
     body: [
-      { at: 0, pose: { rotateY: -9, scale: 0.97 } },
-      { at: 1, pose: {} },
+      { at: 0, pose: { x: 0, rotateY: 2 } },
+      { at: 0.85, pose: { rotateX: -4, rotateZ: 3, y: -6, scale: 1 } },
     ],
-    shots: [{ slice: "landing", at: 0, startSec: 2.75, rate: 0.6, play: 110 }],
+    shots: [{ slice: "connect", from: "lastTap" }, { slice: "landing" }],
     copy: [
       {
         kind: "spotlight",
-        at: 0.5,
-        hold: 6,
+        at: 0.4,
+        hold: 5.4,
         side: "left",
         kicker: "Achievement unlocked",
         title: "Work from Couch",
@@ -339,8 +325,8 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- new-session -----------------------------------------------------------
   //
-  // The phone returns to centre. The session menu opens on the cat history, the
-  // new session form enlarges the phone, and the chat opening pulls it back.
+  // The phone returns to centre and holds. The session menu opens on the cat
+  // history, the form enlarges the phone, and the chat opening pulls it back.
   {
     slug: "newSession",
     light: "work",
@@ -348,21 +334,11 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: -1.6,
     camera: [
       { at: 0, preset: "full" },
-      // The form is on screen from source 2.0 to 3.8: push in when it opens and
-      // pull back when the chat takes over.
       { at: 1.9, preset: "center-two-thirds" },
       { at: 3.6, preset: "full" },
     ],
-    body: [
-      { at: 0, pose: { x: -26 } },
-      { at: 1.2, pose: { rotateY: -5, scale: 1.01 } },
-      { at: 3.2, pose: {} },
-    ],
-    shots: [
-      { slice: "new_session", at: 0, startSec: 0.9, rate: 1, play: 66 },
-      { slice: "new_session", at: 66, startSec: 3.1, rate: 1, play: 48 },
-      { slice: "new_session", at: 114, startSec: 4.7, rate: 1, play: 30 },
-    ],
+    body: [{ at: 0, pose: {} }],
+    shots: [{ slice: "new_session" }],
     copy: [
       // The note lands while the session menu is open, and slides back before
       // the form replaces it.
@@ -372,9 +348,8 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- plan ------------------------------------------------------------------
   //
-  // The composer shows the model and mode chips. The phone leans in towards the
-  // light while the prompt is typed: two real windows at 6.6 characters a
-  // second, then cut ahead rather than slow the capture down.
+  // The composer shows the model and mode chips. The phone leans in while the
+  // prompt is typed. The slice plays at the speed it was recorded.
   {
     slug: "plan",
     light: "work",
@@ -383,14 +358,9 @@ const SCENE_SPECS: SceneSpec[] = [
     camera: [{ at: 0, preset: "full" }],
     body: [
       { at: 0, pose: {} },
-      { at: 1.6, pose: { rotateY: -7, rotateX: 3, scale: 1.03, y: 8 } },
+      { at: 1.6, pose: { rotateY: -16, rotateX: -10, scale: 1.07, y: 22, x: -14 } },
     ],
-    shots: [
-      { slice: "plan", at: 0, startSec: 0.85, rate: 0.55, play: 126 },
-      { slice: "plan", at: 126, startSec: 26.0, rate: 0.55, play: 120 },
-      { slice: "plan", at: 246, startSec: 28.2, rate: 0.5, play: 90 },
-      { slice: "plan", at: 336, startSec: 29.7, rate: 0.6, play: 60 },
-    ],
+    shots: [{ slice: "plan" }],
     copy: [
       {
         kind: "callout",
@@ -420,23 +390,15 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- question --------------------------------------------------------------
   //
-  // Played at 1.0x, the capture's own speed. The sheet opening is a short hold,
-  // not a slow motion.
+  // The phone sits back into the pool and holds while the agent works.
   {
     slug: "question",
     light: "work",
     layout: "L1",
     drift: -1,
     camera: [{ at: 0, preset: "full" }],
-    body: [
-      { at: 0, pose: { rotateY: 5, rotateX: -2, scale: 0.985, y: -8 } },
-      { at: 3.2, pose: {} },
-    ],
-    shots: [
-      { slice: "question", at: 0, startSec: 1.15, rate: 1, play: 60 },
-      { slice: "question", at: 60, startSec: 3.15, rate: 1, play: 40 },
-      { slice: "question", at: 100, startSec: 4.45, rate: 1, play: 30 },
-    ],
+    body: [{ at: 0, pose: { rotateY: 14, rotateX: 8, scale: 0.92, y: -22 } }],
+    shots: [{ slice: "question" }],
     copy: [
       {
         kind: "callout",
@@ -458,22 +420,15 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- build -----------------------------------------------------------------
   //
-  // The phone holds still and watches the work happen. Two real typing windows,
-  // then the send and the settled reply.
+  // The phone holds still and watches the work happen.
   {
     slug: "build",
     light: "work",
     layout: "L1",
     drift: 1.8,
     camera: [{ at: 0, preset: "full" }],
-    body: [{ at: 0, pose: { rotateX: 2, scale: 1.01 } }],
-    shots: [
-      { slice: "build", at: 0, startSec: 0.85, rate: 0.55, play: 135 },
-      { slice: "build", at: 135, startSec: 18.5, rate: 0.55, play: 120 },
-      { slice: "build", at: 255, startSec: 20.7, rate: 0.55, play: 90 },
-      { slice: "build", at: 345, startSec: 22.4, rate: 0.7, play: 80 },
-      { slice: "build", at: 425, startSec: 24.3, rate: 0.6, play: 25 },
-    ],
+    body: [{ at: 0, pose: { rotateY: -9, rotateX: -8, scale: 1.05, y: 12 } }],
+    shots: [{ slice: "build" }],
     copy: [
       {
         kind: "callout",
@@ -499,8 +454,8 @@ const SCENE_SPECS: SceneSpec[] = [
     camera: [
       { at: 0, preset: "upper-center", scale: 2.2, focus: { x: 0.5, y: 0.08 } },
     ],
-    body: [{ at: 0, pose: { rotateX: 7, y: 6 } }],
-    shots: [{ slice: "usage", at: 0, startSec: 0.88, rate: 0.55, play: 150 }],
+    body: [{ at: 0, pose: { rotateX: -2, y: 4 } }],
+    shots: [{ slice: "usage" }],
     copy: [
       {
         kind: "callout",
@@ -528,18 +483,8 @@ const SCENE_SPECS: SceneSpec[] = [
     layout: "L1",
     drift: 1.7,
     camera: [{ at: 0, preset: "full" }],
-    body: [
-      { at: 0, pose: { rotateY: -10 } },
-      { at: 0.8, pose: {} },
-    ],
-    shots: [
-      { slice: "changes", at: 0, startSec: 0.9, rate: 1, play: 60 },
-      { slice: "changes", at: 60, startSec: 2.9, rate: 1, play: 60 },
-      { slice: "changes", at: 120, startSec: 4.9, rate: 0.8, play: 60 },
-      { slice: "changes", at: 180, startSec: 7.3, rate: 0.6, play: 108 },
-      { slice: "changes", at: 288, startSec: 9.46, rate: 0.8, play: 36 },
-      { slice: "changes", at: 324, startSec: 10.42, rate: 1, play: 20 },
-    ],
+    body: [{ at: 0, pose: { rotateY: -16, rotateZ: -3, scale: 1.02 } }],
+    shots: [{ slice: "changes" }],
     copy: [
       {
         kind: "callout",
@@ -567,19 +512,16 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- worktrees -------------------------------------------------------------
   //
-  // The Changes list is back. The pool holds and the haze drifts through the
-  // light while the sheet lists main and feat/cat-mode.
+  // The Changes list is back. The phone keeps the present turn. The pool holds
+  // and the haze drifts while the sheet lists main and feat/cat-mode.
   {
     slug: "worktrees",
     light: "work",
     layout: "L1",
     drift: -1.7,
     camera: [{ at: 0, preset: "full" }],
-    body: [{ at: 0, pose: {} }],
-    shots: [
-      { slice: "worktrees", at: 0, startSec: 0.8, rate: 1, play: 36 },
-      { slice: "worktrees", at: 90, startSec: 2.1, rate: 1, play: 15 },
-    ],
+    body: [{ at: 0, pose: { rotateY: -16, rotateZ: -3, scale: 1.02 } }],
+    shots: [{ slice: "worktrees" }],
     copy: [
       {
         kind: "callout",
@@ -608,13 +550,7 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: 1.7,
     camera: [{ at: 0, preset: "full" }],
     body: [{ at: 0, pose: {} }],
-    shots: [
-      { slice: "pr", at: 0, startSec: 0.88, rate: 0.55, play: 120 },
-      { slice: "pr", at: 120, startSec: 5.4, rate: 0.55, play: 120 },
-      { slice: "pr", at: 240, startSec: 7.6, rate: 0.55, play: 75 },
-      { slice: "pr", at: 315, startSec: 8.98, rate: 0.7, play: 75 },
-      { slice: "pr", at: 390, startSec: 10.7, rate: 0.6, play: 40 },
-    ],
+    shots: [{ slice: "pr" }],
     copy: [
       {
         kind: "callout",
@@ -655,10 +591,8 @@ const SCENE_SPECS: SceneSpec[] = [
 
 // --- The prompt text --------------------------------------------------------
 //
-// [KR] text, verbatim from the script. Nothing renders these strings: the typing
-// on screen is the capture's own keystrokes. They are kept so the cut can prove
-// it played the prompt the script asked for, and that it cut ahead of the rest
-// instead of slowing it down.
+// [KR] text, verbatim from the script. Nothing renders these strings. The typing
+// on screen is the capture's own keystrokes.
 
 export const KEYBURSTS = {
   plan: "Read the attached spec and the photo of Mia. Plan only; do not edit files. Plan a small cat mode for this screensaver. Do not build yet. Use your question tool exactly once, for one question only: should cat mode be a settings toggle or automatic? The options must be exactly Settings toggle and Automatic. Do not ask about anything else.",
@@ -679,14 +613,79 @@ export type Scene = {
   drift: number
 }
 
-const buildScenes = (): Scene[] => {
+const sliceByName = (slices: CaptureSlice[]): Map<string, CaptureSlice> =>
+  new Map(slices.map((slice) => [slice.name, slice]))
+
+/**
+ * Whole frames a recorded slice occupies at 1x.
+ * `ceil` keeps the last key inside the shot. The 0.0001 avoids a float
+ * landing just over an integer and adding a spare frame.
+ */
+const playbackFrames = (durationSec: number): number =>
+  Math.max(1, Math.ceil(durationSec * FPS - 1e-4))
+
+const tapSec = (data: CaptureSlice, which: "first" | "last"): number => {
+  const taps = [...(data.taps ?? [])].sort((a, b) => a.atSec - b.atSec)
+  const tap = which === "first" ? taps[0] : taps[taps.length - 1]
+  if (tap === undefined) {
+    throw new Error(`${data.name} has no tap to cut on`)
+  }
+  return tap.atSec
+}
+
+const sourceBound = (
+  spec: number | "firstTap" | "lastTap" | undefined,
+  fallback: number,
+  data: CaptureSlice,
+): number => {
+  if (spec === undefined) {
+    return fallback
+  }
+  if (spec === "firstTap") {
+    return tapSec(data, "first")
+  }
+  if (spec === "lastTap") {
+    return tapSec(data, "last")
+  }
+  return spec
+}
+
+const shotWindow = (
+  spec: ShotSpec,
+  data: CaptureSlice,
+): { startSec: number; spanSec: number; hold: boolean } => {
+  if (spec.holdSec !== undefined) {
+    return { startSec: spec.holdAtSec ?? 0, spanSec: spec.holdSec, hold: true }
+  }
+  const startSec = sourceBound(spec.from, 0, data)
+  const endSec = sourceBound(spec.to, data.durationSec, data)
+  return { startSec, spanSec: Math.max(0, endSec - startSec), hold: false }
+}
+
+const sceneFrameCount = (spec: SceneSpec, slices: Map<string, CaptureSlice>): number => {
+  const graphic = GRAPHIC_FRAMES[spec.slug]
+  if (graphic !== undefined) {
+    return graphic
+  }
+  const frames = spec.shots.reduce((sum, shot) => {
+    const data = slices.get(shot.slice)
+    if (data === undefined) {
+      return sum
+    }
+    return sum + playbackFrames(shotWindow(shot, data).spanSec)
+  }, 0)
+  return Math.max(frames, 1)
+}
+
+const buildScenes = (slices: CaptureSlice[]): Scene[] => {
+  const byName = sliceByName(slices)
   let cursor = 0
   return SCENE_ORDER.map((slug) => {
     const spec = SCENE_SPECS.find((entry) => entry.slug === slug)
     if (spec === undefined) {
       throw new Error(`scene ${slug} has no spec`)
     }
-    const frames = SCENE_FRAMES[slug]
+    const frames = sceneFrameCount(spec, byName)
     const scene: Scene = {
       slug,
       from: cursor / FPS,
@@ -701,8 +700,6 @@ const buildScenes = (): Scene[] => {
   })
 }
 
-export const SCENES: Scene[] = buildScenes()
-
 export const sceneAt = (scenes: Scene[], sec: number): Scene => {
   let current = scenes[0]
   for (const scene of scenes) {
@@ -714,37 +711,37 @@ export const sceneAt = (scenes: Scene[], sec: number): Scene => {
   return current
 }
 
-const buildShots = (slices: CaptureSlice[]): Shot[] => {
-  const byName = new Map(slices.map((slice) => [slice.name, slice]))
+const buildShots = (slices: CaptureSlice[], scenes: Scene[]): Shot[] => {
+  const byName = sliceByName(slices)
   const shots: Shot[] = []
   for (const spec of SCENE_SPECS) {
-    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    const scene = scenes.find((entry) => entry.slug === spec.slug)
     if (scene === undefined) {
       continue
     }
-    for (let index = 0; index < spec.shots.length; index += 1) {
-      const shotSpec = spec.shots[index]
+    const playable = spec.shots.filter((shot) => byName.has(shot.slice))
+    let frame = 0
+    for (let index = 0; index < playable.length; index += 1) {
+      const shotSpec = playable[index]
       const data = byName.get(shotSpec.slice)
       if (data === undefined) {
-        // A slice the capture does not have drops its shot; the cut still builds.
         continue
       }
-      const next = spec.shots[index + 1]
-      const at = scene.from + shotSpec.at / FPS
-      const until = next === undefined ? scene.to : scene.from + next.at / FPS
-      const rate = shotSpec.rate
-      const startSec = data.still ? 0 : shotSpec.startSec
-      const remaining = Math.max(0.05, data.durationSec - startSec)
-      const available = data.still ? data.durationSec : remaining / rate
-      const duration = Math.max(0.05, Math.min(shotSpec.play / FPS, available))
+      const window = shotWindow(shotSpec, data)
+      const span = playbackFrames(window.spanSec)
+      const at = scene.from + frame / FPS
+      frame += span
+      const until = index === playable.length - 1 ? scene.to : scene.from + frame / FPS
+      const slot = until - at
       shots.push({
         scene: spec.slug,
         slice: shotSpec.slice,
         at,
         until,
-        startSec,
-        rate,
-        duration,
+        startSec: window.startSec,
+        rate: 1,
+        duration: window.hold ? slot : Math.min(window.spanSec, slot),
+        hold: window.hold,
         drift: spec.drift,
         data,
       })
@@ -755,22 +752,18 @@ const buildShots = (slices: CaptureSlice[]): Shot[] => {
 
 // --- Drift ------------------------------------------------------------------
 //
-// The camera drifts at a constant rate, authored as a percentage of frame width
-// per second. The accumulator restarts on every cut, so a shot pans at one speed
-// and the cut absorbs the reset. The pool and the haze are offset from this same
-// value at different parallax factors, never at the camera's own speed.
+// One continuous sway for the whole film. Peak speed is `DRIFT_PERCENT` of the
+// frame width per second. It does not restart on a shot or a scene, because a
+// restart moves the phone, the pool, and the beam by different amounts.
 
-export const driftAt = (scenes: Scene[], shots: Shot[], sec: number, stageWidth: number): Point => {
-  const scene = sceneAt(scenes, sec)
-  let origin = scene.from
-  for (const shot of shots) {
-    if (sec >= shot.at && sec < shot.until) {
-      origin = shot.at
-      break
-    }
-  }
+export const DRIFT_PERIOD_SEC = 8
+export const DRIFT_PERCENT = 1.6
+
+export const driftAt = (sec: number, stageWidth: number): Point => {
+  const speed = (DRIFT_PERCENT / 100) * stageWidth
+  const amp = (speed * DRIFT_PERIOD_SEC) / (2 * Math.PI)
   return {
-    x: ((scene.drift / 100) * stageWidth * (sec - origin)),
+    x: Math.sin((sec / DRIFT_PERIOD_SEC) * Math.PI * 2) * amp,
     y: 0,
   }
 }
@@ -791,9 +784,25 @@ export type PhoneClip =
 const buildClips = (shots: Shot[]): PhoneClip[] => {
   const clips: PhoneClip[] = []
   for (const shot of shots) {
+    if (shot.hold) {
+      clips.push({
+        kind: "hold",
+        file: shot.data.file,
+        from: shot.at,
+        duration: Math.max(0, shot.until - shot.at),
+        atSec: shot.startSec,
+      })
+      continue
+    }
     const playDuration = Math.max(0, Math.min(shot.duration, shot.until - shot.at))
     if (shot.data.still) {
-      clips.push({ kind: "hold", file: shot.data.file, from: shot.at, duration: playDuration, atSec: 0 })
+      clips.push({
+        kind: "hold",
+        file: shot.data.file,
+        from: shot.at,
+        duration: playDuration,
+        atSec: 0,
+      })
     } else {
       clips.push({
         kind: "play",
@@ -831,12 +840,24 @@ export const activeClip = (clips: PhoneClip[], sec: number): PhoneClip | null =>
   return current
 }
 
-/** The one place a source second becomes a render second. */
+/** The one place a source second becomes a render second. Past the end, the last frame holds. */
 export const clipFrame = (clip: PhoneClip, sec: number): number => {
   if (clip.kind === "hold") {
     return clip.atSec
   }
-  return Math.max(0, clip.startSec + (sec - clip.from) * clip.rate)
+  const played = Math.min(clip.duration, Math.max(0, sec - clip.from)) * clip.rate
+  return clip.startSec + played
+}
+
+export type PhoneLayer = { clip: PhoneClip; opacity: number }
+
+/** The phone picture at `sec`. One layer. Recordings do not share a scroll, so they are not dissolved. */
+export const phoneLayers = (clips: PhoneClip[], sec: number): PhoneLayer[] => {
+  const clip = clips.find((entry) => sec >= entry.from - 1e-9 && sec < entry.from + entry.duration - 1e-6)
+  if (clip === undefined) {
+    return []
+  }
+  return [{ clip, opacity: 1 }]
 }
 
 // --- Keyframes --------------------------------------------------------------
@@ -864,40 +885,45 @@ export const channel = (keyframes: Keyframes, sec: number): number => {
   return keyframes[keyframes.length - 1][1]
 }
 
-const OUTRO = SCENES[SCENES.length - 1]
-
 /** The phone fades out as the outro card fades in. */
-export const phoneFade: Keyframes = [
-  [OUTRO.from, 1],
-  [OUTRO.from + 0.45, 0],
-]
+export const phoneFadeFor = (scenes: Scene[]): Keyframes => {
+  const outro = scenes[scenes.length - 1]
+  return [
+    [outro.from, 1],
+    [outro.from + 0.45, 0],
+  ]
+}
 
 /** The intro slide hands the stage to the phone. */
 export const slideFade = 0.4
 
 // --- Camera and body cues ---------------------------------------------------
 
-const buildCameraCues = (): CameraCue[] => {
+const buildCameraCues = (scenes: Scene[]): CameraCue[] => {
   const cues: CameraCue[] = []
   for (const spec of SCENE_SPECS) {
-    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    const scene = scenes.find((entry) => entry.slug === spec.slug)
     if (scene === undefined) {
       continue
     }
     let previous = PRESETS.full
     for (const cue of spec.camera) {
       const resolved = resolveCameraCue(cue, previous)
-      cues.push({ at: scene.from + cue.at, state: resolved })
+      cues.push({
+        at: scene.from + cue.at,
+        state: resolved,
+        easeSec: cue.easeSec ?? CAMERA_EASE_SEC,
+      })
       previous = resolved
     }
   }
   return cues.sort((a, b) => a.at - b.at)
 }
 
-const buildBodyCues = (): BodyCue[] => {
+const buildBodyCues = (scenes: Scene[]): BodyCue[] => {
   const cues: BodyCue[] = []
   for (const spec of SCENE_SPECS) {
-    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    const scene = scenes.find((entry) => entry.slug === spec.slug)
     if (scene === undefined || spec.body.length === 0) {
       continue
     }
@@ -910,13 +936,13 @@ const buildBodyCues = (): BodyCue[] => {
 
 export type WaddleCue = Waddle
 
-const buildWaddles = (): WaddleCue[] => {
+const buildWaddles = (scenes: Scene[]): WaddleCue[] => {
   const cues: WaddleCue[] = []
   for (const spec of SCENE_SPECS) {
     if (spec.waddle === undefined) {
       continue
     }
-    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    const scene = scenes.find((entry) => entry.slug === spec.slug)
     if (scene === undefined) {
       continue
     }
@@ -939,16 +965,23 @@ const toRenderSec = (shot: Shot, sourceSec: number): number =>
   shot.at + (sourceSec - shot.startSec) / shot.rate
 
 const reachesSource = (shot: Shot, sourceSec: number): boolean =>
+  !shot.hold &&
   sourceSec >= shot.startSec - 1e-6 &&
   sourceSec <= shot.startSec + shot.duration * shot.rate + 1e-6
 
 const buildTaps = (shots: Shot[]): TapEvent[] => {
   const taps: TapEvent[] = []
+  const seen = new Set<string>()
   for (const shot of shots) {
     for (const tap of shot.data.taps ?? []) {
       if (!reachesSource(shot, tap.atSec)) {
         continue
       }
+      const id = `${shot.slice}:${tap.atSec.toFixed(4)}`
+      if (seen.has(id)) {
+        continue
+      }
+      seen.add(id)
       taps.push({
         at: toRenderSec(shot, tap.atSec),
         x: tap.x / shot.data.width,
@@ -976,7 +1009,7 @@ const buildKeys = (shots: Shot[]): KeyEvent[] => {
 // --- Copy -------------------------------------------------------------------
 //
 // A callout anchors to the first tap of its shot. Where the footage ships no
-// taps — every slice after `connect_save` — the script's own `targetX`/`targetY`
+// taps — every slice after `connect` — the script's own `targetX`/`targetY`
 // override is used instead, measured off the captured frames.
 
 export const firstTapAnchor = (shots: Shot[], at: number): Point | null => {
@@ -994,10 +1027,10 @@ export const firstTapAnchor = (shots: Shot[], at: number): Point | null => {
   return { x: first.x / shot.data.width, y: first.y / shot.data.height }
 }
 
-const buildCopy = (shots: Shot[]): CopyItem[] => {
+const buildCopy = (shots: Shot[], scenes: Scene[]): CopyItem[] => {
   const items: CopyItem[] = []
   for (const spec of SCENE_SPECS) {
-    const scene = SCENES.find((entry) => entry.slug === spec.slug)
+    const scene = scenes.find((entry) => entry.slug === spec.slug)
     if (scene === undefined) {
       continue
     }
@@ -1084,13 +1117,20 @@ export type Celebration = {
 
 export type Confetti = { at: number; hold: number; count: number }
 
-const ACHIEVEMENT = SCENES[2]
+/**
+ * The film's only pop. The achievement opens on the save tap, and the pop
+ * lands once that press has read, as the home screen arrives.
+ */
+export const celebrationAt = (scenes: Scene[]): number => {
+  const achievement = scenes.find((scene) => scene.slug === "achievement")
+  if (achievement === undefined) {
+    throw new Error("the cut has no achievement scene")
+  }
+  return achievement.from + 0.7
+}
 
-// The film's only pop and its only confetti. Both silent.
-export const CELEBRATION_AT = ACHIEVEMENT.from + 0.6
-
-const CELEBRATIONS: Celebration[] = [
-  { at: CELEBRATION_AT, hold: 1.5, strength: 1, confetti: true, confettiHold: 4.6 },
+const buildCelebrations = (scenes: Scene[]): Celebration[] => [
+  { at: celebrationAt(scenes), hold: 1.5, strength: 1, confetti: true, confettiHold: 4.6 },
 ]
 
 const buildConfetti = (celebrations: Celebration[]): Confetti[] =>
@@ -1100,15 +1140,20 @@ const buildConfetti = (celebrations: Celebration[]): Confetti[] =>
 
 // --- Light ------------------------------------------------------------------
 
-const LIGHT_BY_SCENE: Record<SceneSlug, LightState> = SCENE_SPECS.reduce(
-  (table, spec) => ({ ...table, [spec.slug]: spec.light }),
-  {} as Record<SceneSlug, LightState>,
-)
-
-const buildLightCues = (): LightCue[] =>
-  SCENES.map((scene) => ({ at: scene.from, state: LIGHT_BY_SCENE[scene.slug] }))
-
-export const LIGHT_CUES: LightCue[] = buildLightCues()
+const buildLightCues = (scenes: Scene[]): LightCue[] => {
+  const cues: LightCue[] = []
+  for (const spec of SCENE_SPECS) {
+    const scene = scenes.find((entry) => entry.slug === spec.slug)
+    if (scene === undefined) {
+      continue
+    }
+    cues.push({ at: scene.from, state: spec.light })
+    for (const extra of spec.lights ?? []) {
+      cues.push({ at: scene.from + extra.at, state: extra.state })
+    }
+  }
+  return cues.sort((a, b) => a.at - b.at)
+}
 
 export const LIGHT_SHAPES = LIGHTS
 
@@ -1193,43 +1238,57 @@ export type Timeline = {
   cameraAt: (sec: number) => CameraState
   driftAt: (sec: number, stageWidth: number) => Point
   sceneAt: (sec: number) => Scene
+  idleFrozenAt: (sec: number) => boolean
+  phoneFade: Keyframes
   endSec: number
 }
 
-/** The drifts that skip a shot that could not be drawn still alternate. */
-const CAMERA_CUES = buildCameraCues()
-const BODY_CUES = buildBodyCues()
-const WADDLES = buildWaddles()
+/**
+ * True once the SSH zoom has filled the frame. The idle walk stops there.
+ */
+export const idleFrozenAt = (scenes: Scene[], sec: number): boolean => {
+  const ssh = scenes.find((scene) => scene.slug === "ssh")
+  if (ssh === undefined || sec < ssh.from || sec >= ssh.to) {
+    return false
+  }
+  return openingIdleFrozenAt(sec)
+}
 
 /**
- * The whole cut, derived from the captured slices. Never throws: a slice that is
- * missing from the capture drops its shot and the rest of the edit stands.
+ * The whole cut, derived from the captured slices. A missing slice drops its
+ * shot. The scene is then as long as the slices that remain. Playback is 1x.
  */
 export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
-  const shots = buildShots(slices)
+  const scenes = buildScenes(slices)
+  const shots = buildShots(slices, scenes)
   const taps = buildTaps(shots)
   const keys = buildKeys(shots)
-  const copy = buildCopy(shots)
+  const copy = buildCopy(shots, scenes)
+  const celebrations = buildCelebrations(scenes)
+  const cameras = buildCameraCues(scenes)
+  const bodies = buildBodyCues(scenes)
   return {
-    scenes: SCENES,
+    scenes,
     shots,
     clips: buildClips(shots),
     taps,
     keys,
     copy,
     ripples: taps.map((tap) => ({ at: tap.at, x: tap.x, y: tap.y })),
-    celebrations: CELEBRATIONS,
-    confetti: buildConfetti(CELEBRATIONS),
+    celebrations,
+    confetti: buildConfetti(celebrations),
     sounds: buildSounds(taps, keys, copy),
-    lights: LIGHT_CUES,
-    cameras: CAMERA_CUES,
-    bodies: BODY_CUES,
-    waddles: WADDLES,
-    poseAt: (sec: number) => poseAt(BODY_CUES, sec),
-    cameraAt: (sec: number) => cameraAt(CAMERA_CUES, sec),
-    driftAt: (sec: number, stageWidth: number) => driftAt(SCENES, shots, sec, stageWidth),
-    sceneAt: (sec: number) => sceneAt(SCENES, sec),
-    endSec: DURATION_SEC,
+    lights: buildLightCues(scenes),
+    cameras,
+    bodies,
+    waddles: buildWaddles(scenes),
+    poseAt: (sec: number) => poseAt(bodies, sec),
+    cameraAt: (sec: number) => cameraAt(cameras, sec),
+    driftAt: (sec: number, stageWidth: number) => driftAt(sec, stageWidth),
+    sceneAt: (sec: number) => sceneAt(scenes, sec),
+    idleFrozenAt: (sec: number) => idleFrozenAt(scenes, sec),
+    phoneFade: phoneFadeFor(scenes),
+    endSec: scenes.length === 0 ? 0 : scenes[scenes.length - 1].to,
   }
 }
 
@@ -1254,6 +1313,3 @@ export const missingSlices = (slices: CaptureSlice[]): string[] => {
   const have = new Set(slices.map((slice) => slice.name))
   return EDIT_SLICES.filter((name) => !have.has(name))
 }
-
-/** Frames a scene holds the stage. Used by the tests and the README table. */
-export const sceneFrames = (slug: SceneSlug): number => SCENE_FRAMES[slug]

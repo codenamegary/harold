@@ -2,9 +2,9 @@
  * The typed prompts from the storyboard, byte for byte.
  *
  * They live here rather than inline in `walk.ts` because they are copy, not
- * driver logic: the script owns the words, the beats own the keystrokes. The
- * driver types them through the `chat` probe's `type` action, so every character
- * leaves a `key` mark in `marks.log` and the video shows the real cadence.
+ * driver logic. The script owns the words. The beats own the keystrokes. The
+ * driver taps `chat_composer` and types each character with adb. Each character
+ * stamps a `key` row on the host clock.
  *
  * `docs/demo/script.md` section 2 is the source. Do not reword without updating
  * it first.

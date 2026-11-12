@@ -63,7 +63,7 @@ describe("marks.log rows", () => {
     expect(deviceMarkRow("keys_done", 13.44).text).toBe("keys_done 13.440")
   })
 
-  it("sorts rows by host time so late device marks land in order", () => {
+  it("sorts rows by host time", () => {
     const sorted = sortRows([syncWakeRow(15.75), tapRow({ atSec: 13.125, x: 1, y: 2 }), keyRow(13.2)])
     expect(sorted.map((row) => row.text)).toEqual(["tap 13.125 1 2", "key 13.200", "sync_wake 15.750"])
   })

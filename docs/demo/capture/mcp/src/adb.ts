@@ -185,6 +185,15 @@ export async function keyevent(code: string): Promise<void> {
 }
 
 /**
+ * Show a cursor on focus and keep the soft keyboard down.
+ * The emulator treats its keyboard as hardware, so the default shows the IME
+ * on focus. The walk sends BACK only when a keyboard is actually showing.
+ */
+export async function suppressSoftKeyboard(): Promise<void> {
+  await adb(["shell", "settings", "put", "secure", "show_ime_with_hard_keyboard", "0"])
+}
+
+/**
  * Whether the soft keyboard is up. `dumpsys input_method` reports `mInputShown`
  * per client, so any true record means it is showing. Used before sending BACK:
  * a BACK with no keyboard would leave the form instead of closing it.

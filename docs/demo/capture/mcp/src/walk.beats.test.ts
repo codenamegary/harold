@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { BUILD_PROMPT, PLAN_PROMPT, PR_PROMPT } from "./chat.prompts"
-import { assertClosedKeyRuns, sortRows } from "./marks"
+import { assertClosedKeyRuns, keyRunMarks, sortRows } from "./marks"
 import type { MarkRow } from "./marks"
 import { sliceNames } from "./slices"
 import {
@@ -38,6 +38,7 @@ const CONFIG: DemoConfig = {
  * a verb fails the test even if the stub happens to accept it.
  */
 const PROBE_ACTIONS: Record<string, readonly string[]> = {
+  shell: ["add_connection", "retry"],
   ssh_setup: ["type", "set", "test_connection", "trust", "save", "back", "auth_mode"],
   chat: [
     "open_session_menu",
@@ -77,25 +78,34 @@ const PROBE_ACTIONS: Record<string, readonly string[]> = {
 type Harness = Readonly<{
   stub: ProbeStub
   context: ReturnType<typeof makeContext>
-  rowCount: () => number
+  rows: () => readonly MarkRow[]
 }>
+
+const typedText = (stub: ProbeStub, field: string): string =>
+  stub
+    .inputs()
+    .filter((input) => input.field === field)
+    .map((input) => input.character)
+    .join("")
 
 const harness = (): Harness => {
   const stub = makeProbeStub()
-  const rows: string[] = []
+  const rows: MarkRow[] = []
   const context = makeContext({
     call: stub.callTool,
     hostNow: stub.hostNow,
     log: () => {},
     sleep: async () => {},
-    sink: { push: (row) => rows.push(row.text), taps: true },
+    sink: { push: (row) => rows.push(row), taps: true },
     config: CONFIG,
     viewport: stub.viewport,
     swipe: async () => {},
     dismissKeyboard: async () => {},
     authorizeKey: async () => {},
+    sendCharacter: stub.receiveCharacter,
+    clearField: stub.clearFocused,
   })
-  return { stub, context, rowCount: () => rows.length }
+  return { stub, context, rows: () => rows }
 }
 
 const toolNames = (stub: ProbeStub): readonly string[] => stub.calls().map((call) => call.name)
@@ -151,28 +161,50 @@ describe("BEATS", () => {
       await beat.run(context)
       expect(stub.calls().length).toBeGreaterThan(before)
     }
-    expect(toolNames(stub)).toContain("harold_navigate")
-    expect(toolNames(stub)).toContain("harold_type")
+    expect(tappedTags(stub)).toContain("shell_add_connection_button")
+    expect(toolNames(stub)).not.toContain("harold_type")
+    expect(actionsOf(stub)).not.toContain("type")
+    expect(stub.inputs().length).toBeGreaterThan(0)
     expect(toolNames(stub)).toContain("harold_wait")
   })
 })
 
 describe("beat sequencing", () => {
-  it("types the four form fields in plan order", async () => {
-    const { stub } = await runThrough("connect_fill")
-    const typed = stub
-      .calls()
-      .filter((call) => call.name === "harold_type")
-      .map((call) => String(call.args.field))
-    expect(typed).toEqual(["host", "user", "port", "name"])
+  it("focuses each form field once and types it", async () => {
+    const { stub } = await runThrough("connect")
+    const tags = tappedTags(stub).filter((tag) =>
+      ["ssh_host_field", "ssh_user_field", "ssh_port_field", "ssh_name_field"].includes(tag),
+    )
+    expect(tags).toEqual(["ssh_name_field", "ssh_host_field", "ssh_user_field", "ssh_port_field"])
+    expect(typedText(stub, "host")).toBe(CONFIG.host)
+    expect(typedText(stub, "user")).toBe(CONFIG.user)
+    expect(typedText(stub, "port")).toBe(CONFIG.port)
+    expect(typedText(stub, "name")).toBe(CONFIG.name)
+    expect(actionsOf(stub)).not.toContain("type")
+  })
+
+  it("opens the form from the empty home, then fills, scrolls, tests, trusts and saves in one run", async () => {
+    const { stub } = await runThrough("connect")
+    expect(tappedTags(stub)[0]).toBe("shell_add_connection_button")
+    const tags = tappedTags(stub)
+    const testAt = tags.indexOf("ssh_test_button")
+    const trustAt = tags.indexOf("ssh_trust_checkbox")
+    const saveAt = tags.indexOf("ssh_save_button")
+    expect(testAt).toBeGreaterThan(tags.indexOf("ssh_port_field"))
+    expect(trustAt).toBeGreaterThan(testAt)
+    expect(saveAt).toBeGreaterThan(trustAt)
+    expect(stub.screenName()).toBe("chat")
+  })
+
+  it("clears the prefilled port before any recorded typing", async () => {
+    const { stub } = await runThrough("connect")
+    const sets = intentCalls(stub).filter((call) => call.action === "set")
+    expect(sets.map((call) => call.args.field)).toEqual(["port"])
+    expect(typedText(stub, "port")).toBe(CONFIG.port)
   })
 
   it("reads the fingerprint before it trusts, and trusts before it saves", async () => {
-    const tested = await runThrough("connect_test")
-    expect(tested.stub.facts().fingerprint.length).toBeGreaterThan(0)
-    expect(toolNames(tested.stub)).toContain("harold_wait")
-
-    const saved = await runThrough("connect_save")
+    const saved = await runThrough("connect")
     expect(tappedTags(saved.stub).slice(-3)).toEqual([
       "ssh_test_button",
       "ssh_trust_checkbox",
@@ -184,10 +216,11 @@ describe("beat sequencing", () => {
     expect(saved.stub.facts().trusted).toBeUndefined()
   })
 
-  it("closes every key run and writes marks for the fill beat", async () => {
-    const { stub, rowCount } = await runThrough("connect_fill")
-    expect(() => assertClosedKeyRuns(stub.ledger())).not.toThrow()
-    expect(rowCount()).toBeGreaterThan(0)
+  it("closes a key run for each typed field", async () => {
+    const { rows } = await runThrough("connect")
+    const text = rows().map((row) => row.text)
+    expect(text.filter((line) => line.startsWith("keys_done "))).toHaveLength(4)
+    expect(() => assertClosedKeyRuns(keyRunMarks(rows()))).not.toThrow()
   })
 
   it("ends on the chat with a live session and the form values cleared", async () => {
@@ -209,7 +242,7 @@ describe("runWalk failure behaviour", () => {
     // The fingerprint never arrives, so the recorded beat fails the way a real
     // connection test that times out would.
     const call = async (name: string, args?: Record<string, unknown>): Promise<unknown> => {
-      if (name === "harold_wait") {
+      if (name === "harold_wait" && args?.field === "fingerprint") {
         throw new Error("timed out waiting for fingerprint. Last facts: {}")
       }
       return stub.callTool(name, args)
@@ -236,13 +269,15 @@ describe("runWalk failure behaviour", () => {
       swipe: async () => {},
       dismissKeyboard: async () => {},
       authorizeKey: async () => {},
+      sendCharacter: stub.receiveCharacter,
+    clearField: stub.clearFocused,
       out: {
         dir,
         slicesDir: dir,
         marksPath: join(dir, "marks.log"),
         manifestPath: join(dir, "slices.json"),
       },
-      only: ["connect_test"],
+      only: ["connect"],
     }
   }
 
@@ -253,8 +288,8 @@ describe("runWalk failure behaviour", () => {
       (error: unknown) => error,
     )
     expect(failure).toBeInstanceOf(Error)
-    expect((failure as Error).message).toMatch(/^slice connect_test: /)
-    expect(events[0]).toBe("start /data/local/tmp/harold-demo-004-connect_test.mp4")
+    expect((failure as Error).message).toMatch(/^slice connect: /)
+    expect(events[0]).toBe("start /data/local/tmp/harold-demo-002-connect.mp4")
     expect(events).toContain("stop")
     expect(events.filter((event) => event.startsWith("pull"))).toEqual([])
   })
@@ -270,13 +305,10 @@ describe("parseArgs", () => {
   })
 
   it("accepts a comma list, repeated flags and the equals form", () => {
-    expect(parseArgs(["--only", "connect_trust,connect_empty"]).only).toEqual([
-      "connect_empty",
-      "connect_trust",
-    ])
-    expect(parseArgs(["--only", "connect_save", "--only", "connect_empty"]).only).toEqual([
-      "connect_empty",
-      "connect_save",
+    expect(parseArgs(["--only", "connect,home_empty"]).only).toEqual(["home_empty", "connect"])
+    expect(parseArgs(["--only", "connect", "--only", "home_empty"]).only).toEqual([
+      "home_empty",
+      "connect",
     ])
     expect(parseArgs(["--only=landing"]).only).toEqual(["landing"])
   })
@@ -338,6 +370,8 @@ describe("tap stamping", () => {
       swipe: async () => {},
       dismissKeyboard: async () => {},
       authorizeKey: async () => {},
+      sendCharacter: stub.receiveCharacter,
+    clearField: stub.clearFocused,
     })
     return { stub, rows, context }
   }
@@ -365,6 +399,8 @@ describe("tap stamping", () => {
       swipe: async () => {},
       dismissKeyboard: async () => {},
       authorizeKey: async () => {},
+      sendCharacter: stub.receiveCharacter,
+    clearField: stub.clearFocused,
     })
     await context.navigate("ssh_setup")
     await context.tap("ssh_host_field")
@@ -392,15 +428,16 @@ describe("probe contract coverage", () => {
   })
 
   it("emits at least one mark on every on-camera beat", async () => {
-    const { stub, context, rowCount } = harness()
+    const { stub, context, rows } = harness()
     for (const beat of BEATS) {
-      const first = rowCount()
+      const first = rows().length
       await beat.run(context)
       if (beat.kind === "onCamera") {
-        expect(rowCount()).toBeGreaterThan(first)
+        expect(rows().length).toBeGreaterThan(first)
       }
     }
     expect(stub.screenName()).toBe("chat")
+    expect(() => assertClosedKeyRuns(keyRunMarks(sortRows(rows())))).not.toThrow()
   })
 })
 
@@ -421,12 +458,11 @@ describe("story beats", () => {
     expect(actionsOf(stub)).toContain("attach_fixture")
   })
 
-  it("types the plan prompt through the chat type action and sends it", async () => {
+  it("types the plan prompt into the composer and sends it", async () => {
     const { stub } = await runThrough("plan")
-    const typed = intentCalls(stub)
-      .filter((call) => call.action === "type")
-      .map((call) => String(call.args.text))
-    expect(typed).toEqual([PLAN_PROMPT])
+    expect(actionsOf(stub)).not.toContain("type")
+    expect(typedText(stub, "composerText")).toBe(PLAN_PROMPT)
+    expect(tappedTags(stub).filter((tag) => tag === "chat_composer")).toEqual(["chat_composer"])
     expect(actionsOf(stub)).toContain("send")
   })
 
@@ -440,10 +476,8 @@ describe("story beats", () => {
 
   it("stages build mode and lets the turn settle before usage", async () => {
     const { stub } = await runThrough("build")
-    const typed = intentCalls(stub)
-      .filter((call) => call.action === "type")
-      .map((call) => String(call.args.text))
-    expect(typed).toEqual([PLAN_PROMPT, BUILD_PROMPT])
+    expect(actionsOf(stub)).not.toContain("type")
+    expect(typedText(stub, "composerText")).toBe(PLAN_PROMPT + BUILD_PROMPT)
     expect(actionsOf(stub)).toContain("set_mode")
     expect(stub.facts().sessionState).toBe("idle")
     expect((stub.facts().lastAssistantText ?? "").length).toBeGreaterThan(0)
@@ -476,10 +510,8 @@ describe("story beats", () => {
 
   it("types the PR prompt, sends it and ends on the PR URL", async () => {
     const { stub } = await runThrough("pr")
-    const typed = intentCalls(stub)
-      .filter((call) => call.action === "type")
-      .map((call) => String(call.args.text))
-    expect(typed).toEqual([PLAN_PROMPT, BUILD_PROMPT, PR_PROMPT])
+    expect(actionsOf(stub)).not.toContain("type")
+    expect(typedText(stub, "composerText")).toBe(PLAN_PROMPT + BUILD_PROMPT + PR_PROMPT)
     expect(stub.screenName()).toBe("chat")
     expect(stub.facts().lastAssistantText).toContain(STUB_PR_URL)
   })

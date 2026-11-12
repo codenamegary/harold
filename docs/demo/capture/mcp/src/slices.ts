@@ -21,7 +21,7 @@
  * one `screenrecord` file each, numbered by their position among the on-camera
  * beats.
  *
- * The connect act stages everything in `boot`. The story after `landing` follows
+ * The connect act stages the empty home in `boot`. The story after `landing` follows
  * a live agent session, so each group of on-camera scenes is preceded by its own
  * `preRoll` beat: `plan_stage` sets plan mode and stages the fixture attachments,
  * `question_stage` waits for the agent question, `build_stage` sets build mode
@@ -38,12 +38,8 @@ export type SliceKind = (typeof sliceKinds)[number]
 
 export const sliceNames = [
   "boot",
-  "connect_empty",
-  "connect_key",
-  "connect_fill",
-  "connect_test",
-  "connect_trust",
-  "connect_save",
+  "home_empty",
+  "connect",
   "landing",
   "new_session",
   "plan_stage",
@@ -71,14 +67,14 @@ export const slicePlan: readonly SliceSpec[] = [
   {
     name: "boot",
     kind: "preRoll",
-    title: "Cold start, then reach the host form with the generated key authorized",
+    title: "Cold start, then wait on the empty home screen",
   },
-  { name: "connect_empty", kind: "onCamera", title: "The empty host form" },
-  { name: "connect_key", kind: "onCamera", title: "The generated public key" },
-  { name: "connect_fill", kind: "onCamera", title: "Type host, user, port and name" },
-  { name: "connect_test", kind: "onCamera", title: "Test the connection and read the fingerprint" },
-  { name: "connect_trust", kind: "onCamera", title: "Trust the host key fingerprint" },
-  { name: "connect_save", kind: "onCamera", title: "Save the host" },
+  { name: "home_empty", kind: "onCamera", title: "The empty home, no connections yet" },
+  {
+    name: "connect",
+    kind: "onCamera",
+    title: "Tap Add connection, fill the form, scroll, test, trust and save",
+  },
   { name: "landing", kind: "onCamera", title: "Landed in the app" },
   {
     name: "new_session",

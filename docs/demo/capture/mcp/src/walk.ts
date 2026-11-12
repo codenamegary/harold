@@ -15,28 +15,25 @@
  *
  * Per slice, in order:
  *
- *   1. `harold_clear_marks`, so the device ledger holds only this slice.
- *   2. An anchor sample (host clock paired with the device clock).
- *   3. `screenrecord` starts, then the head calibration blink: sleep, hold, wake.
- *   4. The beat runs. Taps are real adb taps resolved from a tag; named screen
- *      actions go through `harold_intent`; typing runs inside the app and writes
- *      a `key` mark per character.
- *   5. Another anchor, the tail calibration blink, a final anchor, then the
- *      recorder is stopped and the file is pulled.
- *   6. The device marks are converted to host time through the linear fit of the
- *      anchors, checked against the slice window, and merged with the host rows
- *      in time order.
+ *   1. `screenrecord` starts, then the head calibration blink: sleep, hold, wake.
+ *   2. The beat runs. Taps are real adb taps resolved from a tag. Named screen
+ *      actions go through `harold_intent`. Typing focuses the field with one
+ *      tap, then sends one `adb shell input text` per character. Each character
+ *      stamps a `key` row on this process's host clock, the same clock as
+ *      `sync_wake` and `slice_start`. `keys_done` closes the run.
+ *   3. The tail calibration blink runs. The recorder stops and the file is pulled.
+ *   4. The slice's rows are checked for closed key runs and appended to
+ *      `marks.log` in time order.
  *
- * The blink is the contract `build_capture.py` measures: two `sync_wake` rows
- * bracket the slice, each written with the host stamp of the wake, the instant
- * the first frame after the black run appears. That stamp is the published
- * picture's origin (`trimSec = v_end + GUARD`) and the origin every mark is
- * mapped from, so it has to be the wake and not the sleep.
+ * The blink is the contract `build_capture.py` measures. Two `sync_wake` rows
+ * bracket the slice. Each is the host stamp of the wake, the instant the first
+ * frame after the black run appears. That stamp is the published picture's
+ * origin (`trimSec = v_end + GUARD`). `build_capture.py` maps every mark from it.
  *
  * Usage:
  *   bun run src/walk.ts --list
  *   bun run src/walk.ts --self-test
- *   HAROLD_PROBE_TOKEN=<from logcat> bun run src/walk.ts --only connect_fill
+ *   HAROLD_PROBE_TOKEN=<from logcat> bun run src/walk.ts --only connect
  */
 
 import { execFileSync } from "node:child_process"
@@ -46,17 +43,26 @@ import { performance } from "node:perf_hooks"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { z } from "zod"
-import { adb, fileExists, imeVisible, keyevent, pull, screenSize, spawnAdb, swipe } from "./adb"
+import { adb, fileExists, pull, screenSize, spawnAdb, suppressSoftKeyboard, swipe } from "./adb"
 import type { ChildProcess } from "node:child_process"
 import { BUILD_PROMPT, PLAN_PROMPT, PR_PROMPT } from "./chat.prompts"
 import { connectProbe } from "./client"
 import type { CallTool } from "./client"
-import { clockLimits, fitClock, mapMarks } from "./clock"
-import type { AnchorSample, ClockFit, TimedMark } from "./clock"
+import {
+  clampTypeGapMs,
+  clearFieldText,
+  sendInputCharacter,
+  sshTypeFields,
+  tagByField,
+  TYPE_GAP_DEFAULT_MS,
+  typeIntoField,
+} from "./input.text"
+import type { TypeFieldName } from "./input.text"
 import {
   assertClosedKeyRuns,
   countKeys,
-  deviceMarkRow,
+  keyRow,
+  keyRunMarks,
   markRow,
   renderRows,
   sortRows,
@@ -64,8 +70,8 @@ import {
   tapRow,
 } from "./marks"
 import type { MarkRow } from "./marks"
-import { anchorPayloadSchema, intentResultSchema, probeMarkSchema, screenSnapshotSchema } from "./probe"
-import type { IntentResult, ProbeControl, ProbeMark, ScreenSnapshot } from "./probe"
+import { intentResultSchema, screenSnapshotSchema } from "./probe"
+import type { IntentResult, ProbeControl, ScreenSnapshot } from "./probe"
 import {
   cameraSliceIndex,
   cameraSliceNames,
@@ -90,12 +96,15 @@ const SCREENRECORD_TIME_LIMIT_SEC = 300
  * The hold is the length of the black signal `build_capture.py` measures, and
  * the encoder writes a frame only when the display changes, so 1.2 s produced
  * runs of 0.5-0.7 s on an idle screen. Under load it produced a single frame and
- * the slice failed the two-black-run check, so the hold keeps a margin.
+ * the slice failed the two-black-run check. 2.4 s is the margin. The hold is
+ * quiet: a dumpsys in the middle of it starves the encoder and the black frame
+ * never lands. The display has to be `mScreenState=OFF` before the hold starts,
+ * and still off at the end, or the blink sleeps again.
  *
  * The hold is counted from `mWakefulness=Asleep`, not from the key press: see
  * `POWER_SLEEP_TIMEOUT_MS`.
  */
-const SYNC_BLACK_HOLD_MS = 1800
+const SYNC_BLACK_HOLD_MS = 2400
 const SYNC_WAKE_SETTLE_MS = 600
 
 /**
@@ -119,10 +128,10 @@ const BLINK_NUDGE_MS = 300
 
 /**
  * A blink is the black hold, the sleep/wake transitions and the wake settle:
- * 2.4-3.5 s measured here. Ten seconds means the device ignored the sleep or the
- * wake command for a while, which silently corrupts the calibration window.
+ * about 5-7 s measured here. One resleep (the display came back on) fits under
+ * this ceiling. Past it, the device ignored the sleep or the wake.
  */
-const MAX_TAIL_BLINK_SEC = 10
+const MAX_TAIL_BLINK_SEC = 18
 
 /** Anything above this is logged with its per-phase timings. */
 const BLINK_WARN_SEC = 5
@@ -181,16 +190,9 @@ const RECORDER_FLUSH_MS = 500
 /** Poll interval for state waits. Never a fixed wait for a transition. */
 const POLL_INTERVAL_MS = 200
 
-/**
- * `build_capture.py` rejects a slice that needs more than 15 clicks per second
- * (2 frames per click at 30 fps). 80 ms per character lands near 12 cps.
- */
-const TYPE_GAP_FLOOR_MS = 70
-
 /** Cosmetic holds. Named, because they are the only fixed waits in a slice. */
-const DWELL_FORM_MS = 2000
-const DWELL_KEY_MS = 2500
-const DWELL_FILL_MS = 1200
+const DWELL_HOME_MS = 1600
+const DWELL_FILL_MS = 200
 const DWELL_FINGERPRINT_MS = 2500
 const DWELL_TRUST_MS = 2000
 const DWELL_SAVE_MS = 600
@@ -207,7 +209,13 @@ const DWELL_DIFF_MS = 2500
 const DWELL_WORKTREE_MS = 2000
 const DWELL_PR_MS = 3000
 
-const SAFE_MARGIN_PX = 40
+// Measured on this 1080x2400 emulator: a control scrolled as far as the form
+// allows still ends about 158px above the bottom (the Save button at
+// top 2111, bottom 2242). The gesture bar is about 126px, so that resting
+// spot is tappable. A clipped sliver is not: Test connection once reported
+// top 2283, bottom 2337, only 63px of clearance, and the tap missed.
+// 120px rejects that sliver and still accepts the resting spot.
+const SAFE_MARGIN_PX = 120
 const FINE_SCROLL_TRIES = 6
 const FINE_SCROLL_FRACTION = 0.25
 
@@ -291,21 +299,19 @@ export type BeatContext = Readonly<{
   navigate: (route: "ssh_setup" | "chat") => Promise<void>
   tap: (tag: string) => Promise<{ tag: string; x: number; y: number }>
   scrollTo: (tag: string, direction?: ScrollDirection) => Promise<void>
-  type: (field: string, text: string) => Promise<void>
+  type: (field: TypeFieldName, text: string, replace?: boolean) => Promise<void>
   /**
    * Run one named action on the current screen. The declaration in `actions()`
    * is checked before the call, so a beat can only drive what the probe exposes.
    */
   intent: (action: string, args?: Record<string, string>) => Promise<IntentResult>
   /**
-   * Type into the chat composer through the probe's own `type` action, so every
-   * character leaves a `key` mark in `marks.log`.
+   * Focus `chat_composer` and type one character at a time.
+   * Does not call the probe `type` action.
    */
   typeComposer: (text: string) => Promise<void>
   wait: (args: WaitArgs) => Promise<WaitResult>
   waitForScreenChange: (from: string, timeoutMs?: number) => Promise<string | null>
-  clearMarks: () => Promise<void>
-  anchor: () => Promise<AnchorSample>
   dismissKeyboard: () => Promise<void>
   authorizeKey: (publicKey: string) => Promise<void>
   dwell: (ms: number) => Promise<void>
@@ -323,6 +329,8 @@ export type ContextDeps = Readonly<{
   swipe: (request: SwipeRequest) => Promise<void>
   dismissKeyboard: () => Promise<void>
   authorizeKey: (publicKey: string) => Promise<void>
+  sendCharacter: (character: string) => Promise<void>
+  clearField: (current: string) => Promise<void>
 }>
 
 export type DeviceControl = Readonly<{
@@ -365,9 +373,7 @@ export type SliceDiagnostics = Readonly<{
   startedSec: number
   endedSec: number
   windowSec: number
-  anchors: readonly AnchorSample[]
-  fit: ClockFit
-  marks: readonly TimedMark[]
+  keyCount: number
 }>
 
 export type WalkDeps = Readonly<{
@@ -381,6 +387,8 @@ export type WalkDeps = Readonly<{
   swipe: (request: SwipeRequest) => Promise<void>
   dismissKeyboard: () => Promise<void>
   authorizeKey: (publicKey: string) => Promise<void>
+  sendCharacter: (character: string) => Promise<void>
+  clearField: (current: string) => Promise<void>
   out: Readonly<{ dir: string; slicesDir: string; marksPath: string; manifestPath: string }>
   only: readonly SliceName[]
 }>
@@ -390,12 +398,6 @@ const tapResultSchema = z.object({
   x: z.number(),
   y: z.number(),
   screen: z.string().nullable(),
-})
-
-const typeResultSchema = z.object({
-  field: z.string(),
-  value: z.string(),
-  marks: z.array(probeMarkSchema),
 })
 
 const waitResultSchema = z.object({
@@ -439,7 +441,14 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     if (target === undefined) {
       throw new Error(`no control tagged ${tag}. Known controls: ${await describeControls()}`)
     }
-    const inside = target.top >= SAFE_MARGIN_PX && target.bottom <= height - SAFE_MARGIN_PX
+    const centerY = (target.top + target.bottom) / 2
+    // A control clipped by the bottom edge reports a short rect whose center
+    // sits in the gesture area. A tap there does not land. Keep scrolling.
+    const sliverOnTheEdge = centerY > height * 0.9 && target.bottom - target.top < 96
+    const inside =
+      target.top >= SAFE_MARGIN_PX &&
+      target.bottom <= height - SAFE_MARGIN_PX &&
+      !sliverOnTheEdge
     if (inside) {
       return target
     }
@@ -487,20 +496,28 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     return { tag: result.tag, x: result.x, y: result.y }
   }
 
-  const type = async (field: string, text: string): Promise<void> => {
-    const result = typeResultSchema.parse(
-      await call("harold_type", { field, text, gapMs: config.typeGapMs }),
-    )
-    assertClosedKeyRuns(result.marks)
-    const keys = countKeys(result.marks)
-    if (keys !== [...text].length) {
-      throw new Error(
-        `${field} emitted ${keys} key marks for ${[...text].length} characters`,
-      )
-    }
-    if (result.value !== text) {
-      throw new Error(`${field} holds ${JSON.stringify(result.value)} after typing ${JSON.stringify(text)}`)
-    }
+  const typing = {
+    readFact: async (field: TypeFieldName) => (await screen()).facts[field] ?? "",
+    focus: async (tag: string) => {
+      await tap(tag)
+    },
+    sendCharacter: deps.sendCharacter,
+    clearField: deps.clearField,
+    stampKey: () => {
+      if (sink.taps) {
+        sink.push(keyRow(hostNow()))
+      }
+    },
+    stampKeysDone: () => {
+      if (sink.taps) {
+        sink.push(markRow("keys_done", hostNow()))
+      }
+    },
+    sleep: deps.sleep,
+  }
+
+  const type = async (field: TypeFieldName, text: string, replace = false): Promise<void> => {
+    await typeIntoField(field, text, { ...typing, gapMs: config.typeGapMs, replace })
   }
 
   /**
@@ -526,26 +543,8 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     return result
   }
 
-  /**
-   * The chat probe's `type` action writes one `key` mark per character and
-   * `keys_done` at the end. It ignores `field`, so the fact that carries the
-   * text is `composerText`; that is what gets verified.
-   */
   const typeComposer = async (text: string): Promise<void> => {
-    const result = await intent("type", { text, gapMs: String(config.typeGapMs) })
-    assertClosedKeyRuns(result.marks)
-    const keys = countKeys(result.marks)
-    if (keys !== [...text].length) {
-      throw new Error(
-        `the composer emitted ${keys} key marks for ${[...text].length} characters`,
-      )
-    }
-    const landed = result.facts.composerText ?? ""
-    if (landed !== text) {
-      throw new Error(
-        `the composer holds ${JSON.stringify(landed)} after typing ${JSON.stringify(text)}`,
-      )
-    }
+    await typeIntoField("composerText", text, { ...typing, gapMs: config.typeGapMs, replace: false })
   }
 
   const wait = async (args: WaitArgs): Promise<WaitResult> =>
@@ -596,15 +595,6 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     typeComposer,
     wait,
     waitForScreenChange,
-    clearMarks: async () => {
-      await call("harold_clear_marks")
-    },
-    anchor: async () => {
-      const before = hostNow()
-      const payload = anchorPayloadSchema.parse(await call("harold_anchor"))
-      const after = hostNow()
-      return { deviceNanos: payload.anchorNanos, hostSec: (before + after) / 2, rttSec: after - before }
-    },
     dismissKeyboard: deps.dismissKeyboard,
     authorizeKey: deps.authorizeKey,
     dwell: deps.sleep,
@@ -637,11 +627,13 @@ const waitForProbe = async (ctx: BeatContext): Promise<ScreenSnapshot> => {
   return poll()
 }
 
-const fillPlan = (config: DemoConfig): readonly Readonly<{ field: string; tag: string; text: string }>[] => [
-  { field: "host", tag: "ssh_host_field", text: config.host },
-  { field: "user", tag: "ssh_user_field", text: config.user },
-  { field: "port", tag: "ssh_port_field", text: config.port },
-  { field: "name", tag: "ssh_name_field", text: config.name },
+const fillPlan = (
+  config: DemoConfig,
+): readonly Readonly<{ field: TypeFieldName; tag: string; text: string }>[] => [
+  { field: "name", tag: tagByField.name, text: config.name },
+  { field: "host", tag: tagByField.host, text: config.host },
+  { field: "user", tag: tagByField.user, text: config.user },
+  { field: "port", tag: tagByField.port, text: config.port },
 ]
 
 const factsOf = async (ctx: BeatContext): Promise<Record<string, string>> =>
@@ -854,6 +846,24 @@ const clearComposer = async (ctx: BeatContext): Promise<void> => {
 }
 
 /**
+ * The port field starts at 22. Clear any prefilled SSH field here, before a
+ * recorded slice. Typing refuses a field that is not empty and does not clear
+ * on camera.
+ */
+const clearPrefilledSshFields = async (ctx: BeatContext): Promise<void> => {
+  const facts = await factsOf(ctx)
+  const filled = sshTypeFields.filter((field) => (facts[field] ?? "") !== "")
+  for (const field of filled) {
+    ctx.log(`clearing prefilled ${field}`)
+    const result = await ctx.intent("set", { field, value: "" })
+    const left = result.facts[field] ?? ""
+    if (left !== "") {
+      throw new Error(`clearing ${field} left ${JSON.stringify(left)}`)
+    }
+  }
+}
+
+/**
  * One runner per slice name. `Record<SliceName, BeatRun>` makes the plan
  * exhaustive: adding a slice to `slices.ts` fails the typecheck until it has a
  * beat here, and the recorder around it never needs to change.
@@ -861,9 +871,37 @@ const clearComposer = async (ctx: BeatContext): Promise<void> => {
 export const beatsBySlice: Record<SliceName, BeatRun> = {
   boot: async (ctx) => {
     ctx.log("waiting for the probe to answer")
-    await waitForProbe(ctx)
-    ctx.log("navigating to ssh_setup")
-    await ctx.navigate("ssh_setup")
+    const snap = await waitForProbe(ctx)
+    if (snap.screen !== "shell") {
+      throw new Error(`boot expected the empty home, found ${snap.screen ?? "(none)"}`)
+    }
+    await ctx.wait({
+      field: "status",
+      equals: "No connections yet",
+      timeoutMs: PROBE_TIMEOUT_MS,
+    })
+    ctx.mark("home_ready")
+  },
+
+  home_empty: async (ctx) => {
+    await ctx.wait({
+      field: "status",
+      equals: "No connections yet",
+      timeoutMs: PROBE_TIMEOUT_MS,
+    })
+    ctx.mark("home_empty")
+    await ctx.dwell(DWELL_HOME_MS)
+  },
+
+  connect: async (ctx) => {
+    await ctx.tap("shell_add_connection_button")
+    const opened = await ctx.waitForScreenChange("shell")
+    if (opened !== "ssh_setup") {
+      throw new Error(
+        `Add connection opened ${opened ?? "(no instrumented screen)"} instead of ssh_setup`,
+      )
+    }
+    await clearPrefilledSshFields(ctx)
     const form = await ctx.screen()
     const publicKey = form.facts.publicKey ?? ""
     if (!publicKey.startsWith("ssh-")) {
@@ -874,35 +912,17 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
     await ctx.authorizeKey(publicKey)
     ctx.mark("key_authorized")
     ctx.log(`authorized ${publicKey.slice(0, 32)}... on the demo host`)
-    // Park the form at its bottom, so the first on-camera beat scrolls up onto
-    // the empty fields instead of opening on a static frame.
-    await ctx.scrollTo("ssh_save_button")
-  },
 
-  connect_empty: async (ctx) => {
-    await ctx.scrollTo("ssh_host_field", "up")
-    ctx.mark("auth_mode_generate")
-    ctx.mark("form_empty")
-    await ctx.dwell(DWELL_FORM_MS)
-  },
-
-  connect_key: async (ctx) => {
-    // `ssh_public_key` is a testTag, not a probe control, so it cannot be the
-    // scroll target. The Test connection button sits immediately below the key
-    // box and always exists, so scrolling to it frames the key.
-    await ctx.scrollTo("ssh_test_button")
-    ctx.mark("public_key_visible")
-    await ctx.dwell(DWELL_KEY_MS)
-  },
-
-  connect_fill: async (ctx) => {
     const plan = fillPlan(ctx.config)
     for (const step of plan) {
       ctx.log(`typing ${step.field}`)
       await ctx.scrollTo(step.tag, "up")
-      await ctx.tap(step.tag)
-      await ctx.type(step.field, step.text)
-      await ctx.dismissKeyboard()
+      // Name is typed first, while it is still empty. The host field would
+      // otherwise write a suggestion into a blank name (`127` for 127.0.0.1).
+      // A name that is already set is left alone. Do not press BACK here: the
+      // IME reports itself shown whenever a field is focused, even when no
+      // keyboard is drawn, and BACK then leaves the form.
+      await ctx.type(step.field, step.text, false)
     }
     const snapshot = await ctx.screen()
     const wrong = plan.filter((step) => (snapshot.facts[step.field] ?? "") !== step.text)
@@ -914,12 +934,27 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
     }
     ctx.mark("host_fields_filled")
     await ctx.dwell(DWELL_FILL_MS)
-  },
 
-  connect_test: async (ctx) => {
     await ctx.scrollTo("ssh_test_button")
+    const button = (await ctx.screen()).controls.find((candidate) => candidate.tag === "ssh_test_button")
+    if (button !== undefined) {
+      ctx.log(
+        `test button rect [${button.left},${button.top}][${button.right},${button.bottom}]`,
+      )
+    }
     await ctx.tap("ssh_test_button")
-    const result = await ctx.wait({ field: "fingerprint", settled: true, timeoutMs: FINGERPRINT_TIMEOUT_MS })
+    const result = await ctx
+      .wait({ field: "fingerprint", settled: true, timeoutMs: 8_000 })
+      .catch(async () => {
+        ctx.log("no fingerprint yet, tapping Test connection again")
+        await ctx.scrollTo("ssh_test_button")
+        await ctx.tap("ssh_test_button")
+        return ctx.wait({
+          field: "fingerprint",
+          settled: true,
+          timeoutMs: FINGERPRINT_TIMEOUT_MS,
+        })
+      })
     const error = result.facts.error ?? ""
     if (error.length > 0) {
       throw new Error(`the connection test reported ${JSON.stringify(error)}`)
@@ -932,17 +967,13 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
     await ctx.scrollTo("ssh_trust_checkbox")
     ctx.mark("fingerprint_visible")
     await ctx.dwell(DWELL_FINGERPRINT_MS)
-  },
 
-  connect_trust: async (ctx) => {
     await ctx.scrollTo("ssh_trust_checkbox")
     await ctx.tap("ssh_trust_checkbox")
     await ctx.wait({ field: "trusted", equals: "true", timeoutMs: TRUST_TIMEOUT_MS })
     ctx.mark("trusted")
     await ctx.dwell(DWELL_TRUST_MS)
-  },
 
-  connect_save: async (ctx) => {
     await ctx.scrollTo("ssh_save_button")
     await ctx.tap("ssh_save_button")
     ctx.mark("save_tapped")
@@ -1347,6 +1378,12 @@ const screenrecordRunning = async (): Promise<boolean> => {
  * helpers already retry) and that killed a capture on `010-question`. An empty
  * answer reads as "not in the wanted state yet" and the poll simply tries again.
  */
+const firstField = (output: string, key: string): string => {
+  const prefix = `${key}=`
+  const line = output.split("\n").find((candidate) => candidate.trim().startsWith(prefix))
+  return line === undefined ? "" : line.trim().slice(prefix.length).trim()
+}
+
 const wakefulness = async (): Promise<string> => {
   let output = ""
   try {
@@ -1354,8 +1391,22 @@ const wakefulness = async (): Promise<string> => {
   } catch {
     return ""
   }
-  const line = output.split("\n").find((candidate) => candidate.trim().startsWith("mWakefulness="))
-  return line === undefined ? "" : line.trim().slice("mWakefulness=".length).trim()
+  return firstField(output, "mWakefulness")
+}
+
+/**
+ * The picture `screenrecord` actually encodes. `mWakefulness=Asleep` can arrive
+ * while `mScreenState` is still `ON`, and a hold counted from wakefulness then
+ * ends before the panel is black. `OFF` is the black frame.
+ */
+const screenState = async (): Promise<string> => {
+  let output = ""
+  try {
+    output = await adb(["shell", "dumpsys", "display"])
+  } catch {
+    return ""
+  }
+  return firstField(output, "mScreenState")
 }
 
 const waitForPowerState = async (wanted: readonly string[], timeoutMs = 5000): Promise<void> => {
@@ -1369,6 +1420,25 @@ const waitForPowerState = async (wanted: readonly string[], timeoutMs = 5000): P
       throw new Error(
         `the device never reached power state ${wanted.join("/")} (stuck at ` +
           `${JSON.stringify(state)}); the sync blink cannot be trusted`,
+      )
+    }
+    await new Promise((done) => setTimeout(done, POWER_POLL_MS))
+    return poll()
+  }
+  return poll()
+}
+
+const waitForScreenState = async (wanted: string, timeoutMs = 5000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs
+  const poll = async (): Promise<void> => {
+    const state = await screenState()
+    if (state === wanted) {
+      return
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `the display never reached ${wanted} (stuck at ${JSON.stringify(state)}); ` +
+          `the sync blink cannot be trusted`,
       )
     }
     await new Promise((done) => setTimeout(done, POWER_POLL_MS))
@@ -1576,11 +1646,21 @@ export const makeDeviceControl = (deps?: Readonly<{ log?: (message: string) => v
       // and cost a 4 s timeout per attempt (25.9 s measured on `new_session`),
       // so the real dark state is waited for separately, once.
       await phase("sleep", () => powerKey("KEYCODE_SLEEP", ["Asleep", "Dozing"]))
-      // `Asleep` only: Dozing arrives ~1.8 s before the display is actually dark
-      // on this emulator (see `POWER_SLEEP_TIMEOUT_MS`), and a hold started there
-      // records the lit UI instead of a black run.
-      await phase("dark", () => waitForPowerState(["Asleep"], POWER_SLEEP_TIMEOUT_MS))
-      await new Promise((done) => setTimeout(done, SYNC_BLACK_HOLD_MS))
+      // `mScreenState=OFF` is the black frame. `Asleep` can arrive while the
+      // panel is still lit, and a hold started there records the UI.
+      await phase("off", () => waitForScreenState("OFF", POWER_SLEEP_TIMEOUT_MS))
+      // No dumpsys during the hold. A poll here is the only load the encoder
+      // sees, and on the fill slice it dropped the black frame entirely.
+      const hold = () => new Promise((done) => setTimeout(done, SYNC_BLACK_HOLD_MS))
+      await hold()
+      if ((await screenState()) !== "OFF") {
+        await phase("resleep", () => powerKey("KEYCODE_SLEEP", ["Asleep", "Dozing"]))
+        await phase("reoff", () => waitForScreenState("OFF", POWER_SLEEP_TIMEOUT_MS))
+        await hold()
+        if ((await screenState()) !== "OFF") {
+          throw new Error("the display turned back on during the calibration hold")
+        }
+      }
       // The stamp is the wake, not the sleep. `build_capture.py` anchors the
       // published picture to the *end* of each black run (`trimSec = v_end_1 +
       // GUARD`) and maps every mark from the same stamp, so the stamp has to be
@@ -1612,13 +1692,10 @@ export const makeDeviceControl = (deps?: Readonly<{ log?: (message: string) => v
 
 // --- Recording ---------------------------------------------------------------
 
-const readDeviceMarks = async (call: CallTool): Promise<readonly ProbeMark[]> =>
-  z.array(probeMarkSchema).parse(await call("harold_marks", { since: 0 }))
-
 const recordSlice = async (params: Readonly<{
   beat: Beat
   deps: WalkDeps
-}>): Promise<Readonly<{ entry: SliceEntry; diagnostics: SliceDiagnostics; deviceMarks: readonly ProbeMark[] }>> => {
+}>): Promise<Readonly<{ entry: SliceEntry; diagnostics: SliceDiagnostics }>> => {
   const { beat, deps } = params
   const index = cameraSliceIndex(beat.name)
   const file = sliceFileName(beat.name)
@@ -1626,8 +1703,6 @@ const recordSlice = async (params: Readonly<{
   const rows: MarkRow[] = []
   const timing = { endedSec: 0, tailBlinkSec: 0 }
 
-  await deps.call("harold_clear_marks")
-  const anchors: AnchorSample[] = []
   const ctx = makeContext({
     call: deps.call,
     hostNow: deps.hostNow,
@@ -1639,8 +1714,9 @@ const recordSlice = async (params: Readonly<{
     swipe: deps.swipe,
     dismissKeyboard: deps.dismissKeyboard,
     authorizeKey: deps.authorizeKey,
+    sendCharacter: deps.sendCharacter,
+    clearField: deps.clearField,
   })
-  anchors.push(await ctx.anchor())
 
   deps.log(`slice ${beat.name}: recording ${file}`)
 
@@ -1658,9 +1734,7 @@ const recordSlice = async (params: Readonly<{
     // every non-sync_wake row inside `started..ended` to a published time, so
     // it rejected the row as negative and failed the whole build.
     rows.push(markRow(`slice_start_${beat.name}`, deps.hostNow()))
-    anchors.push(await ctx.anchor())
     await beat.run(ctx)
-    anchors.push(await ctx.anchor())
     rows.push(markRow(`slice_end_${beat.name}`, deps.hostNow()))
     const tailBlinkStartedSec = deps.hostNow()
     rows.push(syncWakeRow(await deps.device.blink({ nudgeAfterWake: true })))
@@ -1696,21 +1770,15 @@ const recordSlice = async (params: Readonly<{
     )
   }
 
-  anchors.push(await ctx.anchor())
-  const deviceMarks = await readDeviceMarks(deps.call)
-  assertClosedKeyRuns(deviceMarks)
-  const fit = fitClock(anchors)
-  const timed = mapMarks(deviceMarks, fit, { startedSec, endedSec })
-  for (const mark of timed) {
-    rows.push(deviceMarkRow(mark.kind, mark.hostSec))
-  }
-  writeRows(deps.out.marksPath, sortRows(rows))
+  const ordered = sortRows(rows)
+  assertClosedKeyRuns(keyRunMarks(ordered))
+  const keyCount = countKeys(keyRunMarks(ordered))
+  writeRows(deps.out.marksPath, ordered)
   await deps.device.pull(remote, join(deps.out.slicesDir, file))
 
   deps.log(
     `slice ${beat.name}: ${windowSec.toFixed(2)}s raw (tail blink ` +
-      `${timing.tailBlinkSec.toFixed(2)}s), ${timed.length} device marks, ` +
-      `slope ${fit.slope.toFixed(6)}, residual ${(fit.residualSec * 1000).toFixed(1)} ms`,
+      `${timing.tailBlinkSec.toFixed(2)}s), ${keyCount} keys`,
   )
 
   const entry: SliceEntry = { index, name: beat.name, file, remote, started: startedSec, ended: endedSec }
@@ -1721,11 +1789,9 @@ const recordSlice = async (params: Readonly<{
     startedSec,
     endedSec,
     windowSec,
-    anchors,
-    fit,
-    marks: timed,
+    keyCount,
   }
-  return { entry, diagnostics, deviceMarks }
+  return { entry, diagnostics }
 }
 
 // --- Walk --------------------------------------------------------------------
@@ -1738,7 +1804,6 @@ export type WalkReport = Readonly<{
   typedCharacters: number
   steps: readonly Step[]
   finalScreen: Readonly<{ screen: string | null; facts: Record<string, string> }>
-  marks: readonly ProbeMark[]
   slices: readonly SliceDiagnostics[]
 }>
 
@@ -1748,7 +1813,6 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
   const entries: SliceEntry[] = []
   const diagnostics: SliceDiagnostics[] = []
   const steps: Step[] = []
-  const allDeviceMarks: ProbeMark[] = []
 
   const unrecorded = makeContext({
     call: deps.call,
@@ -1761,6 +1825,8 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
     swipe: deps.swipe,
     dismissKeyboard: deps.dismissKeyboard,
     authorizeKey: deps.authorizeKey,
+    sendCharacter: deps.sendCharacter,
+    clearField: deps.clearField,
   })
 
   deps.log(`driver_start${deps.only.length > 0 ? ` only=${deps.only.join(",")}` : ""}`)
@@ -1779,7 +1845,6 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
     const slice = await recordSlice({ beat, deps })
     entries.push(slice.entry)
     diagnostics.push(slice.diagnostics)
-    allDeviceMarks.push(...slice.deviceMarks)
     await writeFile(deps.out.manifestPath, `${JSON.stringify(entries, null, 2)}\n`)
     steps.push({
       step: `onCamera:${beat.name}`,
@@ -1788,8 +1853,7 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
         recorded: true,
         file: slice.entry.file,
         windowSec: Number(slice.diagnostics.windowSec.toFixed(3)),
-        slope: Number(slice.diagnostics.fit.slope.toFixed(6)),
-        residualMs: Number((slice.diagnostics.fit.residualSec * 1000).toFixed(1)),
+        keys: slice.diagnostics.keyCount,
       },
     })
 
@@ -1805,10 +1869,9 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
   return {
     startedAt: startedIso,
     durationMs: Date.now() - startedAt,
-    typedCharacters: countKeys(allDeviceMarks),
+    typedCharacters: diagnostics.reduce((total, slice) => total + slice.keyCount, 0),
     steps,
     finalScreen: { screen: finalScreen.screen, facts: finalScreen.facts },
-    marks: allDeviceMarks,
     slices: diagnostics,
   }
 }
@@ -1885,7 +1948,7 @@ const usage = (): string =>
     "",
     "  --list                    print the beat plan and exit",
     "  --only <a,b>              record only these slices; repeatable",
-    "  --self-test               check beats, marks and clock math with no device",
+    "  --self-test               check beats and marks with no device",
     "  --out <dir>               output directory (default docs/demo/work/capture)",
     "  --emulator-serial <sn>    adb serial to drive",
     "",
@@ -1911,8 +1974,8 @@ const envList = (value: string | undefined, fallback: readonly string[]): readon
 }
 
 const configFromEnv = (): DemoConfig => {
-  const gap = Number(process.env.HAROLD_TYPE_GAP_MS ?? 80)
-  const typeGapMs = Number.isFinite(gap) && gap >= TYPE_GAP_FLOOR_MS ? gap : TYPE_GAP_FLOOR_MS
+  const gap = Number(process.env.HAROLD_TYPE_GAP_MS ?? TYPE_GAP_DEFAULT_MS)
+  const typeGapMs = clampTypeGapMs(gap)
   return {
     host: process.env.HAROLD_DEMO_HOST ?? "127.0.0.1",
     port: process.env.HAROLD_DEMO_SSH_PORT ?? "2223",
@@ -1932,49 +1995,17 @@ const configFromEnv = (): DemoConfig => {
 
 // --- Self test ---------------------------------------------------------------
 
-/**
- * Convert a stub ledger through anchors built around it, the way the walk does
- * with live samples, and prove every mark lands inside the window in order.
- */
-const verifyConversion = (
-  name: SliceName,
-  marks: readonly ProbeMark[],
-): Readonly<{ anchors: readonly AnchorSample[]; fit: ClockFit; marks: readonly TimedMark[]; startedSec: number; endedSec: number }> => {
-  if (marks.length === 0) {
-    throw new Error(`self-test: slice ${name} produced no device marks`)
-  }
-  const firstNanos = marks[0].nanos
-  const lastNanos = marks[marks.length - 1].nanos
-  const spanSec = (lastNanos - firstNanos) / 1e9
-  const anchors: readonly AnchorSample[] = [
-    { deviceNanos: firstNanos - 1e9, hostSec: 1, rttSec: 0.002 },
-    { deviceNanos: firstNanos, hostSec: 2, rttSec: 0.002 },
-    { deviceNanos: lastNanos + 1e9, hostSec: 3 + spanSec, rttSec: 0.002 },
-  ]
-  const fit = fitClock(anchors)
-  const startedSec = 0.5
-  const endedSec = 4 + spanSec
-  const timed = mapMarks(marks, fit, { startedSec, endedSec })
-  if (timed.length !== marks.length) {
-    throw new Error(`self-test: slice ${name} dropped device marks in conversion`)
-  }
-  if (Math.abs(timed[0].hostSec - 2) > 1e-6) {
-    throw new Error(
-      `self-test: the first mark of ${name} maps to host ${timed[0].hostSec}, expected 2`,
-    )
-  }
-  return { anchors, fit, marks: timed, startedSec, endedSec }
-}
+const TYPED_SLICES: readonly SliceName[] = ["connect", "plan", "build", "pr"]
 
 /**
- * Drive every beat against the in-memory stub, then prove the sequencing, the
- * device mark conversion and the marks.log rows. No device, no adb, no docker.
+ * Drive every beat against the in-memory stub, then prove the sequencing and
+ * the host-stamped key rows. No device, no adb, no docker.
  */
 export const runSelfTest = async (): Promise<number> => {
   const config = configFromEnv()
   const stub = makeProbeStub()
   const rows: MarkRow[] = []
-  const verified: SliceName[] = []
+  const typed: SliceName[] = []
 
   const ctx = makeContext({
     call: stub.callTool,
@@ -1991,13 +2022,13 @@ export const runSelfTest = async (): Promise<number> => {
         throw new Error(`the stub key is not a public key: ${publicKey}`)
       }
     },
+    sendCharacter: stub.receiveCharacter,
+    clearField: stub.clearFocused,
   })
 
   for (const beat of BEATS) {
     const before = stub.calls().length
     const first = rows.length
-    // Same boundary `recordSlice` uses, so a slice only ever sees its own marks.
-    await ctx.clearMarks()
     await beat.run(ctx)
     const calls = stub.calls().slice(before)
     if (calls.length === 0) {
@@ -2007,26 +2038,29 @@ export const runSelfTest = async (): Promise<number> => {
       throw new Error(`self-test: on-camera beat ${beat.name} emitted no marks`)
     }
     if (beat.kind === "onCamera") {
-      const marks = stub.ledger()
-      assertClosedKeyRuns(marks)
-      // Only a beat that types leaves device marks to convert. The rest are
-      // valid on-camera slices with host rows only.
-      if (marks.length > 0) {
-        verifyConversion(beat.name, marks)
-        verified.push(beat.name)
+      const sliceRows = rows.slice(first)
+      assertClosedKeyRuns(keyRunMarks(sliceRows))
+      if (sliceRows.some((row) => row.text.startsWith("key "))) {
+        typed.push(beat.name)
+      }
+      if (beat.name === "connect") {
+        const closed = sliceRows.filter((row) => row.text.startsWith("keys_done ")).length
+        if (closed !== 4) {
+          throw new Error(`self-test: connect closed ${closed} key runs, expected 4`)
+        }
       }
     }
   }
 
-  if (!verified.includes("connect_fill")) {
-    throw new Error("self-test: the fill beat produced no convertible device marks")
-  }
-  const typedSlices: readonly SliceName[] = ["plan", "build", "pr"]
-  const missingTyped = typedSlices.filter((name) => !verified.includes(name))
+  const missingTyped = TYPED_SLICES.filter((name) => !typed.includes(name))
   if (missingTyped.length > 0) {
-    throw new Error(
-      `self-test: ${missingTyped.join(", ")} produced no convertible device marks`,
-    )
+    throw new Error(`self-test: ${missingTyped.join(", ")} produced no key rows`)
+  }
+  const probeType = stub.calls().some(
+    (call) => call.name === "harold_intent" && call.args.action === "type",
+  )
+  if (probeType) {
+    throw new Error("self-test: a beat called the probe type action")
   }
 
   if (stub.screenName() !== "chat") {
@@ -2055,13 +2089,15 @@ export const runSelfTest = async (): Promise<number> => {
     throw new Error(`self-test: marks.log rows do not match the grammar:\n${rowsText}`)
   }
 
+  assertClosedKeyRuns(keyRunMarks(sortRows(rows)))
+
   const taps = stub.calls().filter((call) => call.name === "harold_tap")
   const tapTags = [...new Set(taps.map((call) => String(call.args.tag)))]
   console.log(
     `self-test: ${slicePlan.length} beats, ${stub.calls().length} tool calls, ` +
-      `${verified.length} recorded slices, taps on ${tapTags.join(", ")}`,
+      `${typed.length} typed slices, taps on ${tapTags.join(", ")}`,
   )
-  console.log(`self-test: ${sortRows(rows).length} marks.log rows, clock limits ${JSON.stringify(clockLimits)}`)
+  console.log(`self-test: ${sortRows(rows).length} marks.log rows`)
   return 0
 }
 
@@ -2113,6 +2149,7 @@ const main = async (): Promise<number> => {
   const probe = await connectProbe()
 
   try {
+    await suppressSoftKeyboard()
     const report = await runWalk({
       call: probe.callTool,
       hostNow: () => performance.now() / 1000,
@@ -2122,11 +2159,9 @@ const main = async (): Promise<number> => {
       device,
       viewport: screenSize,
       swipe: async (request) => swipe(request.x, request.fromY, request.x, request.toY, request.durationMs),
-      dismissKeyboard: async () => {
-        if (await imeVisible()) {
-          await keyevent("KEYCODE_BACK")
-        }
-      },
+      sendCharacter: sendInputCharacter,
+      clearField: clearFieldText,
+      dismissKeyboard: async () => {},
       authorizeKey: async (publicKey) => {
         execFileSync("docker", ["exec", "-i", config.container, "add-authorized-key"], {
           input: `${publicKey}\n`,

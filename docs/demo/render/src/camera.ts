@@ -1,3 +1,6 @@
+import { Easing } from "remotion"
+import { type WorldView } from "./stage"
+
 // --- Camera -----------------------------------------------------------------
 //
 // The script's camera vocabulary. A preset names a framing, never a feature:
@@ -15,8 +18,8 @@
 // is a point on the *phone screen*; the camera puts that point at the centre of
 // the frame and clamps so the stage never shows through the phone.
 //
-// A camera state holds until the next one. Nothing here eases between states:
-// a preset change is a cut, and a cut is how the film moves.
+// A camera state holds until the next cue, then eases. The phone never cuts
+// from one framing to the next.
 
 export type Point = { x: number; y: number }
 
@@ -50,6 +53,21 @@ export const PRESETS: Record<CameraPreset, CameraState> = {
 /** The whole handset at 1x leaves this much of the stage height to the floor. */
 export const PHONE_FIT = 0.82
 
+/**
+ * Scale at which the handset fills the stage height, bezel included.
+ * Screen height is `stageHeight * PHONE_FIT * scale`, and the bezel is about
+ * `10 * scale` on each edge. 1.18 lands the frame a few pixels inside 1080p.
+ */
+export const VERTICAL_FIT = 1.18
+
+/** Wide entrance. Small enough that the phone can walk into the pool from further back. */
+export const ENTRANCE_SCALE = 0.52
+
+/** How long a framing takes to become the next one. It then holds. */
+export const CAMERA_EASE_SEC = 0.85
+
+const cameraEase = Easing.bezier(0.45, 0, 0.2, 1)
+
 export type CameraCueSpec = {
   /** Absolute seconds. */
   at: number
@@ -57,9 +75,25 @@ export type CameraCueSpec = {
   scale?: number
   focus?: Point
   dock?: number
+  /** How long this cue takes to reach. Defaults to CAMERA_EASE_SEC. */
+  easeSec?: number
 }
 
-export type CameraCue = { at: number; state: CameraState }
+export type CameraCue = { at: number; state: CameraState; easeSec: number }
+
+/**
+ * How much of the camera drift the phone takes. Wide idle shots ride the
+ * parallax. Once the handset fills the frame, it holds still.
+ */
+export const phoneDriftGain = (scale: number): number => {
+  if (scale <= 1) {
+    return 1
+  }
+  if (scale >= VERTICAL_FIT) {
+    return 0
+  }
+  return (VERTICAL_FIT - scale) / (VERTICAL_FIT - 1)
+}
 
 /** Overrides apply on top of the named preset, exactly as `[PZ ... x=y]` does. */
 export const resolveCameraCue = (spec: CameraCueSpec, fallback: CameraState): CameraState => {
@@ -72,15 +106,44 @@ export const resolveCameraCue = (spec: CameraCueSpec, fallback: CameraState): Ca
   }
 }
 
+const mix = (from: number, to: number, t: number): number => from + (to - from) * t
+
+const mixCamera = (from: CameraState, to: CameraState, t: number): CameraState => ({
+  preset: to.preset,
+  scale: mix(from.scale, to.scale, t),
+  focus: { x: mix(from.focus.x, to.focus.x, t), y: mix(from.focus.y, to.focus.y, t) },
+  dock: mix(from.dock, to.dock, t),
+})
+
+/**
+ * The framing at `sec`. The cue at or before `sec` is the target. The move
+ * starts on that cue and takes `CAMERA_EASE_SEC`, then the framing holds.
+ * The first cue is already there, so the phone is not born mid-zoom.
+ */
 export const cameraAt = (cues: CameraCue[], sec: number): CameraState => {
-  let current = cues[0]?.state ?? PRESETS.full
-  for (const cue of cues) {
-    if (sec < cue.at) {
-      break
-    }
-    current = cue.state
+  if (cues.length === 0) {
+    return PRESETS.full
   }
-  return current
+  let index = 0
+  for (let cursor = 1; cursor < cues.length; cursor += 1) {
+    if (sec >= cues[cursor].at) {
+      index = cursor
+    }
+  }
+  const cue = cues[index]
+  if (index === 0) {
+    return cue.state
+  }
+  const previous = cues[index - 1]
+  const window = Math.min(cue.easeSec, Math.max(0, cue.at - previous.at))
+  if (window <= 0) {
+    return cue.state
+  }
+  const t = Math.min(1, Math.max(0, (sec - cue.at) / window))
+  if (t >= 1) {
+    return cue.state
+  }
+  return mixCamera(previous.state, cue.state, cameraEase(t))
 }
 
 export type PhoneLayout = {
@@ -133,6 +196,23 @@ export const phoneLayout = (
     bezel,
     frameWidth: width + bezel * 2,
     frameHeight: height + bezel * 2,
+  }
+}
+
+/**
+ * The view of the world that keeps the floor under the phone.
+ *
+ * `locked` is the framing the world is drawn for, one to one. At any other
+ * framing the world scales with the phone and stays pinned to its feet, so a
+ * push-in is a camera move and not a phone that grows on a still backdrop.
+ * Both layouts are taken without drift. The drift is the layers' own parallax.
+ */
+export const worldView = (now: PhoneLayout, locked: PhoneLayout): WorldView => {
+  const scale = now.width / locked.width
+  return {
+    scale,
+    x: now.left + now.width / 2 - (locked.left + locked.width / 2) * scale,
+    y: now.top + now.height - (locked.top + locked.height) * scale,
   }
 }
 

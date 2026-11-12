@@ -3,8 +3,8 @@
  * Proof of concept: add an SSH connection to the real app using only MCP tool
  * calls, while the device records the screen.
  *
- * Every interaction is either a real adb tap resolved from a tag, or typing that
- * runs inside the app. Nothing here reads a uiautomator dump.
+ * Every interaction is a real adb tap resolved from a tag, or real adb typing
+ * into a focused field. Nothing here reads a uiautomator dump.
  *
  * The client, the tool unwrapping and the transport teardown live in
  * [`client.ts`](./client.ts), shared with the capture walk.
@@ -15,7 +15,9 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
+import { suppressSoftKeyboard } from "./adb"
 import { connectProbe } from "./client"
+import { sshTypeFields } from "./input.text"
 import { probeMarkSchema, screenSnapshotSchema } from "./probe"
 import type { ProbeMark, ScreenSnapshot } from "./probe"
 
@@ -53,6 +55,7 @@ async function main(): Promise<void> {
     screenSnapshotSchema.parse(await callTool("harold_screen"))
 
   try {
+    await suppressSoftKeyboard()
     await record("screen: boot", async () => {
       const snapshot = await readScreen()
       console.log(`   probe alive, screen=${snapshot.screen ?? "none"}`)
@@ -60,6 +63,12 @@ async function main(): Promise<void> {
     })
 
     await record("navigate: ssh_setup", () => callTool("harold_navigate", { route: "ssh_setup" }))
+    const form = await readScreen()
+    for (const field of sshTypeFields) {
+      if ((form.facts[field] ?? "") !== "") {
+        await record(`set: clear ${field}`, () => callTool("harold_set", { field, value: "" }))
+      }
+    }
     await record("marks: clear", () => callTool("harold_clear_marks"))
 
     await record("type: host", () =>
@@ -130,7 +139,10 @@ async function main(): Promise<void> {
       return (Array.isArray(raw) ? raw : []).map((mark) => probeMarkSchema.parse(mark))
     })
 
-    const typedCharacters = marks.filter((mark) => mark.kind === "key").length
+    const typedCharacters = [SSH_HOST, SSH_USER, SSH_PORT, SSH_CONNECTION_NAME].reduce(
+      (total, text) => total + [...text].length,
+      0,
+    )
     const report = {
       startedAt: new Date(startedAt).toISOString(),
       durationMs: Date.now() - startedAt,

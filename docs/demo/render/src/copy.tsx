@@ -1,7 +1,7 @@
 import { Easing, interpolate, useVideoConfig } from "remotion"
 import type { PhoneLayout } from "./camera"
-import { monoFamily, sansFamily } from "./fonts"
-import { body, ink, inkOnLime, lime, lineSoft, paper } from "./theme"
+import { monoFamily, sansFamily, typeScale } from "./fonts"
+import { body, ink, inkOnLime, lime, paper } from "./theme"
 import {
   type BoxItem,
   type CalloutItem,
@@ -13,8 +13,34 @@ import {
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 const ease = Easing.bezier(0.16, 1, 0.3, 1)
+const pop = Easing.bezier(0.34, 1.56, 0.64, 1)
 const FADE_SEC = 0.5
-const INSET = 96
+const INSET = 120
+const CARD_MARGIN = 72
+const CARD_GAP = 72
+const CARD_WIDTH = 480
+
+/**
+ * A stage card stands on the open side of the handset, close beside it and
+ * level with the top of the screen. It stops short of the frame edge.
+ */
+export const stageCardBox = (
+  layout: PhoneLayout,
+  stageW: number,
+): { left: number; top: number; width: number; onLeft: boolean } => {
+  const frameLeft = layout.left - layout.bezel
+  const frameRight = layout.left + layout.width + layout.bezel
+  const roomLeft = frameLeft - CARD_MARGIN - CARD_GAP
+  const roomRight = stageW - frameRight - CARD_MARGIN - CARD_GAP
+  const onLeft = roomLeft >= roomRight
+  const open = Math.max(0, onLeft ? roomLeft : roomRight)
+  const width = Math.min(CARD_WIDTH, Math.max(280, open))
+  const left = onLeft
+    ? Math.max(CARD_MARGIN, frameLeft - CARD_GAP - width)
+    : Math.min(stageW - CARD_MARGIN - width, frameRight + CARD_GAP)
+  const top = Math.max(96, layout.top + layout.height * 0.1)
+  return { left, top, width, onLeft }
+}
 
 /** Eased presence 0..1 for a copy primitive, or null when it is not on screen. */
 const presenceAt = (sec: number, at: number, hold: number): number | null => {
@@ -39,27 +65,36 @@ export const CardView: React.FC<{ item: CardItem; sec: number; layout: PhoneLayo
   sec,
   layout,
 }) => {
-  const { width, height } = useVideoConfig()
+  const { width } = useVideoConfig()
   const presence = presenceAt(sec, item.at, item.hold)
   if (presence === null) {
     return null
   }
   const rise = (1 - presence) * 18
   if (item.place === "stage") {
-    const phoneRight = layout.left + layout.width
-    // Sit opposite the phone, and never across it.
-    const roomLeft = layout.left - 24
-    const roomRight = width - phoneRight - 24
-    const onLeft = roomLeft >= 540 || roomLeft > roomRight
+    // The card pops up beside the phone like a sign held up, a little
+    // crooked. It leaves by sliding away from the phone as the camera goes in.
+    const box = stageCardBox(layout, width)
+    const since = sec - item.at
+    const away = box.onLeft ? -1 : 1
+    const gone = interpolate(since, [item.hold, item.hold + FADE_SEC], [0, 1], {
+      ...clamp,
+      easing: Easing.bezier(0.5, 0, 0.8, 0.4),
+    })
+    // Tilted away from the phone. It straightens as it lands and tips as it goes.
+    const tilt = interpolate(since, [0, 0.46], [9, 2.2], { ...clamp, easing: pop }) + gone * 4
     return (
       <div
         style={{
           position: "absolute",
-          top: height * 0.3,
-          width: 500,
-          ...(onLeft ? { left: INSET } : { right: INSET }),
-          opacity: presence,
-          translate: `0px ${rise}px`,
+          top: box.top,
+          width: box.width,
+          left: box.left,
+          transformOrigin: box.onLeft ? "100% 70%" : "0% 70%",
+          opacity: Math.min(interpolate(since, [0, 0.14], [0, 1], clamp), 1 - gone),
+          translate: `${away * gone * 90}px 0px`,
+          scale: interpolate(since, [0, 0.46], [0.78, 1], { ...clamp, easing: pop }),
+          rotate: `${away * tilt}deg`,
           pointerEvents: "none",
         }}
       >
@@ -67,19 +102,19 @@ export const CardView: React.FC<{ item: CardItem; sec: number; layout: PhoneLayo
           style={{
             background: paper,
             color: ink,
-            borderRadius: 18,
-            padding: "32px 34px 32px 30px",
-            borderTop: `6px solid ${lime}`,
-            boxShadow: "0 34px 90px rgba(0,0,0,0.62)",
+            borderRadius: 2,
+            padding: "34px 38px 38px",
+            borderTop: `14px solid ${lime}`,
+            boxShadow: "0 34px 80px rgba(0,0,0,0.6), 0 6px 18px rgba(0,0,0,0.35)",
           }}
         >
           <div
             style={{
               fontFamily: sansFamily,
-              fontSize: 48,
-              fontWeight: 600,
-              lineHeight: 0.98,
-              letterSpacing: "-0.035em",
+              fontSize: 62,
+              fontWeight: 700,
+              lineHeight: 0.96,
+              letterSpacing: "-0.045em",
               textWrap: "balance",
             }}
           >
@@ -106,19 +141,19 @@ export const CardView: React.FC<{ item: CardItem; sec: number; layout: PhoneLayo
         style={{
           background: paper,
           color: ink,
-          borderRadius: 14,
-          padding: "18px 20px",
-          borderLeft: `4px solid ${lime}`,
-          boxShadow: "0 20px 50px rgba(0,0,0,0.55)",
+          borderRadius: 2,
+          padding: "22px 24px",
+          borderLeft: `10px solid ${lime}`,
+          boxShadow: "0 18px 40px rgba(0,0,0,0.5)",
         }}
       >
         <div
           style={{
             fontFamily: sansFamily,
-            fontSize: Math.max(15, Math.round(layout.width * 0.062)),
-            fontWeight: 600,
-            lineHeight: 1.05,
-            letterSpacing: "-0.02em",
+            fontSize: Math.max(22, Math.round(layout.width * 0.072)),
+            fontWeight: 700,
+            lineHeight: 1.02,
+            letterSpacing: "-0.03em",
           }}
         >
           {item.title}
@@ -130,8 +165,50 @@ export const CardView: React.FC<{ item: CardItem; sec: number; layout: PhoneLayo
 
 // --- [CALLOUT] --------------------------------------------------------------
 
-const CALL_H = 196
+const CALL_H = 268
 const HOLE = 30
+const CALLOUT_MARGIN = 28
+
+export type CalloutBox = {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+export type CalloutCardBoxParams = {
+  compact: boolean
+  placement: "target" | "edge"
+  side: "left" | "right"
+  anchorX: number
+  anchorY: number
+  layout: PhoneLayout
+  stageW: number
+  stageH: number
+}
+
+/** The tag box. It stays on stage and off the handset, shrinking when the side is tight. */
+export const calloutCardBox = (params: CalloutCardBoxParams): CalloutBox => {
+  const { compact, placement, side, anchorX, anchorY, layout, stageW, stageH } = params
+  const frameLeft = layout.left - layout.bezel
+  const frameRight = layout.left + layout.width + layout.bezel
+  const right = side === "right"
+  const preferred = compact ? 500 : 580
+  const open = right ? stageW - frameRight : frameLeft
+  const fitted = Math.max(0, open - CALLOUT_MARGIN * 2)
+  const width = Math.min(preferred, Math.max(160, fitted))
+  const gap = compact ? 48 : 72
+  const parked = right ? frameRight + CALLOUT_MARGIN : frameLeft - CALLOUT_MARGIN - width
+  const beside = right ? anchorX + gap : anchorX - gap - width
+  const wanted = placement === "edge" ? parked : beside
+  const left = right
+    ? Math.min(stageW - width - CALLOUT_MARGIN, Math.max(wanted, frameRight + CALLOUT_MARGIN))
+    : Math.max(CALLOUT_MARGIN, Math.min(wanted, frameLeft - CALLOUT_MARGIN - width))
+  const anchorTop = placement === "edge" ? anchorY - CALL_H / 2 : anchorY + 80
+  const top = Math.min(Math.max(anchorTop, CALLOUT_MARGIN), stageH - CALL_H - CALLOUT_MARGIN)
+  return { left, top, width, height: CALL_H }
+}
+
 /** Half the height of the T bracket: it brackets the control, not the pane. */
 const ARM = 66
 /** How far the bracket's caps reach back towards the phone frame. */
@@ -178,22 +255,20 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
 
   const anchorX = layout.left + target.x * layout.width
   const anchorY = layout.top + target.y * layout.height
-  const cardW = compact ? 420 : 500
-  const gap = compact ? 44 : 70
   const right = side === "right"
-  const edgeLeft = right ? layout.left + layout.width + gap : layout.left - gap - cardW
-  const targetLeft = right ? anchorX + gap : anchorX - gap - cardW
-  // A tag beside its control can land on the phone when the control sits near
-  // the frame edge. Push it clear of the phone — by the layout gap, so a T
-  // bracket still has an arm — and then keep it on the stage.
-  const wanted = placement === "edge" ? edgeLeft : targetLeft
-  const clearance = placement === "edge" ? gap : 14
-  const clearOfPhone = right
-    ? Math.max(wanted, layout.left + layout.width + clearance)
-    : Math.min(wanted, layout.left - clearance - cardW)
-  const cardLeft = Math.min(Math.max(clearOfPhone, 24), stageW - cardW - 24)
-  const anchorTop = placement === "edge" ? anchorY - CALL_H / 2 : anchorY + 80
-  const cardTop = Math.min(Math.max(anchorTop, 24), stageH - CALL_H - 24)
+  const box = calloutCardBox({
+    compact,
+    placement,
+    side,
+    anchorX,
+    anchorY,
+    layout,
+    stageW,
+    stageH,
+  })
+  const cardW = box.width
+  const cardLeft = box.left
+  const cardTop = box.top
   const holeX = right ? cardLeft + HOLE : cardLeft + cardW - HOLE
   const holeY = cardTop + HOLE
   const holeNow = holeY + translateY
@@ -204,12 +279,13 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
   // The T bracket has to sit between the tag and the phone. When the tag is
   // pushed to the stage edge it can end up past the frame edge, so the bracket
   // is kept clear of the tag on one side and on the stage on the other.
-  const rawT = right
-    ? layout.left + layout.width + layout.bezel + 10
-    : layout.left - layout.bezel - 10
+  const frameEdge = right
+    ? layout.left + layout.width + layout.bezel
+    : layout.left - layout.bezel
+  const between = right ? (frameEdge + cardLeft) / 2 : (cardLeft + cardW + frameEdge) / 2
   const tX = right
-    ? Math.min(Math.max(rawT, layout.left + layout.width + 2), cardLeft - 8)
-    : Math.max(Math.min(rawT, layout.left - 2), cardLeft + cardW + 8)
+    ? Math.min(cardLeft - 8, Math.max(frameEdge + 8, between))
+    : Math.max(cardLeft + cardW + 8, Math.min(frameEdge - 8, between))
   const spanTop = anchorY - ARM
   const spanBottom = anchorY + ARM
   const hDraw = interpolate(since, [0.05, 0.45], [0, 1], { ...clamp, easing: ease })
@@ -237,7 +313,7 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
               y2={tagCenterY}
               pathLength={1}
               stroke={lime}
-              strokeWidth={2.5}
+              strokeWidth={4}
               strokeLinecap="round"
               strokeDasharray="1"
               strokeDashoffset={1 - hDraw}
@@ -251,7 +327,7 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
               y2={spanBottom}
               pathLength={1}
               stroke={lime}
-              strokeWidth={2.5}
+              strokeWidth={4}
               strokeLinecap="round"
               strokeDasharray="1"
               strokeDashoffset={1 - vDraw}
@@ -267,7 +343,7 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
                 y2={y}
                 pathLength={1}
                 stroke={lime}
-                strokeWidth={2.5}
+                strokeWidth={4}
                 strokeLinecap="round"
                 strokeDasharray="1"
                 strokeDashoffset={1 - vDraw}
@@ -281,7 +357,7 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
               d={string}
               pathLength={1}
               stroke={lime}
-              strokeWidth={2.5}
+              strokeWidth={4}
               strokeLinecap="round"
               strokeDasharray="1"
               strokeDashoffset={1 - draw}
@@ -317,9 +393,9 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
           width: cardW,
           height: CALL_H,
           background: lime,
-          border: `2px solid ${ink}`,
-          borderRadius: 20,
-          boxShadow: "0 28px 80px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.3) inset",
+          border: `3px solid ${ink}`,
+          borderRadius: 4,
+          boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
           color: inkOnLime,
           opacity: presence,
           pointerEvents: "none",
@@ -352,9 +428,9 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
           <div
             style={{
               fontFamily: monoFamily,
-              fontSize: 15,
-              fontWeight: 600,
-              letterSpacing: "0.18em",
+              fontSize: typeScale.label,
+              fontWeight: 700,
+              letterSpacing: "0.22em",
               opacity: 0.62,
             }}
           >
@@ -364,12 +440,12 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
         <div
           style={{
             marginTop: eyebrow ? 8 : 0,
-            maxWidth: compact ? 340 : 400,
+            maxWidth: Math.max(120, cardW - 108),
             fontFamily: sansFamily,
-            fontSize: compact ? 36 : 40,
-            fontWeight: 600,
-            lineHeight: 0.98,
-            letterSpacing: "-0.035em",
+            fontSize: Math.min(compact ? 46 : typeScale.lead, Math.max(32, Math.round((cardW - 108) * 0.13))),
+            fontWeight: 700,
+            lineHeight: 0.94,
+            letterSpacing: "-0.04em",
             textWrap: "balance",
           }}
         >
@@ -379,9 +455,9 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
           <div
             style={{
               marginTop: 10,
-              maxWidth: compact ? 340 : 400,
+              maxWidth: Math.max(120, cardW - 108),
               fontFamily: monoFamily,
-              fontSize: 18,
+              fontSize: typeScale.monoSmall,
               lineHeight: 1.32,
               letterSpacing: "0.01em",
               opacity: 0.72,
@@ -397,7 +473,8 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
 
 // --- [SPOTLIGHT] ------------------------------------------------------------
 
-const SPOT_COLUMN = 640
+export const SPOT_COLUMN = 580
+export const SPOT_INSET = 64
 
 /**
  * [SPOTLIGHT] the large copy card: a mono kicker, a lime rule, a display title.
@@ -427,7 +504,7 @@ export const SpotlightView: React.FC<{ item: SpotlightItem; sec: number }> = ({ 
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        ...(side === "left" ? { left: INSET } : { right: INSET }),
+        ...(side === "left" ? { left: SPOT_INSET } : { right: SPOT_INSET }),
         opacity: presence,
         translate: `${slide}px 0px`,
         pointerEvents: "none",
@@ -436,9 +513,9 @@ export const SpotlightView: React.FC<{ item: SpotlightItem; sec: number }> = ({ 
       <div
         style={{
           fontFamily: monoFamily,
-          fontSize: 26,
-          fontWeight: 500,
-          letterSpacing: "0.16em",
+          fontSize: 28,
+          fontWeight: 700,
+          letterSpacing: "0.22em",
           lineHeight: 1,
           color: lime,
           opacity: kickerIn,
@@ -446,15 +523,15 @@ export const SpotlightView: React.FC<{ item: SpotlightItem; sec: number }> = ({ 
       >
         {kicker}
       </div>
-      <div style={{ marginTop: 22, width: 116 * rule, height: 3, background: lime }} />
+      <div style={{ marginTop: 28, width: 168 * rule, height: 8, background: lime }} />
       <div
         style={{
-          marginTop: 30,
+          marginTop: 28,
           fontFamily: sansFamily,
-          fontSize: 96,
-          fontWeight: 600,
-          lineHeight: 0.94,
-          letterSpacing: "-0.045em",
+          fontSize: typeScale.display,
+          fontWeight: 700,
+          lineHeight: 0.9,
+          letterSpacing: "-0.05em",
           color: paper,
           textWrap: "balance",
           opacity: titleIn,
@@ -469,7 +546,7 @@ export const SpotlightView: React.FC<{ item: SpotlightItem; sec: number }> = ({ 
 
 // --- [NOTE] -----------------------------------------------------------------
 
-const NOTE_W = 470
+const NOTE_W = 540
 
 /**
  * [NOTE] one paper note with a lime tape and a rule. It slides out from behind
@@ -515,8 +592,8 @@ export const NoteView: React.FC<{ item: NoteItem; sec: number; layout: PhoneLayo
         style={{
           background: "#F7F3E7",
           color: ink,
-          borderRadius: 6,
-          padding: "44px 34px 34px",
+          borderRadius: 2,
+          padding: "56px 40px 40px",
           position: "relative",
         }}
       >
@@ -525,27 +602,27 @@ export const NoteView: React.FC<{ item: NoteItem; sec: number; layout: PhoneLayo
             position: "absolute",
             left: 30,
             top: -16,
-            padding: "8px 14px 7px",
+            padding: "10px 16px 9px",
             background: lime,
             color: inkOnLime,
             fontFamily: monoFamily,
-            fontSize: 15,
-            fontWeight: 600,
-            letterSpacing: "0.2em",
+            fontSize: typeScale.label,
+            fontWeight: 700,
+            letterSpacing: "0.22em",
             transform: "rotate(-2deg)",
             boxShadow: "0 6px 14px rgba(0,0,0,0.25)",
           }}
         >
           {item.label}
         </div>
-        <div style={{ height: 3, background: lime, marginBottom: 22 }} />
+        <div style={{ height: 8, background: lime, marginBottom: 26 }} />
         <div
           style={{
             fontFamily: sansFamily,
-            fontSize: 44,
-            fontWeight: 600,
-            lineHeight: 0.98,
-            letterSpacing: "-0.035em",
+            fontSize: typeScale.title,
+            fontWeight: 700,
+            lineHeight: 0.94,
+            letterSpacing: "-0.045em",
             textWrap: "balance",
           }}
         >
@@ -602,8 +679,8 @@ export const BoxView: React.FC<{ item: BoxItem; sec: number; layout: PhoneLayout
           top: layout.top + y * layout.height - boxH / 2,
           width: boxW,
           height: boxH,
-          border: `3px solid ${lime}`,
-          borderRadius: 12,
+          border: `4px solid ${lime}`,
+          borderRadius: 2,
           opacity: presence,
           pointerEvents: "none",
         }}
@@ -613,14 +690,15 @@ export const BoxView: React.FC<{ item: BoxItem; sec: number; layout: PhoneLayout
           position: "absolute",
           left: INSET,
           top: 120,
-          width: 420,
-          padding: "20px 24px",
+          width: 480,
+          padding: "28px 32px",
           background: paper,
           color: ink,
-          borderRadius: 12,
+          borderRadius: 2,
+          borderTop: `12px solid ${lime}`,
           fontFamily: sansFamily,
-          fontSize: 32,
-          fontWeight: 600,
+          fontSize: typeScale.lead,
+          fontWeight: 700,
           letterSpacing: "-0.03em",
           opacity: presence,
           pointerEvents: "none",
@@ -659,12 +737,12 @@ export const CapView: React.FC<{ item: CapItem; sec: number }> = ({ item, sec })
     >
       <div
         style={{
-          background: "rgba(8,10,13,0.92)",
-          border: `1px solid ${lineSoft}`,
-          borderRadius: 8,
-          padding: "14px 22px",
+          background: "#000",
+          borderTop: `8px solid ${lime}`,
+          borderRadius: 2,
+          padding: "18px 28px",
           fontFamily: monoFamily,
-          fontSize: 22,
+          fontSize: typeScale.monoSmall,
           letterSpacing: "0.04em",
           color: body,
         }}

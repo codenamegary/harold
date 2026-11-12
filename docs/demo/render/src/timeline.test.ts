@@ -1,17 +1,32 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
-import { REST, poseAt, waddleAt, type BodyCue } from "./body"
-import { PHONE_FIT, PRESETS, phoneLayout, type CameraState } from "./camera"
-import { LIGHTS, PARALLAX, lightAt, type LightState } from "./stage"
+import { REST, idleGainForScale, poseAt, waddleAt, type BodyCue } from "./body"
 import {
-  CELEBRATION_AT,
-  DURATION_IN_FRAMES,
-  DURATION_SEC,
+  CAMERA_EASE_SEC,
+  ENTRANCE_SCALE,
+  PHONE_FIT,
+  PRESETS,
+  VERTICAL_FIT,
+  phoneDriftGain,
+  phoneLayout,
+  type CameraState,
+} from "./camera"
+import {
+  FLARE_SPREAD,
+  LIGHTS,
+  PARALLAX,
+  beamCone,
+  beamHalfAt,
+  lightAt,
+  type LightState,
+} from "./stage"
+import {
+  DRIFT_PERCENT,
+  DRIFT_PERIOD_SEC,
   EDIT_SLICES,
   FPS,
   KEYBURSTS,
   MUSIC_VOLUME,
-  SCENES,
   SCENE_ORDER,
   activeClip,
   buildTimeline,
@@ -24,27 +39,24 @@ import {
   firstTapAnchor,
   missingSlices,
   notes,
-  phoneFade,
-  sceneFrames,
   spotlights,
   type CaptureSlice,
   type SceneSlug,
   type Shot,
   type Timeline,
 } from "./timeline"
-import { CTA_HANDLE, SITE, SUBTITLE } from "./slides"
+import { calloutCardBox, SPOT_COLUMN, SPOT_INSET, stageCardBox } from "./copy"
+import { INTRO_FRAMES, SSH_ZOOM_EASE_SEC, SSH_ZOOM_SEC } from "./opening"
+import { rimLevels } from "./phone"
+import { CTA_HANDLE, SITE, SUBTITLE, lockupBox } from "./slides"
 
 const capture = JSON.parse(
   readFileSync(new URL("../public/capture.json", import.meta.url), "utf8"),
 ) as { width: number; height: number; slices: CaptureSlice[] }
 
 const REAL_SLICES = [
-  "connect_empty",
-  "connect_key",
-  "connect_fill",
-  "connect_test",
-  "connect_trust",
-  "connect_save",
+  "home_empty",
+  "connect",
   "landing",
   "new_session",
   "plan",
@@ -83,27 +95,10 @@ const drawnAt = (t: Timeline, sec: number): number => {
   return clipFrame(clip, sec)
 }
 
-/** On-screen characters a second for a shot's own real typing window. */
-const onScreenCps = (shot: Shot, sample = 12): number => {
-  const drawnTo = shot.startSec + shot.duration * shot.rate
-  const keys = (shot.data.keys ?? [])
-    .map((key) => key.atSec)
-    .filter((atSec) => atSec >= shot.startSec && atSec <= drawnTo)
-    .sort((a, b) => a - b)
-  const first = keys.slice(0, sample)
-  if (first.length < 2) {
-    throw new Error(`shot at ${shot.at} draws no typing`)
-  }
-  const renderSpan = (first[first.length - 1] - first[0]) / shot.rate
-  return (first.length - 1) / renderSpan
-}
-
-const frame = (sec: number): number => Math.round(sec * FPS)
-
 // --- Capture contract -------------------------------------------------------
 
 describe("timeline / capture contract", () => {
-  test("the edit uses every captured slice, in capture order", () => {
+  test("the edit names the slices it plays, in capture order", () => {
     expect([...EDIT_SLICES].sort()).toEqual([...REAL_SLICES].sort())
     expect(EDIT_SLICES).toEqual(REAL_SLICES)
     expect(missingSlices(capture.slices)).toEqual([])
@@ -119,8 +114,13 @@ describe("timeline / capture contract", () => {
   test("every shot stays inside its own slice", () => {
     const t = timeline()
     for (const shot of t.shots) {
-      const drawnTo = shot.startSec + shot.duration * shot.rate
-      expect(drawnTo).toBeLessThanOrEqual(shot.data.durationSec + 1e-6)
+      if (shot.hold) {
+        expect(shot.startSec).toBeGreaterThanOrEqual(0)
+        expect(shot.startSec).toBeLessThanOrEqual(shot.data.durationSec)
+      } else {
+        const drawnTo = shot.startSec + shot.duration * shot.rate
+        expect(drawnTo).toBeLessThanOrEqual(shot.data.durationSec + 1e-6)
+      }
       expect(shot.data.file.startsWith("slices/")).toBe(true)
       expect(shot.duration * FPS).toBeGreaterThan(2)
     }
@@ -130,44 +130,43 @@ describe("timeline / capture contract", () => {
     const t = timeline()
     const byScene = (scene: SceneSlug): string[] => shotsOf(t, scene).map((shot) => shot.slice)
     expect(byScene("intro")).toEqual([])
-    expect(byScene("ssh")).toEqual([
-      "connect_empty",
-      "connect_key",
-      "connect_fill",
-      "connect_fill",
-      "connect_test",
-      "connect_test",
-      "connect_trust",
-      "connect_save",
-      "landing",
-    ])
-    expect(byScene("achievement")).toEqual(["landing"])
-    expect(byScene("newSession")).toEqual(["new_session", "new_session", "new_session"])
-    expect(byScene("plan")).toEqual(["plan", "plan", "plan", "plan"])
-    expect(byScene("question")).toEqual(["question", "question", "question"])
-    expect(byScene("build")).toEqual(["build", "build", "build", "build", "build"])
+    expect(byScene("ssh")).toEqual(["home_empty", "connect"])
+    expect(byScene("achievement")).toEqual(["connect", "landing"])
+    expect(byScene("newSession")).toEqual(["new_session"])
+    expect(byScene("plan")).toEqual(["plan"])
+    expect(byScene("question")).toEqual(["question"])
+    expect(byScene("build")).toEqual(["build"])
     expect(byScene("usage")).toEqual(["usage"])
-    expect(byScene("changes")).toEqual([
-      "changes",
-      "changes",
-      "changes",
-      "changes",
-      "changes",
-      "changes",
-    ])
-    expect(byScene("worktrees")).toEqual(["worktrees", "worktrees"])
-    expect(byScene("pr")).toEqual(["pr", "pr", "pr", "pr", "pr"])
+    expect(byScene("changes")).toEqual(["changes"])
+    expect(byScene("worktrees")).toEqual(["worktrees"])
+    expect(byScene("pr")).toEqual(["pr"])
     expect(byScene("outro")).toEqual([])
   })
 
-  test("the achievement picks the landing recording up where the SSH left it", () => {
+  test("the achievement opens on the save tap and keeps playing", () => {
     const t = timeline()
-    const sshLast = shotsOf(t, "ssh")[shotsOf(t, "ssh").length - 1]
-    const hinge = shotsOf(t, "achievement")[0]
-    const leftAt = sshLast.startSec + sshLast.duration * sshLast.rate
-    expect(leftAt).toBeCloseTo(hinge.startSec, 6)
-    expect(hinge.slice).toBe("landing")
+    const connect = capture.slices.find((slice) => slice.name === "connect")
+    const taps = [...(connect?.taps ?? [])].sort((a, b) => a.atSec - b.atSec)
+    const tap = taps[taps.length - 1]
+    if (connect === undefined || tap === undefined) {
+      throw new Error("connect has no save tap")
+    }
+    const achievement = t.scenes.find((scene) => scene.slug === "achievement")
+    const opening = shotsOf(t, "achievement")[0]
+    const sshConnect = shotsOf(t, "ssh").find((shot) => shot.slice === "connect")
+    if (achievement === undefined || sshConnect === undefined) {
+      throw new Error("the save tap is not split across the hinge")
+    }
+    expect(opening.slice).toBe("connect")
+    expect(opening.hold).toBe(false)
+    expect(opening.startSec).toBeCloseTo(tap.atSec, 3)
+    expect(sshConnect.startSec + sshConnect.duration).toBeCloseTo(tap.atSec, 3)
+    expect(achievement.from).toBeCloseTo(opening.at, 3)
+    const before = t.cameraAt(achievement.from - 1 / FPS).scale
+    const after = t.cameraAt(achievement.from + 1 / FPS).scale
+    expect(Math.abs(after - before)).toBeLessThan(0.08)
   })
+
 })
 
 // --- Scenes and light -------------------------------------------------------
@@ -188,31 +187,36 @@ describe("timeline / the scenes", () => {
       "pr",
       "outro",
     ])
-    expect(SCENES.length).toBe(12)
-    expect(SCENES[2].slug).toBe("achievement")
+    const scenes = timeline().scenes
+    expect(scenes.length).toBe(12)
+    expect(scenes[2].slug).toBe("achievement")
   })
 
-  test("the duration is the sum of the scene budget, between 110 and 125 s", () => {
-    const frames = SCENES.map((scene) => scene.frames)
-    expect(frames).toEqual([105, 600, 225, 180, 420, 180, 450, 150, 360, 105, 465, 150])
-    expect(frames.reduce((sum, value) => sum + value, 0)).toBe(DURATION_IN_FRAMES)
-    expect(DURATION_IN_FRAMES).toBe(3390)
-    expect(DURATION_SEC).toBeCloseTo(113, 10)
-    expect(DURATION_SEC).toBeGreaterThanOrEqual(110)
-    expect(DURATION_SEC).toBeLessThanOrEqual(125)
-    expect(buildTimeline(capture.slices).endSec).toBe(DURATION_SEC)
+  test("the film is as long as the recordings, plus the three graphic scenes", () => {
+    const t = timeline()
+    const frames = t.scenes.map((scene) => scene.frames)
+    const total = frames.reduce((sum, value) => sum + value, 0)
+    expect(total / FPS).toBeCloseTo(t.endSec, 9)
+    expect(t.scenes[0].frames).toBe(INTRO_FRAMES)
+    expect(t.scenes[t.scenes.length - 1].frames).toBe(150)
+    const achievement = t.scenes.find((scene) => scene.slug === "achievement")
+    if (achievement === undefined) {
+      throw new Error("no achievement scene")
+    }
+    expect(achievement.frames).toBeGreaterThan(FPS * 4)
   })
 
   test("the scenes tile the timeline with no gap, on whole frames", () => {
-    expect(SCENES[0].from).toBe(0)
-    SCENES.forEach((scene, index) => {
+    const scenes = timeline().scenes
+    expect(scenes[0].from).toBe(0)
+    scenes.forEach((scene, index) => {
       if (index > 0) {
-        expect(scene.from).toBeCloseTo(SCENES[index - 1].to, 9)
+        expect(scene.from).toBeCloseTo(scenes[index - 1].to, 9)
       }
       expect(Math.abs(scene.from * FPS - Math.round(scene.from * FPS))).toBeLessThan(1e-9)
-      expect(sceneFrames(scene.slug)).toBe(scene.frames)
+      expect(scene.frames / FPS).toBeCloseTo(scene.to - scene.from, 9)
     })
-    expect(SCENES[SCENES.length - 1].to).toBe(DURATION_SEC)
+    expect(scenes[scenes.length - 1].to).toBe(timeline().endSec)
   })
 
   test("every scene holds the light state the script names", () => {
@@ -230,11 +234,11 @@ describe("timeline / the scenes", () => {
       ["pr", "full"],
       ["outro", "alone"],
     ]
-    expect(SCENES.map((scene) => [scene.slug, scene.light]) as [SceneSlug, LightState][]).toEqual(
+    const t = timeline()
+    expect(t.scenes.map((scene) => [scene.slug, scene.light]) as [SceneSlug, LightState][]).toEqual(
       expected,
     )
-    const t = timeline()
-    for (const scene of SCENES) {
+    for (const scene of t.scenes) {
       // The state holds after its transition, so the shape is exact.
       expect(lightAt(t.lights, scene.from + 1.3).state).toBe(scene.light)
       expect(lightAt(t.lights, scene.from + 1.3).shape).toEqual(LIGHTS[scene.light])
@@ -252,23 +256,26 @@ describe("timeline / the scenes", () => {
     // alone -> arrival -> reward -> work -> full. The outro returns to alone.
     expect(states).toEqual(["alone", "arrival", "reward", "work", "full"])
     expect(Object.keys(LIGHTS).length).toBe(5)
-    const outro = SCENES[SCENES.length - 1]
+    const scenes = timeline().scenes
+    const outro = scenes[scenes.length - 1]
     expect(outro.light).toBe("alone")
   })
 
   test("a light transition is smooth and then holds", () => {
     const t = timeline()
-    const arrival = t.lights[1].at
-    const before = lightAt(t.lights, arrival - 0.001)
-    const middle = lightAt(t.lights, arrival + 0.6)
-    const after = lightAt(t.lights, arrival + 1.2)
-    expect(before.state).toBe("alone")
-    expect(middle.state).toBe("arrival")
-    expect(middle.shape.intensity).toBeGreaterThan(before.shape.intensity)
-    expect(middle.shape.intensity).toBeLessThan(after.shape.intensity)
-    expect(after.shape).toEqual(LIGHTS.arrival)
-    // It holds until the next cue, which is the achievement.
-    expect(lightAt(t.lights, t.lights[2].at - 0.01).shape).toEqual(LIGHTS.arrival)
+    const ssh = t.scenes[1]
+    const reward = t.lights.find((cue) => cue.state === "reward")
+    if (reward === undefined) {
+      throw new Error("the cut has no reward light")
+    }
+    expect(lightAt(t.lights, ssh.from + 1.3).state).toBe("arrival")
+    const before = lightAt(t.lights, reward.at - 0.01)
+    const middle = lightAt(t.lights, reward.at + 0.6)
+    const after = lightAt(t.lights, reward.at + 1.2)
+    expect(before.state).toBe("arrival")
+    expect(middle.state).toBe("reward")
+    expect(middle.shape.flare).toBeGreaterThan(before.shape.flare)
+    expect(after.shape).toEqual(LIGHTS.reward)
   })
 
   test("only the intro and the outro are graphics-only scenes", () => {
@@ -306,13 +313,13 @@ describe("timeline / camera", () => {
     const t = timeline()
     const achievement = t.scenes[2]
     expect(achievement.layout).toBe("L2C")
-    const state = t.cameraAt(achievement.from + 0.5)
+    const state = t.cameraAt(achievement.from + CAMERA_EASE_SEC + 0.05)
     expect(state.preset).toBe("center-two-thirds")
     expect(state.scale).toBe(2)
     expect(state.dock).toBeGreaterThan(0.6)
-    // The phone has to clear the spotlight column on the left.
+    // The phone frame has to clear the spotlight column on the left.
     const layout = phoneLayout(state, VIDEO_W, VIDEO_H, STAGE_W, STAGE_H, { x: 0, y: 0 })
-    expect(layout.left).toBeGreaterThan(96 + 640)
+    expect(layout.left - layout.bezel).toBeGreaterThan(SPOT_INSET + SPOT_COLUMN + 48)
   })
 
   test("the usage scene honours the script's zoom exactly", () => {
@@ -321,7 +328,7 @@ describe("timeline / camera", () => {
     if (usage === undefined) {
       throw new Error("no usage scene")
     }
-    const state = t.cameraAt(usage.from + 0.2)
+    const state = t.cameraAt(usage.from + CAMERA_EASE_SEC + 0.05)
     expect(state.preset).toBe("upper-center")
     expect(state.scale).toBe(2.2)
     expect(state.focus).toEqual({ x: 0.5, y: 0.08 })
@@ -338,15 +345,18 @@ describe("timeline / camera", () => {
     if (newSession === undefined) {
       throw new Error("no newSession scene")
     }
-    const wide = t.cameraAt(newSession.from + 1)
-    const form = t.cameraAt(newSession.from + 2.5)
-    const back = t.cameraAt(newSession.from + 5)
+    const wide = t.cameraAt(newSession.from + CAMERA_EASE_SEC + 0.05)
+    const mid = t.cameraAt(newSession.from + 1.9 + CAMERA_EASE_SEC * 0.45)
+    const form = t.cameraAt(newSession.from + 1.9 + CAMERA_EASE_SEC + 0.05)
+    const back = t.cameraAt(newSession.from + 3.6 + CAMERA_EASE_SEC + 0.05)
     expect(wide.preset).toBe("full")
+    expect(wide.scale).toBe(1)
     expect(form.preset).toBe("center-two-thirds")
+    expect(form.scale).toBe(2)
     expect(back.preset).toBe("full")
-    // No state changes inside a held window.
-    expect(t.cameraAt(newSession.from + 1.5)).toEqual(wide)
-    expect(t.cameraAt(newSession.from + 3)).toEqual(form)
+    expect(mid.scale).toBeGreaterThan(wide.scale)
+    expect(mid.scale).toBeLessThan(form.scale)
+    expect(t.cameraAt(newSession.from + 1.5).scale).toBe(wide.scale)
   })
 
   test("1x is the whole handset, and any push covers the frame", () => {
@@ -404,34 +414,98 @@ describe("timeline / the stage", () => {
   })
 
   test("every scene drifts at one to two percent of frame width per second", () => {
-    for (const scene of SCENES) {
+    for (const scene of timeline().scenes) {
       expect(Math.abs(scene.drift)).toBeGreaterThanOrEqual(1)
       expect(Math.abs(scene.drift)).toBeLessThanOrEqual(2)
     }
   })
 
-  test("the drift accumulator restarts on every cut", () => {
+  test("the five light states are different pictures", () => {
+    const { alone, arrival, reward, work, full } = LIGHTS
+    // Alone is wide and dim, centred under the lockup.
+    expect(alone.intensity).toBeLessThan(0.5)
+    expect(alone.radiusX).toBeGreaterThan(work.radiusX * 2)
+    expect(alone.centreX).toBeCloseTo(0.5, 2)
+    expect(alone.haze).toBeLessThan(arrival.haze)
+    // Arrival is brighter and sits to one side of the centred phone.
+    expect(arrival.intensity).toBeGreaterThan(alone.intensity + 0.3)
+    expect(arrival.centreX).toBeLessThan(work.centreX - 0.05)
+    expect(arrival.radiusX).toBeGreaterThan(work.radiusX + 0.08)
+    expect(arrival.haze).toBeGreaterThan(work.haze + 0.3)
+    expect(work.haze).toBeLessThan(0.35)
+    expect(work.radiusX).toBeLessThan(0.16)
+    expect(reward.flare).toBeGreaterThan(0.5)
+    expect(arrival.flare).toBeLessThan(0.5)
+    expect(work.flare).toBeLessThan(0.5)
+    expect(full.flare).toBeLessThan(0.5)
+    expect(reward.centreX - reward.radiusX * FLARE_SPREAD).toBeGreaterThan(0.4)
+    expect(full.radiusX).toBeGreaterThan(work.radiusX * 2.5)
+    expect(full.centreX).toBeCloseTo(0.5, 1)
+    expect(reward.haze).toBeGreaterThan(work.haze)
+  })
+
+  test("a side light hits one edge harder, a pool under the phone hits both", () => {
+    const phone = { poolRadius: 600, phoneCenter: 960, phoneWidth: 400 }
+    const fromLeft = rimLevels({ ...phone, poolX: 700 })
+    expect(fromLeft.left).toBeGreaterThan(fromLeft.right + 0.4)
+    const fromRight = rimLevels({ ...phone, poolX: 1220 })
+    expect(fromRight.right).toBeGreaterThan(fromRight.left + 0.4)
+    const under = rimLevels({ ...phone, poolX: 960 })
+    expect(under.left).toBeCloseTo(under.right, 9)
+    expect(under.left).toBeGreaterThan(0.5)
+  })
+
+  test("a phone out in the dark has not earned the light", () => {
+    const pool = { poolX: 700, poolRadius: 300, phoneWidth: 200 }
+    const inside = rimLevels({ ...pool, phoneCenter: 780 })
+    const far = rimLevels({ ...pool, phoneCenter: 1700 })
+    expect(far.left).toBeLessThan(inside.left * 0.2)
+    // The levels are continuous, so a drifting phone never pops a rim.
+    const a = rimLevels({ ...pool, phoneCenter: 770 })
+    const b = rimLevels({ ...pool, phoneCenter: 771 })
+    expect(Math.abs(a.left - b.left)).toBeLessThan(0.01)
+    expect(Math.abs(a.right - b.right)).toBeLessThan(0.01)
+  })
+
+  test("drift is one wave, so a shot change cannot snap the phone", () => {
     const t = timeline()
-    const shot = shotsOf(t, "plan")[1]
-    expect(driftAt(t.scenes, t.shots, shot.at, STAGE_W).x).toBeCloseTo(0, 6)
-    const later = driftAt(t.scenes, t.shots, shot.at + 2, STAGE_W).x
-    const expected = (t.scenes[4].drift / 100) * STAGE_W * 2
-    expect(later).toBeCloseTo(expected, 6)
-    // The pool and the haze are offset from the same drift at different factors.
+    expect(driftAt(0, STAGE_W).x).toBeCloseTo(0, 6)
+    const cut = shotsOf(t, "ssh")[1].at
+    const before = driftAt(cut - 1 / FPS, STAGE_W).x
+    const after = driftAt(cut + 1 / FPS, STAGE_W).x
+    expect(Math.abs(after - before)).toBeLessThan(3)
+    const speed = (DRIFT_PERCENT / 100) * STAGE_W
+    const amp = (speed * DRIFT_PERIOD_SEC) / (2 * Math.PI)
+    const later = driftAt(2, STAGE_W).x
+    expect(Math.abs(later)).toBeLessThanOrEqual(amp + 1e-6)
+    expect(Math.abs(later)).toBeGreaterThan(1)
     expect(later * PARALLAX.pool).not.toBeCloseTo(later, 3)
-    expect(later * PARALLAX.haze).not.toBeCloseTo(later, 3)
+  })
+
+  test("the shaft lands on the pool circle", () => {
+    const drift = 80
+    for (const shape of Object.values(LIGHTS)) {
+      const cone = beamCone(shape, STAGE_W, STAGE_H, drift)
+      // The foot is the pool ellipse: same centre, same radii, same drift.
+      expect(cone.footX).toBeCloseTo(shape.centreX * STAGE_W + drift * PARALLAX.pool, 6)
+      expect(cone.footY).toBeCloseTo(shape.centreY * STAGE_H, 6)
+      expect(cone.footHalfX).toBeCloseTo(shape.radiusX * STAGE_W, 6)
+      expect(cone.footHalfY).toBeCloseTo(shape.radiusY * STAGE_H, 6)
+      expect(beamHalfAt(cone, cone.footY)).toBeCloseTo(cone.footHalfX, 6)
+      // The lamp is straight above the pool, above the frame, and narrow.
+      expect(cone.apexX).toBeCloseTo(cone.footX, 6)
+      expect(cone.apexY).toBeLessThan(0)
+      expect(cone.apexHalf).toBeLessThan(cone.footHalfX * 0.2)
+      expect(beamHalfAt(cone, 0)).toBeLessThan(cone.footHalfX)
+    }
   })
 })
 
 // --- Body language ----------------------------------------------------------
 
 describe("timeline / the phone as a character", () => {
-  test("the SSH scene is the only waddle, and it starts on the cut", () => {
-    const t = timeline()
-    expect(t.waddles.length).toBe(1)
-    const ssh = t.scenes[1]
-    expect(t.waddles[0].at).toBeCloseTo(ssh.from, 6)
-    expect(t.waddles[0].duration).toBeGreaterThan(1)
+  test("the work scenes do not waddle. The SSH walk lives in the opening act", () => {
+    expect(timeline().waddles).toEqual([])
   })
 
   test("the waddle rings down to nothing", () => {
@@ -442,6 +516,42 @@ describe("timeline / the phone as a character", () => {
     const early = Math.abs(waddleAt(waddle, 0.2).rotateZ)
     const late = Math.abs(waddleAt(waddle, 1.3).rotateZ)
     expect(early).toBeGreaterThan(late)
+    const mid = waddleAt(waddle, 0.4)
+    expect(Math.abs(mid.rotateZ)).toBeGreaterThan(0)
+  })
+
+  test("the idle walk stops once the SSH zoom has filled the frame", () => {
+    const t = timeline()
+    const ssh = t.scenes[1]
+    expect(t.idleFrozenAt(ssh.from + 0.2)).toBe(false)
+    expect(t.idleFrozenAt(ssh.from + SSH_ZOOM_SEC + SSH_ZOOM_EASE_SEC + 0.05)).toBe(true)
+    expect(t.idleFrozenAt(t.scenes[2].from + 0.2)).toBe(false)
+  })
+
+  test("a zoomed-in phone does not take the camera drift", () => {
+    expect(phoneDriftGain(1)).toBe(1)
+    expect(phoneDriftGain(ENTRANCE_SCALE)).toBe(1)
+    expect(phoneDriftGain(VERTICAL_FIT)).toBe(0)
+    expect(phoneDriftGain(2.4)).toBe(0)
+    const wide = phoneLayout(PRESETS.full, VIDEO_W, VIDEO_H, STAGE_W, STAGE_H, { x: 40, y: 0 })
+    const still = phoneLayout(
+      { ...PRESETS.full, scale: VERTICAL_FIT },
+      VIDEO_W,
+      VIDEO_H,
+      STAGE_W,
+      STAGE_H,
+      { x: 40 * phoneDriftGain(VERTICAL_FIT), y: 0 },
+    )
+    const stillOther = phoneLayout(
+      { ...PRESETS.full, scale: VERTICAL_FIT },
+      VIDEO_W,
+      VIDEO_H,
+      STAGE_W,
+      STAGE_H,
+      { x: 80 * phoneDriftGain(VERTICAL_FIT), y: 0 },
+    )
+    expect(wide.left).not.toBeCloseTo(wide.left - 40, 4)
+    expect(still.left).toBeCloseTo(stillOther.left, 6)
   })
 
   test("every scene with footage states its body language on the cut", () => {
@@ -479,14 +589,45 @@ describe("timeline / the phone as a character", () => {
       throw new Error("no changes scene")
     }
     const turning = poseAt(t.bodies, changes.from + 0.1)
-    const presented = poseAt(t.bodies, changes.from + 1.2)
-    expect(turning.rotateY).toBeLessThan(-5)
-    expect(Math.abs(presented.rotateY)).toBeLessThan(1)
+    const presented = poseAt(t.bodies, changes.from + 6)
+    expect(turning.rotateY).toBeLessThan(-8)
+    expect(presented.rotateY).toBeLessThan(-8)
   })
 
   test("a held pose is still animated by the sway", () => {
     const cues: BodyCue[] = [{ at: 0, pose: { ...REST } }]
     expect(poseAt(cues, 4)).toEqual(REST)
+  })
+
+  test("a pose holds through the scene instead of drifting toward the next one", () => {
+    const t = timeline()
+    const ssh = t.scenes[1]
+    const settledAt = Math.min(ssh.from + 8, ssh.to - 1)
+    const settled = poseAt(t.bodies, settledAt)
+    expect(settled.x).toBeCloseTo(0, 4)
+    expect(settled.rotateY).toBeCloseTo(2, 4)
+    expect(settled.scale).toBeCloseTo(1, 4)
+    const plan = t.scenes.find((scene) => scene.slug === "plan")
+    const question = t.scenes.find((scene) => scene.slug === "question")
+    if (plan === undefined || question === undefined) {
+      throw new Error("missing scenes")
+    }
+    const leaning = poseAt(t.bodies, Math.min(plan.from + 3, plan.to - 1))
+    const stillLeaning = poseAt(t.bodies, Math.min(plan.from + 10, plan.to - 1))
+    expect(stillLeaning.rotateY).toBeCloseTo(leaning.rotateY, 4)
+    expect(stillLeaning.scale).toBeCloseTo(leaning.scale, 4)
+    const sitting = poseAt(t.bodies, Math.min(question.from + 4, question.to - 1))
+    expect(sitting.rotateY).toBeGreaterThan(8)
+    expect(sitting.scale).toBeLessThan(1)
+    expect(idleGainForScale(1)).toBe(1)
+    expect(idleGainForScale(2.2)).toBeLessThan(1)
+  })
+
+  test("the achievement holds clear of the left copy", () => {
+    const t = timeline()
+    const held = poseAt(t.bodies, t.scenes[2].from + 3)
+    expect(held.scale).toBeLessThanOrEqual(1.02)
+    expect(held.x).toBeGreaterThanOrEqual(0)
   })
 })
 
@@ -512,7 +653,7 @@ describe("timeline / the copy is the script's", () => {
       }
     })
     expect(lines).toEqual([
-      "CARD Harold over SSH to your agent hosts [stage]",
+      "CARD Look what I can do! [stage]",
       "SPOTLIGHT Achievement unlocked / Work from Couch",
       "NOTE NEW SESSION / Start something new",
       "CALLOUT PLAN Use your agent’s plan mode",
@@ -556,7 +697,7 @@ describe("timeline / the copy is the script's", () => {
 
   test("callouts anchor to the first tap of their shot when there is one", () => {
     const t = timeline()
-    // The capture ships taps only up to connect_save, so every callout in the
+    // The capture ships taps only up to connect, so every callout in the
     // film falls back to the script's targetX/targetY override.
     for (const callout of callouts(t.copy)) {
       expect(callout.anchoredBy).toBe("point")
@@ -602,6 +743,36 @@ describe("timeline / the copy is the script's", () => {
     }
   })
 
+  test("copy stays off the handset", () => {
+    const wide = phoneLayout(PRESETS.full, VIDEO_W, VIDEO_H, STAGE_W, STAGE_H, { x: 0, y: 0 })
+    expect(SPOT_INSET + SPOT_COLUMN).toBeLessThan(wide.left - wide.bezel - 48)
+    const card = stageCardBox(wide, STAGE_W)
+    const frameLeft = wide.left - wide.bezel
+    const cardRight = card.left + card.width
+    expect(card.onLeft).toBe(true)
+    expect(cardRight).toBeLessThan(frameLeft - 48)
+    const usage = phoneLayout(
+      { preset: "upper-center", scale: 2.2, focus: { x: 0.5, y: 0.08 }, dock: 0.5 },
+      VIDEO_W,
+      VIDEO_H,
+      STAGE_W,
+      STAGE_H,
+      { x: 0, y: 0 },
+    )
+    const tag = calloutCardBox({
+      compact: true,
+      placement: "edge",
+      side: "left",
+      anchorX: usage.left + usage.width * 0.5,
+      anchorY: usage.top + usage.height * 0.13,
+      layout: usage,
+      stageW: STAGE_W,
+      stageH: STAGE_H,
+    })
+    expect(tag.left).toBeGreaterThanOrEqual(24)
+    expect(tag.left + tag.width).toBeLessThan(usage.left - usage.bezel - 8)
+  })
+
   test("the spotlight kickers are sentence case, as written", () => {
     for (const item of spotlights(timeline().copy)) {
       expect(item.kicker).not.toBe(item.kicker.toUpperCase())
@@ -617,6 +788,15 @@ describe("timeline / the copy is the script's", () => {
     expect(SUBTITLE).toBe("Hark! The Harold Agents Sing")
     expect(CTA_HANDLE).toBe("codenamegary/harold")
     expect(SITE).toBe("harold.codenamegary.com")
+  })
+
+  test("the lockup sits in the shaft, above the pool", () => {
+    const box = lockupBox(LIGHTS.alone, STAGE_W, STAGE_H)
+    const poolTop = (LIGHTS.alone.centreY - LIGHTS.alone.radiusY) * STAGE_H
+    expect(box.top).toBeLessThan(poolTop - 120)
+    expect(box.top).toBeGreaterThan(36)
+    const beamX = LIGHTS.alone.centreX * STAGE_W
+    expect(box.left + box.width / 2).toBeCloseTo(beamX, 0)
   })
 
   test("the prompt text is the script's, and it is not rendered", () => {
@@ -654,15 +834,9 @@ describe("timeline / sound", () => {
 
   test("every recorded tap inside a shot is a ripple and a tap sound", () => {
     const t = timeline()
-    expect(t.taps.length).toBe(4)
-    expect(t.ripples.length).toBe(4)
-    expect(t.sounds.filter((sound) => sound.name === "tap").length).toBe(4)
-    expect(t.taps.map((tap) => tap.slice)).toEqual([
-      "connect_fill",
-      "connect_test",
-      "connect_trust",
-      "connect_save",
-    ])
+    expect(t.taps.length).toBeGreaterThan(0)
+    expect(t.ripples.length).toBe(t.taps.length)
+    expect(t.sounds.filter((sound) => sound.name === "tap").length).toBe(t.taps.length)
   })
 
   test("each ripple lands on the exact source frame of its tap", () => {
@@ -737,57 +911,23 @@ describe("timeline / sound", () => {
 // --- Pacing -----------------------------------------------------------------
 
 describe("timeline / pacing", () => {
-  test("the question slice plays at real speed", () => {
-    const t = timeline()
-    const question = shotsOf(t, "question")
-    expect(question.length).toBe(3)
-    for (const shot of question) {
-      expect(shot.rate).toBe(1)
-    }
-    expect(question[0].startSec).toBeCloseTo(1.15, 6)
-    const last = question[question.length - 1]
-    expect(last.startSec + last.duration).toBeCloseTo(5.45, 6)
-  })
-
-  test("no short slice is stretched into slow motion", () => {
+  test("every shot plays the capture at 1x", () => {
     for (const shot of timeline().shots) {
-      expect(shot.rate).toBeGreaterThanOrEqual(0.5)
+      expect(shot.rate).toBe(1)
+      expect(shot.startSec).toBeGreaterThanOrEqual(0)
     }
   })
 
-  test("the long prompts play a real window at six to eight characters a second", () => {
+  test("a typing slice keeps every recorded key", () => {
     const t = timeline()
-    const fill = shotsOf(t, "ssh").find((shot) => shot.slice === "connect_fill")
-    if (fill === undefined) {
-      throw new Error("no fill shot")
+    for (const name of ["connect", "plan", "build", "pr"]) {
+      const recorded = capture.slices.find((slice) => slice.name === name)
+      if (recorded === undefined) {
+        throw new Error(`no ${name} slice`)
+      }
+      const drawn = t.keys.filter((key) => key.slice === name)
+      expect(drawn.length).toBe(recorded.keys?.length ?? 0)
     }
-    const plan = shotsOf(t, "plan")[0]
-    const build = shotsOf(t, "build")[0]
-    const pr = shotsOf(t, "pr")[0]
-    for (const shot of [fill, plan, build, pr]) {
-      expect(shot.rate).toBeLessThan(1)
-      const cps = onScreenCps(shot)
-      expect(cps).toBeGreaterThan(6)
-      expect(cps).toBeLessThan(8)
-    }
-  })
-
-  test("the long prompts are cut ahead, not slowed to fit", () => {
-    const t = timeline()
-    const plan = shotsOf(t, "plan")
-    const build = shotsOf(t, "build")
-    const planChars = t.keys.filter((key) =>
-      plan.some((shot) => key.at >= shot.at - 1e-9 && key.at < shot.until - 1e-9),
-    ).length
-    const buildChars = t.keys.filter((key) =>
-      build.some((shot) => key.at >= shot.at - 1e-9 && key.at < shot.until - 1e-9),
-    ).length
-    expect(planChars).toBeLessThan(KEYBURSTS.plan.length / 2)
-    expect(buildChars).toBeLessThan(KEYBURSTS.build.length / 2)
-    expect(planChars).toBeGreaterThan(40)
-    expect(buildChars).toBeGreaterThan(40)
-    expect(plan.length).toBe(4)
-    expect(build.length).toBe(5)
   })
 })
 
@@ -799,9 +939,7 @@ describe("timeline / celebration", () => {
     expect(t.celebrations.length).toBe(1)
     expect(t.confetti.length).toBe(1)
     const achievement = t.scenes[2]
-    expect(t.celebrations[0].at).toBeCloseTo(CELEBRATION_AT, 9)
-    expect(CELEBRATION_AT).toBeCloseTo(achievement.from + 0.6, 9)
-    expect(frame(CELEBRATION_AT)).toBe(723)
+    expect(t.celebrations[0].at).toBeCloseTo(achievement.from + 0.7, 9)
     expect(t.confetti[0].at).toBe(t.celebrations[0].at)
     expect(t.confetti[0].count).toBe(96)
     expect(t.confetti[0].at + t.confetti[0].hold).toBeLessThanOrEqual(achievement.to)
@@ -822,9 +960,10 @@ describe("timeline / celebration", () => {
   })
 
   test("the phone leaves with the outro slide", () => {
-    const outro = SCENES[SCENES.length - 1]
-    expect(channel(phoneFade, outro.from - 0.01)).toBeCloseTo(1, 6)
-    expect(channel(phoneFade, outro.from + 0.45)).toBe(0)
+    const t = timeline()
+    const outro = t.scenes[t.scenes.length - 1]
+    expect(channel(t.phoneFade, outro.from - 0.01)).toBeCloseTo(1, 6)
+    expect(channel(t.phoneFade, outro.from + 0.45)).toBe(0)
     expect(outro.slug).toBe("outro")
   })
 })

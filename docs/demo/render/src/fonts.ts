@@ -16,15 +16,15 @@ export const sansFamily = `"${SANS}", system-ui, sans-serif`
 export const monoFamily = `"${MONO}", ui-monospace, monospace`
 
 // The type scale. Large display type is tracked tight; machine-readable text is
-// always mono and never tracked.
-export const type = {
-  display: 112,
-  headline: 86,
-  title: 62,
-  lead: 40,
-  body: 28,
-  label: 21,
-  mono: 38,
+// always mono and never tracked. One lime accent does the rest of the colour.
+export const typeScale = {
+  display: 128,
+  headline: 96,
+  title: 68,
+  lead: 54,
+  body: 30,
+  label: 20,
+  mono: 40,
   monoSmall: 24,
 } as const
 

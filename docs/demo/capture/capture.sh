@@ -10,14 +10,14 @@
 # The connect act is recorded as named slices by the MCP walk in
 # docs/demo/capture/mcp/src/walk.ts. It drives the app through the debug probe's
 # tool surface, starts one screenrecord file per on-camera beat, brackets it with
-# a sleep/wake calibration blink, converts the device marks to host time through
-# paired anchors, and writes slices.json, marks.log and the mp4s.
+# a sleep/wake calibration blink, stamps taps and keystrokes on the host clock,
+# and writes slices.json, marks.log and the mp4s.
 # build_capture.py then writes capture.json for Remotion to compose. There is no
 # stitched video.
 #
 # Usage:
 #   bash docs/demo/capture/capture.sh                 # full run, whole connect act
-#   bash docs/demo/capture/capture.sh --only connect_fill
+#   bash docs/demo/capture/capture.sh --only connect
 #                                                     # re-record one slice
 #
 # Artifacts:

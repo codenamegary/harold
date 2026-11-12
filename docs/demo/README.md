@@ -26,10 +26,11 @@ What is kept and what is not:
 
 ## The capture loop
 
-The phone is driven over MCP, not by UI dumps. The debug app runs a probe server,
-and the driver asks that server where a control is. Every tap is still a real adb
-tap and every keystroke runs inside the app. The driver records **15 on-camera
-slices** plus the pre-roll beats that stage the app between them.
+The phone is driven over MCP. The debug app runs a probe server, and the driver
+asks that server where a control is. Every tap is a real adb tap. Every
+on-camera character is one `adb shell input text` into the focused field. The
+driver records **11 on-camera slices** plus the pre-roll beats that stage the
+app between them.
 
 The loop, end to end:
 
@@ -41,35 +42,34 @@ The loop, end to end:
    `question_stage`, `build_stage`, `pr_stage`) drive the app but are never
    recorded.
 3. [`mcp/src/walk.ts`](./capture/mcp/src/walk.ts) runs one beat per slice. For
-   each slice it clears the mark ledger, samples the device clock, starts
-   `screenrecord`, and runs a calibration blink: sleep, hold black, wake, dismiss
-   the keyguard. Then it runs the beat, waiting on probe facts instead of
-   sleeping. After the beat it samples the clock again and runs the tail blink.
+   each recorded slice it starts `screenrecord` and runs a calibration blink.
+   The blink is sleep, hold black, wake, then dismiss the keyguard. Then it
+   runs the beat. It waits on probe facts. After the beat it runs the tail blink.
 4. The blink is the sync contract. `build_capture.py` finds the black run, trims
    the head, and expresses every tap, keystroke, and mark as a time in the
    published file.
-5. Marks are stamped on the device clock (`elapsedRealtimeNanos`). The driver
-   fits a straight line from device seconds to host seconds over that slice's
-   anchor samples, then maps every mark through it. A tap is never off by the gap
-   between two clocks.
+5. Each typed character is one `adb shell input text`. The driver stamps `key`
+   on the host clock before the character goes out. That is the same clock as
+   `sync_wake`. It stamps `keys_done` when the field is done. `build_capture.py`
+   maps those host stamps onto the video with the blinks.
 6. `capture.sh` pulls the slices to `render/public/slices/` and runs
    `build_capture.py`, which writes `render/public/capture.json`.
 
 The real commands, in order, from the repo root:
 
 ```sh
-# whole run: fake host, emulator, app install, 15 slices, capture.json
+# whole run: fake host, emulator, app install, 11 slices, capture.json
 bash docs/demo/capture/capture.sh
 
 # re-record one slice, or a few, without recording the rest
-bash docs/demo/capture/capture.sh --only connect_fill
-bash docs/demo/capture/capture.sh --only connect_trust,connect_save
+bash docs/demo/capture/capture.sh --only connect
+bash docs/demo/capture/capture.sh --only home_empty,connect
 
 # drive the walk without the emulator bring-up (needs a device and a token)
 cd docs/demo/capture/mcp
 bun run src/walk.ts --list
 bun run src/walk.ts --self-test
-bun run src/walk.ts --only connect_fill
+bun run src/walk.ts --only connect
 ```
 
 A direct walk needs the port forwarded and the probe token from logcat:
@@ -78,7 +78,7 @@ A direct walk needs the port forwarded and the probe token from logcat:
 adb forward tcp:7391 tcp:7391
 export HAROLD_PROBE_TOKEN=$(adb logcat -d -s HaroldProbe:I \
   | sed -n 's/.*token=\([0-9a-f]*\).*/\1/p' | tail -n 1)
-cd docs/demo/capture/mcp && bun run src/walk.ts --only connect_fill
+cd docs/demo/capture/mcp && bun run src/walk.ts --only connect
 ```
 
 To rebuild `capture.json` from slices already pulled, without a device:
@@ -87,10 +87,10 @@ To rebuild `capture.json` from slices already pulled, without a device:
 python3 docs/demo/capture/build_capture.py
 ```
 
-## The 113.0 second cut
+## The 182.8 second cut
 
-[`render/`](./render) builds a 1920x1080, 30 fps, **3390 frame** video from the
-15 recorded slices. That is 113.0 s exactly. The master is H.264 at CRF 18. The
+[`render/`](./render) builds a 1920x1080, 30 fps, **5485 frame** video from the
+11 recorded slices. That is 182.8 s. The master is H.264 at CRF 18. The
 compressed cut is CRF 26 with 96 kbps AAC and faststart. `capture.json` supplies
 the pixels and the timings. `timeline.ts` is the edit, and a retime there never
 re-records anything. The `question` beat plays its capture at 1.0x. The cut

@@ -1,31 +1,30 @@
-import { AbsoluteFill, useVideoConfig } from "remotion"
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion"
 import type { PhoneLayout } from "./camera"
-import { parallax, poolLit, type LightNow, type LightShape } from "./stage"
+import {
+  beamCone,
+  beamHalfAt,
+  FLARE_SPREAD,
+  HORIZON,
+  parallax,
+  type BeamCone,
+  type LightNow,
+  type WorldView,
+} from "./stage"
 
-// The stage, back to front: wall and floor, then the pool, then the phone, then
-// the haze. This file draws the three layers that are not the phone, plus the
-// shadow that puts the phone on the floor and the mask that makes the intro and
-// outro slides catch only the edge of the pool.
+// The stage, back to front: a dark void, a floor that only shows where the
+// light spills on it, the pool, the shaft that lands in the pool, the phone,
+// then the dust in the shaft. One light. Everything it touches has a soft
+// edge, because the air has haze in it. Nothing else is lit.
 //
-// A gradient on its own is not a stage. Every plane here carries one feature
-// that can be seen to move at its own speed, so the drift reads as parallax
-// instead of a still image breathing:
-//
-//   wall   vertical striations, slowest
-//   floor  scuffs, on the phone's plane
-//   pool   a lit patch with a rim, sliding across the floor
-//   haze   a shaft and dust, fastest, crossing in front of the phone
+// The floor, the pool, the shaft and the dust are drawn in world space, inside
+// `StageWorld`. The void, the contact shadow and the grade are on the screen.
 
-const POOL_RGB = "226, 236, 255"
-const WALL_RGB = "140, 162, 196"
-const HAZE_RGB = "206, 222, 252"
-const LIME_RGB = "182, 243, 107"
+const POOL = "236, 242, 255"
+const LIME = "182, 243, 107"
 
-/** Where the floor meets the wall, as a fraction of stage height. */
-const SEAM = 0.585
+/** How far the floor and the wall run past the frame, so a wide view never finds an edge. */
+const SPAN = 5
 
-// Deterministic dust and floor grain. Nothing here may call Math.random: a mote
-// must land on the same pixel every time the frame is rendered.
 const mulberry32 = (seed: number) => {
   let a = seed >>> 0
   return () => {
@@ -42,197 +41,278 @@ const wrap = (value: number, span: number): number => {
   return wrapped < 0 ? wrapped + span : wrapped
 }
 
-const MOTES = Array.from({ length: 64 }, (_, index) => {
-  const rand = mulberry32(Math.imul(index + 7, 0x9e3779b1))
-  return {
-    x: rand(),
-    y: rand(),
-    size: 1.2 + rand() * 3.4,
-    speed: 0.004 + rand() * 0.014,
-    phase: rand() * Math.PI * 2,
-    bob: 0.004 + rand() * 0.012,
-  }
-})
+const unit = (value: number): number => Math.min(1, Math.max(0, value))
 
-/** Short marks on the floor. They are the reference the pool slides across. */
-const SCUFFS = Array.from({ length: 9 }, (_, index) => {
-  const rand = mulberry32(Math.imul(index + 3, 0x85ebca6b))
-  return {
-    x: rand(),
-    y: 0.14 + rand() * 0.74,
-    width: 70 + rand() * 190,
-    opacity: 0.03 + rand() * 0.06,
-  }
-})
+// Dust, only ever drawn inside the shaft. A few big soft motes sit near the
+// lens, the rest are specks. One set hangs behind the phone and one in front.
+type Mote = {
+  across: number
+  down: number
+  size: number
+  blur: number
+  glow: number
+  speed: number
+  sway: number
+  phase: number
+}
+
+const motes = (count: number, seed: number): Mote[] =>
+  Array.from({ length: count }, (_, index) => {
+    const rand = mulberry32(Math.imul(index + seed, 0x9e3779b1))
+    const near = rand() > 0.74
+    return {
+      across: rand() * 2 - 1,
+      down: rand(),
+      size: near ? 8 + rand() * 8 : 3 + rand() * 3.5,
+      blur: near ? 2.5 + rand() * 2.5 : 0.6,
+      glow: near ? 0.2 + rand() * 0.14 : 0.36 + rand() * 0.36,
+      speed: 0.012 + rand() * 0.02,
+      sway: 0.04 + rand() * 0.07,
+      phase: rand() * Math.PI * 2,
+    }
+  })
+
+const MOTES_BEHIND = motes(20, 7)
+const MOTES_FRONT = motes(10, 131)
+
+/** How bright the shaft is in the haze. A dim state is a dim shaft, not no shaft. */
+const shaftAlpha = (light: LightNow): number => 0.035 + light.shape.haze * 0.2
 
 /**
- * Lumps of light on the pool rim. Real light on a rough floor does not end on a
- * clean ellipse, so the rim is broken up by seeded blobs of varying size.
+ * The shaft's outline inside its own box: the lamp at the top, the pool's
+ * near edge at the bottom. `width` narrows it around the centre line.
  */
-const RIM_RAGS = Array.from({ length: 20 }, (_, index) => {
-  const rand = mulberry32(Math.imul(index + 17, 0x27d4eb2f))
+const shaftPath = (cone: BeamCone, width: number): { box: React.CSSProperties; clip: string } => {
+  const halfX = cone.footHalfX * width
+  const halfY = cone.footHalfY * width
+  const apexHalf = cone.apexHalf * width
+  const left = cone.footX - halfX
+  const top = cone.apexY
+  const floor = cone.footY - top
+  const arc = Array.from({ length: 25 }, (_, index) => {
+    const angle = (index / 24) * Math.PI
+    return `${halfX + Math.cos(angle) * halfX}px ${floor + Math.sin(angle) * halfY}px`
+  })
+  const points = [`${halfX - apexHalf}px 0px`, `${halfX + apexHalf}px 0px`, ...arc]
   return {
-    angle: rand() * Math.PI * 2,
-    offset: -0.05 + rand() * 0.1,
-    width: 0.45 + rand() * 1.5,
-    height: 0.3 + rand() * 1.1,
-    alpha: 0.2 + rand() * 0.8,
+    box: { position: "absolute", left, top, width: halfX * 2, height: floor + halfY },
+    clip: `polygon(${points.join(", ")})`,
   }
-})
+}
 
 /**
- * Wall and floor. Always the darkest layer, but never featureless: the seam,
- * the wall striations and the floor scuffs are what tell the eye there are two
- * planes here and that they are moving at different rates.
+ * One body of light. Brightest down the centre line, where the eye looks
+ * through the most haze, and thinner toward the floor. The blur makes the
+ * outline haze instead of a cut-out.
  */
-export const StageBack: React.FC<{ light: LightNow; drift: number }> = ({ light, drift }) => {
-  const { width, height } = useVideoConfig()
-  const shape = light.shape
-  const lit = Math.min(1, shape.intensity * 1.7)
-  const seamY = height * SEAM
-  const back = parallax("back", drift)
-  // The floor is the plane the phone stands on, so it shares the phone's speed.
-  const floor = parallax("phone", drift)
+const Shaft: React.FC<{ cone: BeamCone; width: number; alpha: number; blur: number }> = ({
+  cone,
+  width,
+  alpha,
+  blur,
+}) => {
+  const path = shaftPath(cone, width)
   return (
-    <AbsoluteFill style={{ background: "#020308", overflow: "hidden" }}>
-      {/* The wall. */}
+    <div style={{ position: "absolute", left: 0, top: 0, filter: `blur(${blur}px)` }}>
       <div
         style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: 0,
-          height: seamY,
-          background: "linear-gradient(180deg, #05070C 0%, #080B12 40%, #0A0E16 100%)",
+          ...path.box,
+          clipPath: path.clip,
+          background: `linear-gradient(90deg, rgba(${POOL},${alpha * 0.42}) 0%, rgba(${POOL},${alpha * 0.8}) 24%, rgba(${POOL},${alpha}) 50%, rgba(${POOL},${alpha * 0.8}) 76%, rgba(${POOL},${alpha * 0.42}) 100%)`,
+          maskImage:
+            "linear-gradient(180deg, #000 0%, #000 56%, rgba(0,0,0,0.66) 80%, rgba(0,0,0,0.34) 100%)",
         }}
       />
-      {/* Wall striations: the slowest plane, and the one that shows the wall is a wall. */}
-      <div
-        style={{
-          position: "absolute",
-          left: -220 + back,
-          top: 0,
-          width: width + 440,
-          height: seamY,
-          background: `repeating-linear-gradient(90deg, rgba(${WALL_RGB},0.14) 0px, rgba(${WALL_RGB},0.14) 1.5px, transparent 1.5px, transparent 104px)`,
-          maskImage: "linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.25) 78%, transparent 100%)",
-          opacity: 0.5 + lit * 0.5,
-        }}
-      />
-      {/* The floodlight's bounce on the wall: wide, dim, sitting on the seam. */}
-      <div
-        style={{
-          position: "absolute",
-          left: shape.centreX * width - width * 0.5 + back,
-          top: seamY - height * 0.66,
-          width: width,
-          height: height * 0.74,
-          background: `radial-gradient(ellipse 50% 50% at 50% 100%, rgba(${WALL_RGB},${0.15 * lit}) 0%, rgba(${WALL_RGB},${0.07 * lit}) 46%, transparent 78%)`,
-          filter: "blur(30px)",
-          mixBlendMode: "screen",
-        }}
-      />
+    </div>
+  )
+}
 
-      {/* The floor, from the horizon down. Brightest right at the seam. */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: seamY,
-          bottom: 0,
-          background:
-            "linear-gradient(180deg, #0D1117 0%, #090C12 36%, #05070B 72%, #020305 100%)",
-        }}
-      />
-      {SCUFFS.map((scuff, index) => (
-        <div
-          key={`scuff-${index}`}
-          style={{
-            position: "absolute",
-            left: wrap(scuff.x * (width + 400) + floor, width + 400) - 200,
-            top: seamY + scuff.y * (height - seamY),
-            width: scuff.width,
-            height: 1.5,
-            background: `rgba(${WALL_RGB},${scuff.opacity * (0.6 + lit * 0.8)})`,
-            filter: "blur(0.5px)",
-          }}
-        />
-      ))}
-      {/* The light landing on the floor at the base of the wall. */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: seamY,
-          height: height * 0.14,
-          background: `linear-gradient(180deg, rgba(${POOL_RGB},${0.05 * lit}) 0%, rgba(${POOL_RGB},${0.02 * lit}) 44%, transparent 100%)`,
-          mixBlendMode: "screen",
-        }}
-      />
-      {/* The seam itself, lit only where the pool reaches it. */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: seamY,
-          height: 1,
-          background: `rgba(${WALL_RGB},${0.06 + 0.18 * lit})`,
-          maskImage: `linear-gradient(90deg, transparent 2%, rgba(0,0,0,0.55) 22%, #000 ${Math.round(shape.centreX * 100)}%, rgba(0,0,0,0.55) 78%, transparent 98%)`,
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: seamY - 5,
-          height: 11,
-          background: `rgba(${WALL_RGB},${0.07 * lit})`,
-          filter: "blur(6px)",
-          maskImage: `linear-gradient(90deg, transparent 4%, rgba(0,0,0,0.5) 26%, #000 ${Math.round(shape.centreX * 100)}%, rgba(0,0,0,0.5) 74%, transparent 96%)`,
-        }}
-      />
+/** Dust in the shaft. It falls slowly, sways, and fades at the shaft's edge. */
+const Dust: React.FC<{ cone: BeamCone; set: Mote[]; sec: number; gain: number; sway: number }> = ({
+  cone,
+  set,
+  sec,
+  gain,
+  sway,
+}) => {
+  const top = cone.footY - cone.footHalfX * 2.6
+  const fall = cone.footY - top
+  return (
+    <>
+      {set.map((mote, index) => {
+        const down = wrap(mote.down + sec * mote.speed, 1)
+        const across = mote.across * 0.8 + Math.sin(sec * 0.6 + mote.phase) * mote.sway
+        const y = top + down * fall
+        const x = cone.footX + across * beamHalfAt(cone, y) + sway
+        const edge = unit((1 - Math.abs(across)) * 2.4)
+        const ends = Math.min(1, down / 0.12, (1 - down) / 0.12)
+        const opacity = gain * mote.glow * edge * ends
+        if (opacity <= 0.02) {
+          return null
+        }
+        return (
+          <div
+            key={index}
+            style={{
+              position: "absolute",
+              left: x - mote.size / 2,
+              top: y - mote.size / 2,
+              width: mote.size,
+              height: mote.size,
+              borderRadius: "50%",
+              background: `rgba(255,255,255,${opacity})`,
+              filter: `blur(${mote.blur}px)`,
+            }}
+          />
+        )
+      })}
+    </>
+  )
+}
 
-      {/* The near floor falls away into the dark, and the room closes in. */}
+/** The void. The darkest layer, and the only one that never moves. */
+export const StageBack: React.FC = () => (
+  <AbsoluteFill
+    style={{
+      background:
+        "radial-gradient(ellipse 85% 75% at 50% 42%, #0A0D12 0%, #060709 58%, #020203 100%)",
+    }}
+  />
+)
+
+/**
+ * Places the world on the screen. Children are drawn in world px and are free
+ * to run past the frame.
+ */
+export const StageWorld: React.FC<{ view: WorldView; children: React.ReactNode }> = ({
+  view,
+  children,
+}) => {
+  const { width, height } = useVideoConfig()
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
       <div
         style={{
           position: "absolute",
-          inset: 0,
-          background: "linear-gradient(180deg, transparent 58%, rgba(0,0,0,0.5) 100%)",
+          left: 0,
+          top: 0,
+          width,
+          height,
+          transformOrigin: "0px 0px",
+          translate: `${view.x}px ${view.y}px`,
+          scale: `${view.scale}`,
         }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "radial-gradient(135% 100% at 50% 44%, transparent 44%, rgba(0,0,0,0.3) 82%, rgba(0,0,0,0.58) 100%)",
-        }}
-      />
+      >
+        {children}
+      </div>
     </AbsoluteFill>
   )
 }
 
 /**
- * The lit ellipse where the floor meets the wall. Three pieces: the body of the
- * light, a rim so it reads as a patch with an edge instead of a soft gradient,
- * and the sheen spilling toward the camera. Plus the bloom, which is the light
- * reaching past the pool and only happens on `reward`.
+ * The floor and the wall. Neither has a colour of its own. The floor shows
+ * where the pool spills onto it and the wall shows a little bounce, so the
+ * horizon is only there near the light.
+ */
+export const StageFloor: React.FC<{ light: LightNow; drift: number }> = ({ light, drift }) => {
+  const { width, height } = useVideoConfig()
+  const shape = light.shape
+  const horizon = height * HORIZON
+  const back = parallax("back", drift)
+  const centreX = shape.centreX * width + parallax("pool", drift)
+  const centreY = shape.centreY * height
+  const spillX = shape.radiusX * width * 2.2
+  const spillY = shape.radiusY * height * 4.2
+  const bounceX = shape.radiusX * width * 1.9
+  const bounceY = height * 0.4
+  const spill = shape.intensity * 0.17
+  const bounce = shape.intensity * 0.05 + shape.haze * 0.02
+  const seam = 0.035 + shape.intensity * 0.05
+  const reach = width * SPAN
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: -reach,
+          width: reach * 2 + width,
+          top: horizon - height * SPAN,
+          height: height * SPAN,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: reach + centreX - bounceX,
+            top: height * SPAN - bounceY,
+            width: bounceX * 2,
+            height: bounceY * 2,
+            borderRadius: "50%",
+            background: `radial-gradient(closest-side, rgba(${POOL},${bounce}) 0%, rgba(${POOL},${bounce * 0.45}) 45%, rgba(${POOL},0) 100%)`,
+          }}
+        />
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: -reach,
+          width: reach * 2 + width,
+          top: horizon,
+          height: height * SPAN,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            translate: `${back}px 0px`,
+            background: `linear-gradient(180deg, rgba(${POOL},0.014) 0px, rgba(${POOL},0) ${height * 0.4}px)`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: reach + centreX - spillX,
+            top: centreY - horizon - spillY,
+            width: spillX * 2,
+            height: spillY * 2,
+            borderRadius: "50%",
+            background: `radial-gradient(closest-side, rgba(${POOL},${spill}) 0%, rgba(${POOL},${spill * 0.6}) 36%, rgba(${POOL},${spill * 0.2}) 68%, rgba(${POOL},0) 100%)`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: reach + centreX - spillX * 1.25,
+            width: spillX * 2.5,
+            top: 0,
+            height: 2,
+            background: `linear-gradient(90deg, rgba(${POOL},0) 0%, rgba(${POOL},${seam}) 32%, rgba(${POOL},${seam}) 68%, rgba(${POOL},0) 100%)`,
+          }}
+        />
+      </div>
+    </>
+  )
+}
+
+/**
+ * The lit ellipse on the floor, and the flare when the state has one. Even
+ * across the middle, with a soft rim, the way a real pool falls off.
  */
 export const PoolGlow: React.FC<{ light: LightNow; drift: number }> = ({ light, drift }) => {
   const { width, height } = useVideoConfig()
   const shape = light.shape
   const rx = shape.radiusX * width
   const ry = shape.radiusY * height
-  const intensity = shape.intensity
   const centreX = shape.centreX * width + parallax("pool", drift)
   const centreY = shape.centreY * height
-  const rimBlur = Math.round(6 + shape.flare * 8)
+  const hot = shape.intensity * 0.6
+  const flareRx = rx * FLARE_SPREAD
+  const flareRy = ry * 1.35
   return (
-    <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
+    <>
       <div
         style={{
           position: "absolute",
@@ -241,231 +321,203 @@ export const PoolGlow: React.FC<{ light: LightNow; drift: number }> = ({ light, 
           width: rx * 2,
           height: ry * 2,
           borderRadius: "50%",
-          background: `radial-gradient(ellipse at 50% 54%, rgba(${POOL_RGB},${0.66 * intensity}) 0%, rgba(${POOL_RGB},${0.54 * intensity}) 30%, rgba(${POOL_RGB},${0.26 * intensity}) 58%, rgba(${POOL_RGB},${0.08 * intensity}) 82%, rgba(${POOL_RGB},0) 100%)`,
-          filter: `blur(${Math.round(10 + shape.flare * 16)}px)`,
-          mixBlendMode: "screen",
-          // The pool is on the floor. Anything above the seam is the wall's
-          // bounce, not the pool, so the body stops at the seam.
-          maskImage: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.3) 13%, #000 27%)",
+          background: `radial-gradient(closest-side, rgba(${POOL},${hot}) 0%, rgba(${POOL},${hot * 0.94}) 48%, rgba(${POOL},${hot * 0.66}) 72%, rgba(${POOL},${hot * 0.24}) 89%, rgba(${POOL},0) 100%)`,
         }}
       />
-      {/* The edge. A pool of light on a floor has a boundary; a gradient does not. */}
       <div
         style={{
           position: "absolute",
-          left: centreX - rx * 0.93,
-          top: centreY - ry * 0.93,
-          width: rx * 1.86,
-          height: ry * 1.86,
+          left: centreX - rx * 0.6,
+          top: centreY - ry * 0.6,
+          width: rx * 1.2,
+          height: ry * 1.2,
           borderRadius: "50%",
-          border: `3px solid rgba(${POOL_RGB},${0.07 + 0.26 * intensity})`,
-          boxShadow: `0 0 ${Math.round(22 + 26 * shape.flare)}px rgba(${POOL_RGB},${0.06 + 0.16 * intensity})`,
-          filter: `blur(${rimBlur}px)`,
-          mixBlendMode: "screen",
-          maskImage: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 14%, #000 30%)",
-        }}
-      />
-      {/* Falloff noise. Seeded lumps of light sit on the rim and vary its
-          brightness, so the edge reads as light on a rough floor, not a decal. */}
-      {RIM_RAGS.map((rag, index) => {
-        const x = centreX + Math.cos(rag.angle) * rx * (0.93 + rag.offset)
-        const y = centreY + Math.sin(rag.angle) * ry * (0.93 + rag.offset)
-        const w = Math.max(24, rx * 0.22 * rag.width)
-        const h = Math.max(14, ry * 0.5 * rag.height)
-        const alpha = (0.05 + 0.26 * intensity) * rag.alpha
-        return (
-          <div
-            key={`rim-rag-${index}`}
-            style={{
-              position: "absolute",
-              left: x - w / 2,
-              top: y - h / 2,
-              width: w,
-              height: h,
-              borderRadius: "50%",
-              background: `radial-gradient(ellipse at 50% 50%, rgba(${POOL_RGB},${alpha}) 0%, rgba(${POOL_RGB},${alpha * 0.42}) 46%, rgba(${POOL_RGB},0) 74%)`,
-              filter: `blur(${Math.round(7 + shape.flare * 8)}px)`,
-              mixBlendMode: "screen",
-              maskImage: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 14%, #000 30%)",
-            }}
-          />
-        )
-      })}
-      {/* The sheen running from the pool towards the camera. */}
-      <div
-        style={{
-          position: "absolute",
-          left: centreX - rx * 0.44,
-          top: centreY,
-          width: rx * 0.88,
-          height: ry * 1.9,
-          background: `radial-gradient(ellipse 50% 50% at 50% 0%, rgba(${POOL_RGB},${0.16 * intensity}) 0%, rgba(${POOL_RGB},${0.05 * intensity}) 52%, transparent 78%)`,
-          filter: "blur(28px)",
-          mixBlendMode: "screen",
+          background: `radial-gradient(closest-side, rgba(255,255,255,${hot * 0.3}) 0%, rgba(255,255,255,0) 100%)`,
         }}
       />
       {shape.flare > 0.02 ? (
         <div
           style={{
             position: "absolute",
-            left: centreX - rx * 1.55,
-            top: centreY - ry * 1.5,
-            width: rx * 3.1,
-            height: ry * 3,
+            left: centreX - flareRx,
+            top: centreY - flareRy * 0.55,
+            width: flareRx * 2,
+            height: flareRy * 2,
             borderRadius: "50%",
-            background: `radial-gradient(ellipse at 50% 50%, rgba(${LIME_RGB},${0.14 * shape.flare}) 0%, rgba(${POOL_RGB},${0.09 * shape.flare}) 46%, transparent 74%)`,
-            filter: "blur(38px)",
-            mixBlendMode: "screen",
+            filter: "blur(6px)",
+            background: `radial-gradient(ellipse at 50% 58%, rgba(${LIME},0) 54%, rgba(${LIME},${0.8 * shape.flare}) 68%, rgba(${LIME},${0.8 * shape.flare}) 76%, rgba(${LIME},0) 90%)`,
           }}
         />
       ) : null}
-    </AbsoluteFill>
+    </>
   )
 }
 
 /**
- * The phone's shadow on the floor. Without this the phone is a rectangle pasted
- * over a gradient; with it the object stands on the plane the pool is lighting.
- * Drawn after the pool and before the phone, so the pool darkens where the phone
- * blocks it.
+ * The shaft. Drawn behind the phone so the phone stands in it. The foot is
+ * the pool ellipse: same centre, same radii, same drift. A wide soft body and
+ * a brighter core, both blurred, so the edge is haze and not a cut-out.
  */
-export const ContactShadow: React.FC<{
-  layout: PhoneLayout
-  light: LightNow
-  opacity: number
-}> = ({ layout, light, opacity }) => {
-  if (opacity <= 0.01) {
-    return null
-  }
-  const visible = Math.min(1, 0.45 + light.shape.intensity * 0.8) * opacity
-  const feetX = layout.left + layout.width / 2
-  const feetY = layout.top + layout.height + layout.bezel * 0.5
-  const spreadW = layout.width * 1.2
-  const spreadH = layout.width * 0.3
-  return (
-    <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
-      <div
-        style={{
-          position: "absolute",
-          left: feetX - spreadW / 2,
-          top: feetY - spreadH / 2,
-          width: spreadW,
-          height: spreadH,
-          borderRadius: "50%",
-          background: `radial-gradient(ellipse at 50% 50%, rgba(0,0,0,${0.62 * visible}) 0%, rgba(0,0,0,${0.42 * visible}) 40%, rgba(0,0,0,0) 76%)`,
-          filter: "blur(20px)",
-        }}
-      />
-      {/* Contact darkening, tight under the feet. */}
-      <div
-        style={{
-          position: "absolute",
-          left: feetX - layout.width * 0.34,
-          top: feetY - layout.width * 0.05,
-          width: layout.width * 0.68,
-          height: layout.width * 0.1,
-          borderRadius: "50%",
-          background: `radial-gradient(ellipse at 50% 50%, rgba(0,0,0,${0.8 * visible}) 0%, rgba(0,0,0,0.3 * visible) 58%, rgba(0,0,0,0) 100%)`,
-          filter: "blur(9px)",
-        }}
-      />
-    </AbsoluteFill>
-  )
-}
-
-/**
- * The foreground shaft and dust. The nearest layer, so it passes over the phone.
- * Dust never fully leaves: a room with a lamp in it always has something in the
- * air, even when the beam itself has narrowed to a slit.
- */
-export const StageHaze: React.FC<{ light: LightNow; drift: number; sec: number }> = ({
+export const StageBeam: React.FC<{ light: LightNow; drift: number; sec: number }> = ({
   light,
   drift,
   sec,
 }) => {
   const { width, height } = useVideoConfig()
-  const shape = light.shape
-  const offset = parallax("haze", drift)
-  const dust = Math.max(shape.haze, 0.055)
+  const cone = beamCone(light.shape, width, height, drift)
+  const alpha = shaftAlpha(light)
+  return (
+    <>
+      <Shaft cone={cone} width={1} alpha={alpha} blur={44} />
+      <Dust cone={cone} set={MOTES_BEHIND} sec={sec} gain={light.shape.haze} sway={0} />
+    </>
+  )
+}
+
+/**
+ * The phone's shadow on the lit floor. A tight dark contact under the feet
+ * and a wider soft one that leans away from the lamp. It tracks the phone
+ * across the stage, shrinks when the phone hops, and only reads where the
+ * pool is.
+ */
+export const ContactShadow: React.FC<{
+  layout: PhoneLayout
+  /** Where the feet are, relative to the layout's own rest position. */
+  x: number
+  y: number
+  lift: number
+  scale: number
+  /** How lit the floor under the feet is, 0..1. */
+  lit: number
+  /** Which way the shadow leans, -1..1. Away from the lamp. */
+  lean: number
+  opacity: number
+}> = ({ layout, x, y, lift, scale, lit, lean, opacity }) => {
+  const landed = Math.max(0.3, 1 - lift / 70)
+  const visible = opacity * unit(lit * 1.5)
+  if (visible <= 0.02) {
+    return null
+  }
+  const feetX = layout.left + layout.width / 2 + x
+  const feetY = layout.top + layout.height + layout.bezel + y
+  const contactW = layout.frameWidth * 0.94 * scale * (0.82 + landed * 0.18)
+  const contactH = Math.max(10, contactW * 0.1)
+  const castW = contactW * 1.7
+  const castH = contactW * 0.3
   return (
     <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
-      {shape.haze > 0.02 ? (
-        <>
-          <div
-            style={{
-              position: "absolute",
-              left: -width * 0.35 + offset,
-              top: -height * 0.35,
-              width: width * 1.7,
-              height: height * 1.7,
-              background: `linear-gradient(102deg, transparent 28%, rgba(${HAZE_RGB},${0.12 * shape.haze}) 42%, rgba(${HAZE_RGB},${0.2 * shape.haze}) 52%, rgba(${HAZE_RGB},${0.07 * shape.haze}) 63%, transparent 74%)`,
-              filter: "blur(48px)",
-              mixBlendMode: "screen",
-            }}
-          />
-          {/* A tighter second pass, so the beam has a visible core edge. */}
-          <div
-            style={{
-              position: "absolute",
-              left: -width * 0.3 + offset * 1.15,
-              top: -height * 0.25,
-              width: width * 1.25,
-              height: height * 1.5,
-              background: `linear-gradient(99deg, transparent 34%, rgba(${HAZE_RGB},${0.09 * shape.haze}) 48%, rgba(${HAZE_RGB},${0.04 * shape.haze}) 57%, transparent 65%)`,
-              filter: "blur(18px)",
-              mixBlendMode: "screen",
-            }}
-          />
-        </>
-      ) : null}
-      {MOTES.map((mote, index) => {
-        const x = wrap(mote.x + sec * mote.speed + offset / width, 1)
-        const y = mote.y + Math.sin(sec * 0.4 + mote.phase) * mote.bob
-        const lit = poolLit(shape, x, y)
-        const opacity = dust * (0.14 + 0.95 * lit)
-        if (opacity <= 0.01) {
-          return null
-        }
-        return (
-          <div
-            key={index}
-            style={{
-              position: "absolute",
-              left: x * width,
-              top: y * height,
-              width: mote.size,
-              height: mote.size,
-              borderRadius: "50%",
-              background: `rgba(${HAZE_RGB},${opacity})`,
-            }}
-          />
-        )
-      })}
+      <div
+        style={{
+          position: "absolute",
+          left: feetX - castW / 2 + lean * contactW * 0.22,
+          top: feetY - castH * 0.42,
+          width: castW,
+          height: castH,
+          borderRadius: "50%",
+          background: `radial-gradient(closest-side, rgba(0,0,0,${0.5 * visible * landed}) 0%, rgba(0,0,0,${0.26 * visible * landed}) 50%, rgba(0,0,0,0) 100%)`,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: feetX - contactW / 2,
+          top: feetY - contactH * 0.6,
+          width: contactW,
+          height: contactH,
+          borderRadius: "50%",
+          background: `radial-gradient(closest-side, rgba(0,0,0,${0.92 * visible * landed}) 0%, rgba(0,0,0,${0.6 * visible * landed}) 55%, rgba(0,0,0,0) 100%)`,
+        }}
+      />
     </AbsoluteFill>
   )
 }
 
 /**
- * The darkness outside the pool. Multiplied over a slide, it leaves only the
- * part of the graphic the light actually reaches, which is how the intro and the
- * outro "sit in the dark and catch only the edge of the pool".
- *
- * The mask stops at 0.62, not 1: the slide is meant to be dim, never unreadable.
+ * The nearest layer: the part of the shaft between the phone and the lens,
+ * and the dust in it. It only shows on a wide view. A close-up keeps the
+ * screen clean, because a speck over the app reads as a dead pixel. `depth`
+ * is the view's scale.
  */
-export const LightMask: React.FC<{ shape: LightShape }> = ({ shape }) => {
+export const StageHaze: React.FC<{ light: LightNow; drift: number; sec: number; depth: number }> = ({
+  light,
+  drift,
+  sec,
+  depth,
+}) => {
   const { width, height } = useVideoConfig()
-  // The pool is drawn low on the floor, but a slide is type, not a floor object:
-  // the mask is held at the slide's own height so the words stay readable.
-  const rx = Math.round(shape.radiusX * width * 1.9)
-  const ry = Math.round(Math.max(shape.radiusY, 0.3) * height * 2.2)
-  const centreY = Math.round(Math.min(shape.centreY, 0.6) * 100)
+  const cone = beamCone(light.shape, width, height, drift)
+  const wide = unit((0.95 - depth) / 0.4)
+  if (wide <= 0.01) {
+    return null
+  }
   return (
-    <AbsoluteFill
-      style={{
-        pointerEvents: "none",
-        background: `radial-gradient(ellipse ${rx}px ${ry}px at ${Math.round(shape.centreX * 100)}% ${centreY}%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 42%, rgba(0,0,0,0.38) 72%, rgba(0,0,0,0.62) 100%)`,
-        mixBlendMode: "multiply",
-      }}
-    />
+    <>
+      <Shaft cone={cone} width={0.9} alpha={shaftAlpha(light) * 0.26 * wide} blur={40} />
+      <Dust
+        cone={cone}
+        set={MOTES_FRONT}
+        sec={sec}
+        gain={light.shape.haze * wide}
+        sway={parallax("haze", drift) - parallax("pool", drift)}
+      />
+    </>
   )
 }
+
+/**
+ * Fine grain over the stage. The stage is all slow dark gradients, and eight
+ * bits band on those. A little noise breaks the bands up before the encoder
+ * sees them. It is under the phone, so the app stays clean.
+ */
+const Grain: React.FC = () => {
+  const frame = useCurrentFrame()
+  const { width, height } = useVideoConfig()
+  return (
+    <svg width={width} height={height} style={{ position: "absolute", left: 0, top: 0 }}>
+      <filter
+        id="stage-grain"
+        x="0"
+        y="0"
+        width="100%"
+        height="100%"
+        colorInterpolationFilters="sRGB"
+      >
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.85"
+          numOctaves="1"
+          seed={frame % 240}
+          result="noise"
+        />
+        <feColorMatrix
+          in="noise"
+          values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.07 0 0 0 -0.02"
+          result="light"
+        />
+        <feColorMatrix
+          in="noise"
+          values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0.07 0 0 -0.02"
+          result="dark"
+        />
+        <feMerge>
+          <feMergeNode in="light" />
+          <feMergeNode in="dark" />
+        </feMerge>
+      </filter>
+      <rect width={width} height={height} filter="url(#stage-grain)" />
+    </svg>
+  )
+}
+
+/** The grade. A soft vignette that keeps the corners out of the picture, then the grain. */
+export const StageGrade: React.FC = () => (
+  <AbsoluteFill style={{ pointerEvents: "none" }}>
+    <AbsoluteFill
+      style={{
+        background:
+          "radial-gradient(ellipse 78% 78% at 50% 50%, rgba(0,0,0,0) 58%, rgba(0,0,0,0.42) 100%)",
+      }}
+    />
+    <Grain />
+  </AbsoluteFill>
+)

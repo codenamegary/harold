@@ -16,12 +16,8 @@ describe("slice plan", () => {
   it("is the whole storyboard in story order, connect act first", () => {
     expect(sliceNames).toEqual([
       "boot",
-      "connect_empty",
-      "connect_key",
-      "connect_fill",
-      "connect_test",
-      "connect_trust",
-      "connect_save",
+      "home_empty",
+      "connect",
       "landing",
       "new_session",
       "plan_stage",
@@ -39,16 +35,8 @@ describe("slice plan", () => {
     expect(slicePlan.map((spec) => spec.name)).toEqual([...sliceNames])
   })
 
-  it("keeps the seven connect slices in their original names and order", () => {
-    expect(sliceNames.slice(1, 8)).toEqual([
-      "connect_empty",
-      "connect_key",
-      "connect_fill",
-      "connect_test",
-      "connect_trust",
-      "connect_save",
-      "landing",
-    ])
+  it("records the empty home, then one connect run, then landing", () => {
+    expect(sliceNames.slice(1, 4)).toEqual(["home_empty", "connect", "landing"])
   })
 
   it("classifies every staging beat as pre-roll and every scene as on camera", () => {
@@ -60,12 +48,8 @@ describe("slice plan", () => {
       "pr_stage",
     ])
     expect(cameraSliceNames).toEqual([
-      "connect_empty",
-      "connect_key",
-      "connect_fill",
-      "connect_test",
-      "connect_trust",
-      "connect_save",
+      "home_empty",
+      "connect",
       "landing",
       "new_session",
       "plan",
@@ -96,13 +80,15 @@ describe("slice plan", () => {
   })
 
   it("numbers the recorded slices from one, in plan order", () => {
-    expect(cameraSliceIndex("connect_empty")).toBe(1)
-    expect(cameraSliceIndex("landing")).toBe(7)
+    expect(cameraSliceIndex("home_empty")).toBe(1)
+    expect(cameraSliceIndex("connect")).toBe(2)
+    expect(cameraSliceIndex("landing")).toBe(3)
     expect(cameraSliceIndex("pr")).toBe(cameraSliceNames.length)
-    expect(sliceFileName("connect_fill")).toBe("003-connect_fill.mp4")
-    expect(sliceFileName("landing")).toBe("007-landing.mp4")
-    expect(sliceFileName("new_session")).toBe("008-new_session.mp4")
-    expect(sliceFileName("pr")).toBe("015-pr.mp4")
+    expect(sliceFileName("home_empty")).toBe("001-home_empty.mp4")
+    expect(sliceFileName("connect")).toBe("002-connect.mp4")
+    expect(sliceFileName("landing")).toBe("003-landing.mp4")
+    expect(sliceFileName("new_session")).toBe("004-new_session.mp4")
+    expect(sliceFileName("pr")).toBe("011-pr.mp4")
   })
 
   it("refuses to number a pre-roll beat", () => {
@@ -112,16 +98,18 @@ describe("slice plan", () => {
   })
 
   it("recognises only plan names", () => {
-    expect(isSliceName("connect_trust")).toBe(true)
+    expect(isSliceName("connect")).toBe(true)
+    expect(isSliceName("home_empty")).toBe(true)
+    expect(isSliceName("connect_fill")).toBe(false)
     expect(isSliceName("connect_teeth")).toBe(false)
   })
 })
 
 describe("parseOnly", () => {
   it("splits, de-duplicates and orders by the plan", () => {
-    expect(parseOnly(["connect_trust,connect_empty"])).toEqual(["connect_empty", "connect_trust"])
-    expect(parseOnly(["landing", "connect_empty"])).toEqual(["connect_empty", "landing"])
-    expect(parseOnly(["connect_fill", "connect_fill"])).toEqual(["connect_fill"])
+    expect(parseOnly(["connect,home_empty"])).toEqual(["home_empty", "connect"])
+    expect(parseOnly(["landing", "home_empty"])).toEqual(["home_empty", "landing"])
+    expect(parseOnly(["connect", "connect"])).toEqual(["connect"])
   })
 
   it("rejects a name that is not in the plan", () => {
@@ -143,11 +131,11 @@ describe("parseOnly", () => {
 
 describe("shouldRecord", () => {
   it("records everything when the selection is empty", () => {
-    expect(shouldRecord("connect_save", [])).toBe(true)
+    expect(shouldRecord("connect", [])).toBe(true)
   })
 
   it("records only the selected slices", () => {
-    expect(shouldRecord("connect_save", ["connect_save"])).toBe(true)
-    expect(shouldRecord("connect_fill", ["connect_save"])).toBe(false)
+    expect(shouldRecord("connect", ["connect"])).toBe(true)
+    expect(shouldRecord("home_empty", ["connect"])).toBe(false)
   })
 })

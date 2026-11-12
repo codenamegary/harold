@@ -60,7 +60,7 @@ The host has:
 
 - Run `mcp/src/walk.ts` after the app is installed, the reverse is set, and the
   probe token is read from logcat. `capture.sh` does all three.
-- The host setup must fill host, user, port and name, copy the generated public
+- The host setup must fill name, host, user and port, top to bottom, copy the generated public
   key, then test and trust the fingerprint.
 - The plan turn must ask exactly one question with `Settings toggle` and
   `Automatic`. The driver answers `Settings toggle`, submits, and fails the
@@ -88,22 +88,31 @@ sync_wake <mono>      sampled just before the WAKEUP keyevent of a slice
 <name> <mono>         mark() rows, including keys_done
 ```
 
-- Typing is per character. Each character writes its `key` mark, gets its own
-  `input text` call, then waits `KEY_GAP_SEC` (0.03 s, floored at 0.02 s). The
-  recorded `key` timestamps are the ground truth for cadence, and `driver.log`
-  reports `typed <field> <n> chars <cps> cps` plus the measured median and p95
-  key interval per field.
-- Escaping lives in `input_text_tokens`: one token per character, `%s` for a
-  space, single-quoted for the device shell. `drive_phone.py --self-test` runs
-  the helper over spaces, apostrophes, shell metacharacters and uppercase and
-  round-trips every token through `/bin/sh`.
+- The walk types one character per `adb shell input text` call. `retry` is off.
+  A second try can type the character twice. The gap is `HAROLD_TYPE_GAP_MS`
+  (default 80 ms). A shorter gap is raised to 70 ms.
+- Each character stamps `key` on the host clock before the `input text` call.
+  `keys_done` closes the field. `sync_wake` and `slice_start` use that same clock.
+- The field is focused with one tap. The walk waits about 150 ms so the cursor
+  is up before the first character. The field must already be empty. `boot`
+  clears a prefilled port with an instant set before any recorded slice.
+- Escaping lives in `mcp/src/input.text.ts`. A space is `%s`. The token is
+  single-quoted for the device shell. `bun test` round-trips the tokens through
+  `/bin/sh`, including `Mia's cat (plan): don't build? $HOME ...`.
+- Before typing on a device, the walk runs
+  `settings put secure show_ime_with_hard_keyboard 0`. Focus then shows a cursor
+  and no soft keyboard. The walk does not send BACK. The IME reports itself
+  shown whenever a field is focused, even when no keyboard is drawn, and BACK
+  then leaves the form while the probe still describes it.
+- Typing the host writes a suggested name (the host before the first dot).
+  The name beat backspaces that suggestion and types the demo name over it.
 - Every slice starts with a calibration blink: screen off, hold black, wake,
   `wm dismiss-keyguard`, then the slice's first action. The `sync_wake` mark is
-  sampled before the sleep keyevent, so ffmpeg `blackdetect` can find the black
-  run and the plan's offset math can cancel adb issue-to-delivery latency. This
-  needs `locksettings set-disabled true`, `wm dismiss-keyguard` and
-  `svc power stayon true`, which `capture.sh` sets once after `pm clear`.
-- `bash docs/demo/capture/capture.sh --only connect_fill` re-records a single
+  the host time of the wake. `build_capture.py` uses the two blinks to map host
+  time onto the video. This needs `locksettings set-disabled true`,
+  `wm dismiss-keyguard`, and `svc power stayon true`, which `capture.sh` sets
+  once after `pm clear`.
+- `bash docs/demo/capture/capture.sh --only connect` re-records a single
   slice. The walk still drives the app to reach it, records nothing else, and
   exits when the requested slices are done. The file keeps its storyboard
   `NNN-name.mp4` name, so it drops into a later full run unchanged.

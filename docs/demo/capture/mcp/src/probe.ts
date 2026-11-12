@@ -25,8 +25,8 @@ export const probeControlSchema = z.object({
 export type ProbeControl = z.infer<typeof probeControlSchema>
 
 /**
- * One event on the device clock. `nanos` is `SystemClock.elapsedRealtimeNanos()`,
- * converted to host time through `harold_anchor`.
+ * One event on the device clock. `nanos` is `SystemClock.elapsedRealtimeNanos()`.
+ * The walk stamps `key` rows on the host clock and does not convert these.
  */
 export const probeMarkSchema = z.object({
   nanos: z.number(),
@@ -61,10 +61,6 @@ export const healthSchema = z.object({
 })
 
 export type ProbeHealth = z.infer<typeof healthSchema>
-
-export const anchorPayloadSchema = z.object({
-  anchorNanos: z.number(),
-})
 
 export type ProbeConfig = {
   baseUrl: string
@@ -124,10 +120,6 @@ export async function marks(config: ProbeConfig, since = 0): Promise<ProbeMark[]
 
 export async function clearMarks(config: ProbeConfig): Promise<void> {
   await call(config, "/marks/clear", { method: "POST" })
-}
-
-export async function anchor(config: ProbeConfig): Promise<number> {
-  return anchorPayloadSchema.parse(await call(config, "/anchor", { method: "POST" })).anchorNanos
 }
 
 export function control(snapshot: ScreenSnapshot, tag: string): ProbeControl {

@@ -1,6 +1,7 @@
 import { Composition, staticFile } from "remotion"
 import { Demo } from "./Demo"
-import { DURATION_IN_FRAMES, FPS, type CaptureSlice } from "./timeline"
+import { OpeningFilm } from "./opening.scene"
+import { FPS, buildTimeline, type CaptureSlice } from "./timeline"
 
 type CaptureFile = {
   width: number
@@ -8,37 +9,71 @@ type CaptureFile = {
   slices: CaptureSlice[]
 }
 
+const loadCapture = async (): Promise<CaptureFile> => {
+  const response = await fetch(staticFile("capture.json"))
+  if (!response.ok) {
+    throw new Error("Missing public/capture.json. Run docs/demo/capture/capture.sh first.")
+  }
+  return (await response.json()) as CaptureFile
+}
+
 export const MyComposition = () => {
   return (
-    <Composition
-      id="HaroldDemo"
-      component={Demo}
-      durationInFrames={DURATION_IN_FRAMES}
-      fps={FPS}
-      width={1920}
-      height={1080}
-      defaultProps={{
-        slices: [],
-        videoWidth: 1080,
-        videoHeight: 2400,
-      }}
-      calculateMetadata={async () => {
-        const response = await fetch(staticFile("capture.json"))
-        if (!response.ok) {
-          throw new Error("Missing public/capture.json. Run docs/demo/capture/capture.sh first.")
-        }
-        const capture = (await response.json()) as CaptureFile
-        // capture.json supplies the assets and the phone dimensions. The cut
-        // length is authored, not derived: 1800 frames of fixed beats.
-        return {
-          durationInFrames: DURATION_IN_FRAMES,
-          props: {
-            slices: capture.slices,
-            videoWidth: capture.width,
-            videoHeight: capture.height,
-          },
-        }
-      }}
-    />
+    <>
+      <Composition
+        id="HaroldDemo"
+        component={Demo}
+        durationInFrames={150}
+        fps={FPS}
+        width={1920}
+        height={1080}
+        defaultProps={{
+          slices: [],
+          videoWidth: 1080,
+          videoHeight: 2400,
+        }}
+        calculateMetadata={async () => {
+          const capture = await loadCapture()
+          const timeline = buildTimeline(capture.slices)
+          return {
+            durationInFrames: Math.round(timeline.endSec * FPS),
+            props: {
+              slices: capture.slices,
+              videoWidth: capture.width,
+              videoHeight: capture.height,
+            },
+          }
+        }}
+      />
+      <Composition
+        id="HaroldOpening"
+        component={OpeningFilm}
+        durationInFrames={150}
+        fps={FPS}
+        width={1920}
+        height={1080}
+        defaultProps={{
+          slices: [],
+          videoWidth: 1080,
+          videoHeight: 2400,
+        }}
+        calculateMetadata={async () => {
+          const capture = await loadCapture()
+          const timeline = buildTimeline(capture.slices)
+          const ssh = timeline.scenes.find((scene) => scene.slug === "ssh")
+          if (ssh === undefined) {
+            throw new Error("the cut has no ssh scene")
+          }
+          return {
+            durationInFrames: Math.round(ssh.to * FPS),
+            props: {
+              slices: capture.slices,
+              videoWidth: capture.width,
+              videoHeight: capture.height,
+            },
+          }
+        }}
+      />
+    </>
   )
 }

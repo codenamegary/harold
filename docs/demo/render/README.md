@@ -1,29 +1,27 @@
 # Demo render
 
-A 113.0 second cut at 1920x1080, 30 fps, 3390 frames. The phone screen is real
-emulator capture; the capture is raw material and the edit lives in
-[`timeline.ts`](src/timeline.ts). [`../script.md`](../script.md) is the script and
-the only source for scene order, copy, stage, camera and sound.
+A 184.9 second cut at 1920x1080, 30 fps, 5548 frames. The phone screen is real
+emulator capture; the capture is raw material. The opening act lives in
+[`opening.ts`](src/opening.ts) and [`opening.scene.tsx`](src/opening.scene.tsx).
+The rest of the cut lives in [`timeline.ts`](src/timeline.ts). One shared stage
+draws pool, beam, phone, and haze. [`../script.md`](../script.md) is the script
+and the only source for scene order, copy, stage, camera and sound.
 
 The cut follows the script's twelve scenes, its stage, its camera vocabulary and
 its copy. There is no cold open and no promise card.
 
 ## Footage
 
-`public/capture.json` and `public/slices/` hold 15 slices from the MCP capture
-pipeline: 135.4 s of CFR 60, 1080x2400, with the exact time of every tap
-(`taps[]`), every keystroke (`keys[]`) and every named mark (`marks[]`). Nothing
-is re-recorded here.
+`public/capture.json` and `public/slices/` hold 11 slices from the MCP capture
+pipeline, 1080x2400, with the exact time of every tap (`taps[]`), every
+keystroke (`keys[]`) and every named mark (`marks[]`). Nothing is re-recorded
+here.
 
 | Slice           | Used for                                                     |
 | --------------- | ------------------------------------------------------------ |
-| `connect_empty` | the empty SSH host form, as the phone arrives                 |
-| `connect_key`   | the generated public key                                      |
-| `connect_fill`  | the host field being typed; then the filled form              |
-| `connect_test`  | the test tap; then the host fingerprint                       |
-| `connect_trust` | the trust tick                                                |
-| `connect_save`  | the save tap                                                  |
-| `landing`       | the chat landing, then the achievement on the same recording  |
+| `home_empty`    | the empty home, as the phone arrives                         |
+| `connect`       | Add connection, typing, scroll, test, trust, save            |
+| `landing`       | the chat landing after save                                   |
 | `new_session`   | the session menu, the new session form, the chat opening       |
 | `plan`          | the 338-character plan prompt, four real windows               |
 | `question`      | the plan reply, the question card, the answer sheet            |
@@ -35,24 +33,24 @@ is re-recorded here.
 
 ## The scenes
 
-The cut is 3390 frames. That is 113.0 s at 30 fps. Every scene holds one light
+The cut is 5548 frames. That is 184.9 s at 30 fps. Every scene holds one light
 state, and a state change eases over 1.2 s before it holds.
 
-| Scene         | Frames | Range   | Seconds | Light     | Footage                                                                 | Copy                                                     |
-| ------------- | ------ | ------- | ------- | --------- | ----------------------------------------------------------------------- | -------------------------------------------------------- |
-| `intro`       | 105    | 1-105   | 3.5     | `alone`   | none                                                                    | slide: logo, subtitle, CTA                               |
-| `ssh`         | 600    | 106-705 | 20.0    | `arrival` | `connect_empty`, `connect_key`, `connect_fill` x2, `connect_test` x2, `connect_trust`, `connect_save`, `landing` | `[CARD place=stage]` Harold over SSH to your agent hosts |
-| `achievement` | 225    | 706-930 | 7.5     | `reward`  | `landing` (tail, continuous)                                            | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
-| `newSession`  | 180    | 931-1110 | 6.0    | `work`    | `new_session` x3                                                        | `[NOTE]` Start something new                             |
-| `plan`        | 420    | 1111-1530 | 14.0   | `work`    | `plan` x4                                                               | `[CALLOUT]` Plan, Attachments                            |
-| `question`    | 180    | 1531-1710 | 6.0    | `work`    | `question` x3                                                           | `[CALLOUT]` Agent question                               |
-| `build`       | 450    | 1711-2160 | 15.0   | `work`    | `build` x5                                                              | `[CALLOUT]` Build                                        |
-| `usage`       | 150    | 2161-2310 | 5.0    | `work`    | `usage`                                                                 | `[CALLOUT]` Usage                                        |
-| `changes`     | 360    | 2311-2670 | 12.0   | `work`    | `changes` x6                                                            | `[CALLOUT]` Changes, Changes                             |
-| `worktrees`   | 105    | 2671-2775 | 3.5    | `work`    | `worktrees` x2                                                          | `[CALLOUT]` Worktrees                                    |
-| `pr`          | 465    | 2776-3240 | 15.5   | `full`    | `pr` x5                                                                 | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
-| `outro`       | 150    | 3241-3390 | 5.0    | `alone`   | none                                                                    | slide: logo, subtitle, CTA, site                         |
-| **Total**     | **3390** | **1-3390** | **113.0** |      |                                                                         |                                                          |
+| Scene         | Frames | Range     | Seconds | Light     | Footage                                      | Copy                                                     |
+| ------------- | ------ | --------- | ------- | --------- | -------------------------------------------- | -------------------------------------------------------- |
+| `intro`       | 126    | 1-126     | 4.2     | `alone`   | none                                         | slide: logo, subtitle, CTA                               |
+| `ssh`         | 606    | 127-732   | 20.2    | `arrival` | `home_empty` hold, `connect` to the save tap | `[CARD place=stage]` Look what I can do! |
+| `achievement` | 232    | 733-964   | 7.7     | `reward`  | `connect` from the save tap, then `landing`  | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
+| `newSession`  | 162    | 965-1126  | 5.4     | `work`    | `new_session`                                | `[NOTE]` Start something new                             |
+| `plan`        | 1662   | 1127-2788 | 55.4    | `work`    | `plan`                                       | `[CALLOUT]` Plan, Attachments                            |
+| `question`    | 171    | 2789-2959 | 5.7     | `work`    | `question`                                   | `[CALLOUT]` Agent question                               |
+| `build`       | 1330   | 2960-4289 | 44.3    | `work`    | `build`                                      | `[CALLOUT]` Build                                        |
+| `usage`       | 130    | 4290-4419 | 4.3     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
+| `changes`     | 327    | 4420-4746 | 10.9    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
+| `worktrees`   | 107    | 4747-4853 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
+| `pr`          | 545    | 4854-5398 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
+| `outro`       | 150    | 5399-5548 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
+| **Total**     | **5548** | **1-5548** | **184.9** |        |                                              |                                                          |
 
 The achievement sits third, right after the SSH scene, while the cost of setup is
 still fresh. It is the film's only `[POP]` and only `[CF]`.
@@ -62,20 +60,37 @@ still fresh. It is the film's only `[POP]` and only `[CF]`.
 Four layers, back to front, in [`stage.ts`](src/stage.ts) and
 [`stage-view.tsx`](src/stage-view.tsx):
 
-- **back**: wall, floor, the seam between them, a vignette. Always the darkest.
-- **pool**: the lit ellipse where the floor meets the wall, plus a bloom ring.
-  The rim is broken up by seeded lumps of light, so the edge reads as light on a
-  rough floor and not as a drawn plate.
-- **phone**: the handset, between the pool and the haze. It carries a lit edge on
-  the side that faces the pool.
-- **haze**: the foreground shaft and 64 seeded dust motes. The nearest layer, so
-  it passes over the phone.
+- **back**: a dark void. It never moves.
+- **floor**: a faint wall bounce, a soft horizon seam, and the light that
+  spills past the pool.
+- **pool**: one soft ellipse on the floor with a hot centre. `reward` adds one
+  lime flare.
+- **beam**: a blurred cone from a lamp above the frame down to the pool
+  (`beamCone`), with dust behind the phone.
+- **phone**: the handset. `rimLevels` lights each edge by how far the pool sits
+  to that side, so the rim follows the light as it moves. The contact shadow
+  only reads inside the pool.
+- **haze**: a thin front layer of the beam and a few motes. It fades out as the
+  camera gets close so the screen stays clean.
+- **grade**: a vignette and film grain. The grain keeps the dark gradients from
+  banding in the encode.
 
-Five light states, in [`stage.ts`](src/stage.ts:44): `alone`, `arrival`,
-`reward`, `work`, `full`. Each is a full shape — radius, centre, intensity, haze,
-flare — and a change eases over 1.2 s and then holds exactly until the next one.
-`lightAt` is the only place a state becomes pixels; the tests assert that every
-scene holds the shape its state names.
+Floor, pool, beam and haze are drawn in world pixels inside `StageWorld`. A
+scene can pass `worldLock`, a camera state where the world sits 1:1. The world
+then scales and moves with the camera, pinned to the phone's feet. The opening
+locks to its frame-filling camera, so the wide shot sees the whole stage from
+further back and the push-in carries the stage with the phone. Scenes without a
+lock draw the world in screen space, as before.
+
+Five light states, in [`stage.ts`](src/stage.ts): `alone`, `arrival`, `reward`,
+`work`, `full`. Each is its own shape (radius, centre, intensity, haze, flare).
+A change eases over 1.2 s and then holds exactly until the next one. `alone` is
+a wide dim pool under the lockup. `arrival` is brighter and sits a little left
+of the phone, so the phone is lit from one side. `reward` floods the floor on the phone's side and is the
+only flare. That pool stays off the left copy. `work` is a tight hot pool and
+the haze dims. `full` is a wide centred pool. `lightAt` is the only place a
+state becomes pixels. The tests assert that every scene holds the shape its
+state names.
 
 The confetti is lit by the pool. `poolLit` returns how lit a stage point is, and
 `confetti.tsx` multiplies every particle's opacity by it, so the shower falls *in*
@@ -96,21 +111,32 @@ every cut, so a shot pans at one constant rate and the cut absorbs the reset.
 ## The phone as a character
 
 [`body.ts`](src/body.ts) holds the body language as poses: `x`, `y`, `rotateZ`,
-`rotateY`, `rotateX`, `scale`. `poseAt` eases between cues, and every scene with
-footage states its pose on the cut.
+`rotateY`, `rotateX`, `scale`. Close cues ease across their gap. A longer gap
+holds the pose, then eases in the last 0.6s. Every scene with footage states
+its pose on the cut.
 
-- `ssh` enters with the waddle: a damped roll, a bob, and a turn that rings down
-  over 1.5 s, while the camera docks from 0.34 to 0.5 and the pool tightens.
-- `plan` leans in — turned towards the camera, scaled up, pushed towards the light.
-- `question` sits back — turned away, pushed back, smaller.
-- `build` holds still and watches.
-- `usage` tilts its top towards the camera to present the header.
-- `changes` turns to present its screen, ten degrees at the cut, level within 0.8 s.
-- `achievement` turns to camera as the light blooms.
+- `intro` runs 4.2s. The lamp flickers on, the mark pops at 0.5s, the title
+  rises word by word, then the lockup lifts away at 3.15s and the pool slides
+  right and tightens for the phone.
+- `ssh` waddles in small and further back over 1.6s, seven snappy steps, then
+  hops and lands in the pool. The card pops in beside it at 1.2s. The camera
+  pushes in from 2.85s until the phone fills the frame. After the push, the
+  idle walk stops and the phone no longer takes the camera drift. The camera
+  punches in on Add connection at 4.1s, taps, then punches back out to the
+  full form. All of these times live at the top of
+  [`opening.ts`](src/opening.ts).
+- `achievement` holds in the right slot. Scale stays at 1 so the handset stays
+  off the left copy. One pop.
+- `newSession` returns to centre and holds.
+- `plan` leans in and holds: rotateY -16, rotateX -10, scale 1.07.
+- `question` sits back and holds: rotateY 14, scale 0.92.
+- `build` watches and holds: rotateX -8, scale 1.05.
+- `usage` gives a small nod toward the header and holds. The camera does the zoom.
+- `changes` turns to present and holds: rotateY -16. `worktrees` keeps that turn.
+- `pr` sits centred in the wide pool.
 
-A slow idle sway rides on top of every held pose, so a hold is never a still
-image. The waddle is additive, not a one-off: it is the same body language the
-rest of the film uses.
+`idleAt` keeps a quiet waddle on every held pose. Camera scale 1.5 and up uses
+a smaller idle so a close-up stays readable.
 
 ## Layouts and camera
 
@@ -168,7 +194,7 @@ names them, and the tests assert the film uses neither.
 
 **The callout anchor rule.** A callout anchors to the first tap of its shot. If
 the callout names `targetX`/`targetY`, that point wins. In this capture the taps
-stop at `connect_save`, and no scene with a callout plays a slice with taps, so
+stop at `connect`, and no scene with a callout plays a slice with taps, so
 every callout in the film uses the override — and every override was measured off
 the captured frames (the mode chip at `0.79, 0.703`, the question card at
 `0.5, 0.69`, the send control at `0.872, 0.78`, and so on). The rule itself is
@@ -180,10 +206,9 @@ with its curly apostrophe and `Pretty diffs!` with its exclamation mark.
 ## Sound
 
 - One ping per copy primitive, at the frame it lands.
-- One tap sound and one ripple per recorded `[TAP]` that survives a cut: four in
-  total (host field, test, trust tick, save).
-- One key sound per recorded keystroke the cut actually draws, thinned so a
-  12 cps burst does not read as a rattle. Keystrokes are never interpolated.
+- One tap sound and one ripple per recorded tap in a played slice.
+- One key sound per recorded keystroke, thinned when two land closer than
+  0.16 s. Keystrokes are never interpolated.
 - `[POP]` and `[CF]` are silent.
 - The music bed is measured, not dialled: `MUSIC_VOLUME = 0.16` puts `music.mp3`
   at -26.3 LUFS, a measured 11 dB under a tap.
@@ -193,18 +218,15 @@ fires on the frame where the phone draws that character.
 
 ## Pacing
 
-- `question` plays at 1.0x throughout: 1.15-5.45 s of a 6.05 s capture, with a
-  short hold on the open sheet. Nothing on that scene is slowed.
-- No shot is slower than 0.5x.
-- The long prompts play a real window at 6-8 characters a second and then cut
-  ahead: `plan` 14.0 s, `build` 15.0 s, `pr` 15.5 s, all from capture that would
-  otherwise run 45 s at a human cadence.
+Each slice plays once, from the start, at the speed it was recorded. The scene
+is as long as those slices. Intro and outro are the only fixed lengths. Typing
+is not sped up and not cut short to hit a runtime.
 
 ## Working on it
 
 ```sh
 bun install
-bun run dev        # studio, scrub the timeline
+bun run dev        # studio, scrub HaroldDemo or HaroldOpening
 bun test src       # scenes, light, parallax, body, camera, copy, sound, pacing
 bun run lint       # eslint + tsc
 ```
@@ -227,7 +249,7 @@ The review set lives in `../work/render/qa-v5/`: twelve stills at frames 45, 400
   the light and the copy carries the meaning. Readability would need a second,
   tighter preset per scene, which the script does not ask for.
 - **The taps that open each screen are off camera.** The capture has no taps
-  after `connect_save` and the system pickers were never filmed, so `Attach
+  after `connect` and the system pickers were never filmed, so `Attach
   photo`, `Add (1)`, `Attach files`, `Against main`, `settings.js`, `Dismiss` and
   friends are described by the copy, not shown as taps.
 - **The calibration blink reloads a session.** `question` and `build` do not start

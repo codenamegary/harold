@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { celebrationStyle } from "./celebration"
-import { CELEBRATION_AT, FPS, SCENES, buildTimeline, type CaptureSlice } from "./timeline"
+import { buildTimeline, celebrationAt, type CaptureSlice } from "./timeline"
 
 const capture = JSON.parse(
   readFileSync(new URL("../public/capture.json", import.meta.url), "utf8"),
@@ -39,11 +39,10 @@ describe("celebration contract", () => {
     const timeline = buildTimeline(capture.slices)
     expect(timeline.celebrations.length).toBe(1)
     expect(timeline.confetti.length).toBe(1)
-    const achievement = SCENES[2]
+    const achievement = timeline.scenes[2]
     expect(achievement.slug).toBe("achievement")
     const hinge = timeline.celebrations[0]
-    expect(Math.round(hinge.at * FPS)).toBe(723)
-    expect(hinge.at).toBeCloseTo(CELEBRATION_AT, 9)
+    expect(hinge.at).toBeCloseTo(celebrationAt(timeline.scenes), 9)
     expect(hinge.at).toBeGreaterThanOrEqual(achievement.from)
     expect(hinge.at).toBeLessThan(achievement.to)
     expect(hinge.confetti).toBe(true)
@@ -56,7 +55,7 @@ describe("celebration contract", () => {
     const hinge = timeline.celebrations[0]
     expect(celebrationStyle(timeline.celebrations, hinge.at - 0.02)).toEqual(REST)
     expect(celebrationStyle(timeline.celebrations, hinge.at + 0.12).scaleY).toBeLessThan(1)
-    const pr = SCENES.find((scene) => scene.slug === "pr")
+    const pr = timeline.scenes.find((scene) => scene.slug === "pr")
     if (pr === undefined) {
       throw new Error("no pr scene")
     }

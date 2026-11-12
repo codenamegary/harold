@@ -34,7 +34,7 @@ export const celebrationStyle = (celebrations: Celebration[], sec: number): Cele
     interpolate(
       t,
       [0, 0.08, 0.18, 0.3, 0.46, 0.66, 0.84, 1],
-      [1, 1.07, 0.94, 1.03, 0.985, 1.008, 0.998, 1],
+      [1, 1.14, 0.92, 1.05, 0.98, 1.012, 0.998, 1],
       clamp,
     ),
   )
@@ -42,7 +42,7 @@ export const celebrationStyle = (celebrations: Celebration[], sec: number): Cele
     interpolate(
       t,
       [0, 0.08, 0.18, 0.3, 0.46, 0.66, 0.84, 1],
-      [1, 0.9, 1.07, 0.97, 1.02, 0.994, 1.004, 1],
+      [1, 0.8, 1.12, 0.95, 1.03, 0.992, 1.004, 1],
       clamp,
     ),
   )
@@ -52,10 +52,10 @@ export const celebrationStyle = (celebrations: Celebration[], sec: number): Cele
   const damp = 1 - t
 
   return {
-    x: Math.sin(t * Math.PI * 10) * 14 * damp * strength,
-    y: Math.sin(t * Math.PI * 12 + 0.7) * 4 * damp * strength,
+    x: Math.sin(t * Math.PI * 10) * 22 * damp * strength,
+    y: Math.sin(t * Math.PI * 12 + 0.7) * 8 * damp * strength,
     scaleX: squashX * pop,
     scaleY: squashY * pop,
-    rotate: Math.sin(t * Math.PI * 14) * 2.2 * damp * strength,
+    rotate: Math.sin(t * Math.PI * 14) * 4.5 * damp * strength,
   }
 }

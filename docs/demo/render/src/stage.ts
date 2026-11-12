@@ -31,26 +31,77 @@ export type LightShape = {
   flare: number
 }
 
-// The five states are not five shades of dark: each one changes the *shape* of
-// the pool as well as its brightness, so the cut between them is visible on a
-// single frame. `alone` is a smudge, `reward` is the whole room lit, `work` is a
-// shaft narrow enough to see the phone's shadow on the floor.
+// The five states are five different lights, not five shades of one gradient.
+// Each one changes the shape, so a paused frame tells you which act you are in.
 //
-// The pool sits *low* on the floor, where the phone's feet are, and never dead
-// centred behind it: an ellipse centred on the phone reads as a halo, an ellipse
-// the phone stands at the edge of reads as a light the phone has stepped into.
+// The pool sits on the floor. `alone` is wide and dim, centred under the
+// lockup. `arrival` is brighter and sits a little left of the phone, so the
+// phone stands just inside it and is lit from that side. It is authored for the
+// frame-filling phone, whose feet are at the bottom of the frame, so only the
+// far half of the pool shows. `reward` floods the floor under the phone and is
+// the only flare. Its left edge stays right of the copy column. `work` is a
+// tight hot pool and the haze drops. `full` is a wide centred field.
 export const LIGHTS: Record<LightState, LightShape> = {
-  // A wide, weak spill low on the floor: the slide catches only its edge.
-  alone: { radiusX: 0.36, radiusY: 0.11, centreX: 0.52, centreY: 0.8, intensity: 0.14, haze: 0.05, flare: 0 },
-  // Bright and tight, low on the floor, with the phone standing in its edge.
-  arrival: { radiusX: 0.28, radiusY: 0.15, centreX: 0.44, centreY: 0.78, intensity: 0.46, haze: 0.14, flare: 0.12 },
-  // The room opens up: the pool blooms across the floor and up the wall behind
-  // the phone, and the haze becomes a veil. Held off the copy column on the left.
-  reward: { radiusX: 0.6, radiusY: 0.3, centreX: 0.6, centreY: 0.72, intensity: 0.85, haze: 0.5, flare: 1 },
-  // Pool tightens onto the phone; the floor around it goes back to black.
-  work: { radiusX: 0.27, radiusY: 0.16, centreX: 0.43, centreY: 0.8, intensity: 0.52, haze: 0.04, flare: 0.06 },
-  // Pool opens wide. The phone is small and centred in a large lit field.
-  full: { radiusX: 0.54, radiusY: 0.2, centreX: 0.56, centreY: 0.78, intensity: 0.72, haze: 0.18, flare: 0.45 },
+  alone: { radiusX: 0.3, radiusY: 0.06, centreX: 0.5, centreY: 0.82, intensity: 0.4, haze: 0.5, flare: 0 },
+  arrival: { radiusX: 0.34, radiusY: 0.13, centreX: 0.4, centreY: 0.985, intensity: 0.92, haze: 0.8, flare: 0 },
+  reward: { radiusX: 0.3, radiusY: 0.12, centreX: 0.74, centreY: 0.83, intensity: 1, haze: 1, flare: 1 },
+  work: { radiusX: 0.125, radiusY: 0.08, centreX: 0.5, centreY: 0.84, intensity: 1, haze: 0.22, flare: 0 },
+  full: { radiusX: 0.46, radiusY: 0.13, centreX: 0.5, centreY: 0.82, intensity: 0.76, haze: 0.4, flare: 0 },
+}
+
+/** How far a flare ring spreads past the pool, as a multiple of the pool radius. */
+export const FLARE_SPREAD = 1.12
+
+/** Where the floor meets the wall, as a fraction of the stage height. */
+export const HORIZON = 0.667
+
+/** The lamp hangs this many pool half-widths above the pool. */
+export const BEAM_RISE = 4
+
+/** The lamp's own width, as a fraction of the pool's. */
+export const BEAM_APERTURE = 0.08
+
+export type BeamCone = {
+  /** The lamp. Straight above the pool, far above the frame. */
+  apexX: number
+  apexY: number
+  apexHalf: number
+  /** The pool. The cone's foot is the ellipse itself. */
+  footX: number
+  footY: number
+  footHalfX: number
+  footHalfY: number
+}
+
+/**
+ * The shaft, as a cone from the lamp to the pool. The foot is the pool
+ * ellipse: same centre, same radii, same parallax. So the beam stays on the
+ * circle while the camera drifts, and a wide pool gets a wide shaft.
+ */
+export const beamCone = (
+  shape: LightShape,
+  stageWidth: number,
+  stageHeight: number,
+  driftX: number,
+): BeamCone => {
+  const footHalfX = shape.radiusX * stageWidth
+  const footX = shape.centreX * stageWidth + parallax("pool", driftX)
+  const footY = shape.centreY * stageHeight
+  return {
+    apexX: footX,
+    apexY: footY - footHalfX * BEAM_RISE,
+    apexHalf: footHalfX * BEAM_APERTURE,
+    footX,
+    footY,
+    footHalfX,
+    footHalfY: shape.radiusY * stageHeight,
+  }
+}
+
+/** Half the shaft's width at stage height `y`. It is the pool's width at the floor. */
+export const beamHalfAt = (cone: BeamCone, y: number): number => {
+  const t = Math.min(1, Math.max(0, (y - cone.apexY) / (cone.footY - cone.apexY)))
+  return cone.apexHalf + (cone.footHalfX - cone.apexHalf) * t
 }
 
 /** How long a state takes to reach the next one. It then holds. */
@@ -60,7 +111,8 @@ export type LightCue = { at: number; state: LightState }
 
 const mix = (from: number, to: number, t: number): number => from + (to - from) * t
 
-const mixShape = (from: LightShape, to: LightShape, t: number): LightShape => ({
+/** Blend two shapes, field by field. `t` is not eased here. */
+export const mixShape = (from: LightShape, to: LightShape, t: number): LightShape => ({
   radiusX: mix(from.radiusX, to.radiusX, t),
   radiusY: mix(from.radiusY, to.radiusY, t),
   centreX: mix(from.centreX, to.centreX, t),
@@ -71,6 +123,18 @@ const mixShape = (from: LightShape, to: LightShape, t: number): LightShape => ({
 })
 
 export type LightNow = { state: LightState; shape: LightShape }
+
+/** Blend two named lights. `t` 0 is `from`, 1 is `to`. */
+export const mixLights = (from: LightState, to: LightState, t: number): LightNow => {
+  const progress = Math.min(1, Math.max(0, t))
+  if (progress >= 1) {
+    return { state: to, shape: LIGHTS[to] }
+  }
+  if (progress <= 0) {
+    return { state: from, shape: LIGHTS[from] }
+  }
+  return { state: to, shape: mixShape(LIGHTS[from], LIGHTS[to], ease(progress)) }
+}
 
 /**
  * The light at `sec`. The last cue at or before `sec` is the target; the cue
@@ -109,6 +173,32 @@ export const poolLit = (shape: LightShape, x: number, y: number): number => {
   const dy = (y - shape.centreY) / shape.radiusY
   return Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy))
 }
+
+// --- The world --------------------------------------------------------------
+//
+// The stage is drawn in world space. A view places the world on the screen:
+// `screen = view.xy + world * view.scale`. Most of the film looks at the world
+// one to one. The opening looks at it from further back, then pushes in, so the
+// floor, the pool and the shaft grow with the phone instead of the phone
+// inflating on a still backdrop.
+
+export type WorldView = { scale: number; x: number; y: number }
+
+export const SCREEN_VIEW: WorldView = { scale: 1, x: 0, y: 0 }
+
+/** A light authored on the screen, moved into the world that `view` looks at. */
+export const shapeToWorld = (
+  shape: LightShape,
+  view: WorldView,
+  stageWidth: number,
+  stageHeight: number,
+): LightShape => ({
+  ...shape,
+  radiusX: shape.radiusX / view.scale,
+  radiusY: shape.radiusY / view.scale,
+  centreX: (shape.centreX * stageWidth - view.x) / view.scale / stageWidth,
+  centreY: (shape.centreY * stageHeight - view.y) / view.scale / stageHeight,
+})
 
 // --- Parallax ---------------------------------------------------------------
 //

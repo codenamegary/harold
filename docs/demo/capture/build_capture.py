@@ -26,9 +26,9 @@ fails the build with the slice named.
 
 Nothing is clamped, guessed, or defaulted. A slice that does not produce
 exactly two calibration blinks, four agreeing detector edges, an in-range
-offset, an in-range drift rate, in-range event times, closed key runs, a
-showable typing cadence, and a tail whose picture is still moving at every
-event it must show fails the whole build.
+offset, an in-range drift rate, in-range event times, closed key runs, and a
+tail whose picture is still moving at every event it must show fails the
+whole build. Typing speed is whatever the capture recorded.
 """
 from __future__ import annotations
 
@@ -142,17 +142,6 @@ FRAME_RATE = 60
 FRAME_SEC = 1.0 / FRAME_RATE
 CRF = 20
 ENCODE_PRESET = "veryfast"
-
-# --- Typing cadence ----------------------------------------------------------
-#
-# Plan section 3.3: the rendered cadence must be 2..5 frames between clicks,
-# which is 6..15 clicks/s at 30 fps. The build can only prove the ceiling: a
-# recorded typing run faster than 15 cps cannot be shown by any 30 fps window
-# (two clicks closer than 2 frames collapse into one), so the shot would need a
-# cadence the renderer cannot produce.
-RENDER_FPS = 30
-MIN_RENDER_FRAMES_PER_KEY = 2
-MAX_KEY_CADENCE_CPS = RENDER_FPS / MIN_RENDER_FRAMES_PER_KEY
 
 FLOAT_DIGITS = 3
 AT_SEC_EPSILON_SEC = 1e-9
@@ -852,22 +841,13 @@ def _assert_increasing(name, label, values):
 def _typing_row(name, keys, duration_sec):
     count = len(keys)
     window = keys[-1]["atSec"] - keys[0]["atSec"]
-    cadence = (count - 1) / window if window > 0 else float("inf")
-    if count > 1 and cadence > MAX_KEY_CADENCE_CPS:
-        raise BuildError(
-            f"slice {name}: {count} keys in {window:.3f}s is {cadence:.1f} cps, "
-            f"above the {MAX_KEY_CADENCE_CPS:.1f} cps ceiling "
-            f"({RENDER_FPS} fps with {MIN_RENDER_FRAMES_PER_KEY} frames per click, "
-            f"plan section 3.3); narrow the typing window"
-        )
+    cadence = (count - 1) / window if window > 0 else 0.0
     return {
         "name": name,
         "chars": count,
         "windowSec": round_sec(window),
         "cadenceCps": cadence,
         "sliceSec": round_sec(duration_sec),
-        "sliceCps": count / duration_sec if duration_sec > 0 else float("inf"),
-        "minShotSec": round_sec(count / MAX_KEY_CADENCE_CPS),
     }
 
 
@@ -879,17 +859,11 @@ def _print_summary(payload, typing):
     )
     if not typing:
         return
-    print(
-        f"build_capture: typing cadence, ceiling {MAX_KEY_CADENCE_CPS:.1f} cps "
-        f"= {MIN_RENDER_FRAMES_PER_KEY} frames per click at {RENDER_FPS} fps",
-        flush=True,
-    )
+    print("build_capture: typing", flush=True)
     for row in typing:
         print(
-            f"  {row['name']:<22} {row['chars']:3d} chars  typed "
-            f"{row['windowSec']:6.2f}s  {row['cadenceCps']:5.1f} cps  "
-            f"slice {row['sliceSec']:6.2f}s ({row['sliceCps']:4.1f} cps)  "
-            f"needs >= {row['minShotSec']:5.2f}s at {MAX_KEY_CADENCE_CPS:.1f} cps",
+            f"  {row['name']:<22} {row['chars']:3d} chars in "
+            f"{row['windowSec']:6.2f}s  {row['cadenceCps']:4.1f} cps",
             flush=True,
         )
     print(

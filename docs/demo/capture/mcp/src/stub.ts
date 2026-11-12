@@ -2,26 +2,23 @@
  * In-memory stand-in for the probe MCP tool surface.
  *
  * The walk's `--self-test` and the beat tests drive the real beat functions
- * against this, so beat sequencing, action coverage, device mark conversion and
- * `marks.log` formatting are all exercised with no emulator, no adb and no
- * docker.
+ * against this. Beat sequencing, action coverage, and `marks.log` rows run
+ * with no emulator, no adb, and no docker.
  *
- * It models the same four probes the app ships: `ssh_setup`, `chat`,
- * `create_session`, `changes` and `file_diff`. Fact keys and action names are
- * copied from the Kotlin probes, not chosen for convenience, because the self
- * test is only worth anything if it fails when the driver invents a verb or
- * waits on a fact the app never publishes.
+ * It models the probes the app ships: `shell`, `ssh_setup`, `chat`,
+ * `create_session`, `changes`, and `file_diff`. Fact keys and action names are
+ * copied from the Kotlin probes. The self-test fails when the driver invents a
+ * verb or waits on a fact the app never publishes.
  *
- * It keeps one clock. `hostNow()` advances every time a tool is called, and the
- * device clock is that same clock plus a fixed boot offset, so an anchor pair
- * carries the same small round-trip error a real device produces.
+ * `hostNow()` advances on each tool call and on each typed character. The walk
+ * stamps `key` rows from that clock. `receiveCharacter` appends one character
+ * to the focused field.
  */
 
 import type { CallTool } from "./client"
+import { fieldForTag, isTypeFieldName, tagByField } from "./input.text"
+import type { TypeFieldName } from "./input.text"
 import type { ProbeMark, ScreenSnapshot } from "./probe"
-
-/** Device clock at stub time zero, roughly an elapsedRealtimeNanos since boot. */
-const DEVICE_BASE_NANOS = 200_000_000_000
 
 const CALL_LATENCY_SEC = 0.004
 const POLL_SEC = 0.4
@@ -68,12 +65,20 @@ export type StubCall = Readonly<{
 
 export type ProbeControlSnapshot = ScreenSnapshot["controls"][number]
 
+export type StubInput = Readonly<{
+  field: TypeFieldName
+  character: string
+}>
+
 export type ProbeStub = Readonly<{
   callTool: CallTool
   hostNow: () => number
   viewport: () => Promise<{ width: number; height: number }>
   calls: () => readonly StubCall[]
   ledger: () => readonly ProbeMark[]
+  inputs: () => readonly StubInput[]
+  receiveCharacter: (character: string) => Promise<void>
+  clearFocused: (current: string) => Promise<void>
   facts: () => Record<string, string>
   screenName: () => string | null
   controls: () => readonly ProbeControlSnapshot[]
@@ -98,6 +103,10 @@ type StubState = {
   anchorNanos: number
   ledger: ProbeMark[]
   calls: StubCall[]
+  inputs: StubInput[]
+  focusedField: TypeFieldName | null
+  /** Name tracks the host suggestion until the name field itself is edited. */
+  nameFollowsHost: boolean
   // ssh_setup
   testing: boolean
   testingPolls: number
@@ -158,15 +167,19 @@ const CAT_ELICITATION: StubElicitation = {
 
 const initialState = (): StubState => ({
   hostSec: 1,
-  screen: null,
+  screen: "shell",
   anchorNanos: 0,
   ledger: [],
   calls: [],
+  inputs: [],
+  focusedField: null,
+  nameFollowsHost: true,
   testing: false,
   testingPolls: 0,
   fingerprint: "",
   trusted: false,
-  values: { host: "", port: "", user: "", name: "" },
+  // The form's port starts at 22. The walk clears it in pre-roll.
+  values: { host: "", port: "22", user: "", name: "" },
   sessionId: "",
   sessionName: "",
   sessionMenuOpen: false,
@@ -208,8 +221,6 @@ const initialState = (): StubState => ({
   diffLines: 18,
 })
 
-const deviceNanosAt = (hostSec: number): number => DEVICE_BASE_NANOS + hostSec * 1e9
-
 const control = (
   tag: string,
   top: number,
@@ -224,6 +235,21 @@ const control = (
   y: top + 70,
   enabled,
 })
+
+// --- shell -------------------------------------------------------------------
+
+const shellFacts = (): Record<string, string> => ({
+  status: "No connections yet",
+  addConnectionLabel: "Add connection",
+  addConnectionEnabled: "true",
+  retryVisible: "false",
+})
+
+const shellActions = (): readonly string[] => ["add_connection", "retry"]
+
+const shellControls = (): readonly ProbeControlSnapshot[] => [
+  control("shell_add_connection_button", 2100),
+]
 
 // --- ssh_setup ---------------------------------------------------------------
 
@@ -503,6 +529,8 @@ export const makeProbeStub = (): ProbeStub => {
 
   const factsNow = (): Record<string, string> => {
     switch (state.screen) {
+      case "shell":
+        return shellFacts()
       case "ssh_setup":
         return sshFacts(state)
       case "chat":
@@ -520,6 +548,8 @@ export const makeProbeStub = (): ProbeStub => {
 
   const actionsNow = (): readonly string[] => {
     switch (state.screen) {
+      case "shell":
+        return shellActions()
       case "ssh_setup":
         return sshActions()
       case "chat":
@@ -537,6 +567,8 @@ export const makeProbeStub = (): ProbeStub => {
 
   const controlsNow = (): readonly ProbeControlSnapshot[] => {
     switch (state.screen) {
+      case "shell":
+        return shellControls()
       case "ssh_setup":
         return sshControls(state)
       case "chat":
@@ -681,7 +713,7 @@ export const makeProbeStub = (): ProbeStub => {
         saveToChat()
         return
       case "back":
-        state.screen = null
+        state.screen = "shell"
         return
       case "auth_mode":
         return
@@ -703,11 +735,11 @@ export const makeProbeStub = (): ProbeStub => {
           state.values[field] = ""
         }
         for (const character of text) {
-          state.ledger.push({ nanos: deviceNanosAt(state.hostSec), kind: "key" })
+          state.ledger.push({ nanos: state.ledger.length + 1, kind: "key" })
           state.values[field] = `${state.values[field]}${character}`
           state.hostSec += gapMs / 1000
         }
-        state.ledger.push({ nanos: deviceNanosAt(state.hostSec), kind: "keys_done" })
+        state.ledger.push({ nanos: state.ledger.length + 1, kind: "keys_done" })
         return
       }
       default:
@@ -751,11 +783,11 @@ export const makeProbeStub = (): ProbeStub => {
           state.composerText = ""
         }
         for (const character of text) {
-          state.ledger.push({ nanos: deviceNanosAt(state.hostSec), kind: "key" })
+          state.ledger.push({ nanos: state.ledger.length + 1, kind: "key" })
           state.composerText = `${state.composerText}${character}`
           state.hostSec += gapMs / 1000
         }
-        state.ledger.push({ nanos: deviceNanosAt(state.hostSec), kind: "keys_done" })
+        state.ledger.push({ nanos: state.ledger.length + 1, kind: "keys_done" })
         return
       }
       case "send": {
@@ -878,6 +910,11 @@ export const makeProbeStub = (): ProbeStub => {
 
   const perform = (action: string, args: Record<string, string>): void => {
     switch (state.screen) {
+      case "shell":
+        if (action === "add_connection") {
+          state.screen = "ssh_setup"
+        }
+        return
       case "ssh_setup":
         applySshAction(action, args)
         return
@@ -909,6 +946,13 @@ export const makeProbeStub = (): ProbeStub => {
     }
     if (!target.enabled) {
       throw new Error(`${tag} is present but disabled`)
+    }
+    const field = fieldForTag(tag)
+    if (field !== undefined) {
+      state.focusedField = field
+    }
+    if (tag === "shell_add_connection_button") {
+      state.screen = "ssh_setup"
     }
     if (tag === "ssh_trust_checkbox") {
       state.trusted = !state.trusted
@@ -944,26 +988,81 @@ export const makeProbeStub = (): ProbeStub => {
     return { tag, x: target.x, y: target.y, screen: state.screen }
   }
 
+  const currentFieldText = (field: TypeFieldName): string =>
+    field === "composerText" ? state.composerText : (state.values[field] ?? "")
+
+  const appendCharacter = (field: TypeFieldName, character: string): void => {
+    state.inputs.push({ field, character })
+    if (field === "composerText") {
+      state.composerText = `${state.composerText}${character}`
+      return
+    }
+    state.values[field] = `${state.values[field] ?? ""}${character}`
+    if (field === "name") {
+      state.nameFollowsHost = false
+    }
+    if (field === "host" && state.nameFollowsHost) {
+      const host = state.values.host ?? ""
+      state.values.name = host.split(".")[0] ?? ""
+    }
+  }
+
+  const clearFocused = async (current: string): Promise<void> => {
+    const field = state.focusedField
+    if (field === null) {
+      throw new Error("no field is focused")
+    }
+    const value = currentFieldText(field)
+    if (value !== current) {
+      throw new Error(`${field} holds ${JSON.stringify(value)}, not ${JSON.stringify(current)}`)
+    }
+    if (field === "composerText") {
+      state.composerText = ""
+    } else {
+      state.values[field] = ""
+    }
+    if (field === "name") {
+      state.nameFollowsHost = false
+    }
+  }
+
+  const receiveCharacter = async (character: string): Promise<void> => {
+    const field = state.focusedField
+    if (field === null) {
+      throw new Error("no field is focused")
+    }
+    appendCharacter(field, character)
+    state.hostSec += CALL_LATENCY_SEC
+  }
+
   /**
-   * `harold_type` keeps the SSH form grammar: it names a real field, returns the
-   * landed value and the marks for that field. The chat composer has its own
-   * `type` action, driven through `harold_intent`.
+   * Same contract as `harold_type`: the field must already be empty, then each
+   * character lands on its own. The walk types through `receiveCharacter`.
    */
   const typeIntoForm = (args: Record<string, unknown>) => {
     const field = String(args.field ?? "")
-    const text = String(args.text ?? "")
-    const gapMs = Number(args.gapMs ?? 30)
-    if (state.screen !== "ssh_setup" || !(field in state.values)) {
+    if (!isTypeFieldName(field)) {
       throw new Error(`no field named ${field} on ${state.screen ?? "the current screen"}`)
     }
-    const firstMark = state.ledger.length
-    applySshAction("type", {
-      field,
-      text,
-      gapMs: String(gapMs),
-      ...(args.append === "true" ? { append: "true" } : {}),
-    })
-    return { field, value: state.values[field], marks: state.ledger.slice(firstMark) }
+    const tag = tagByField[field]
+    if (!controlsNow().some((candidate) => candidate.tag === tag)) {
+      throw new Error(`no control tagged ${tag} on ${state.screen ?? "the current screen"}`)
+    }
+    const current = currentFieldText(field)
+    if (current !== "") {
+      const error = new Error(
+        `FieldNotEmpty: ${field} holds ${JSON.stringify(current)}. Clear it before the recorded slice.`,
+      )
+      error.name = "FieldNotEmpty"
+      throw error
+    }
+    state.focusedField = field
+    const text = String(args.text ?? "")
+    for (const character of text) {
+      appendCharacter(field, character)
+      state.hostSec += CALL_LATENCY_SEC
+    }
+    return { field, value: currentFieldText(field) }
   }
 
   const setField = (args: Record<string, unknown>) => {
@@ -1075,9 +1174,6 @@ export const makeProbeStub = (): ProbeStub => {
       case "harold_clear_marks":
         state.ledger = []
         return { ok: true }
-      case "harold_anchor":
-        state.anchorNanos = deviceNanosAt(state.hostSec)
-        return { anchorNanos: state.anchorNanos }
       default:
         throw new Error(`the stub does not implement ${name}`)
     }
@@ -1089,6 +1185,9 @@ export const makeProbeStub = (): ProbeStub => {
     viewport: async () => VIEWPORT,
     calls: () => state.calls,
     ledger: () => state.ledger,
+    inputs: () => state.inputs,
+    receiveCharacter,
+    clearFocused,
     facts: () => factsNow(),
     screenName: () => state.screen,
     controls: () => controlsNow(),

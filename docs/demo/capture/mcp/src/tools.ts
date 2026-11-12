@@ -7,8 +7,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import { navigate, screenSize, swipe, tap } from "./adb"
+import { clearFieldText, sendInputCharacter, TYPE_GAP_DEFAULT_MS, typeIntoField, typeFieldNames } from "./input.text"
 import {
-  anchor,
   clearMarks,
   control,
   intent,
@@ -22,7 +22,7 @@ function json(value: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] }
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 function satisfied(snapshot: ScreenSnapshot, field: string, equals?: string): boolean {
   const value = snapshot.facts[field] ?? ""
@@ -34,6 +34,19 @@ function satisfied(snapshot: ScreenSnapshot, field: string, equals?: string): bo
 
 export function registerProbeTools(server: McpServer, config: ProbeConfig): void {
   const packageId = process.env.HAROLD_PACKAGE ?? "harold.android.debug"
+
+  const tapTag = async (tag: string) => {
+    const snapshot = await screen(config)
+    const target = control(snapshot, tag)
+    if (!target.enabled) {
+      throw new Error(`${tag} is present but disabled`)
+    }
+    if (target.right - target.left <= 0 || target.bottom - target.top <= 0) {
+      throw new Error(`${tag} is off screen (zero bounds). Call harold_scroll_to first.`)
+    }
+    await tap(target.x, target.y)
+    return { tag, x: target.x, y: target.y, screen: snapshot.screen }
+  }
 
   server.registerTool(
     "harold_screen",
@@ -54,18 +67,7 @@ export function registerProbeTools(server: McpServer, config: ProbeConfig): void
         "Resolve a tag to its rect and issue a real adb tap. Returns the coordinates used, so the recording keeps a true touch and ripple.",
       inputSchema: { tag: z.string().describe("Compose test tag, as listed by harold_screen") },
     },
-    async ({ tag }) => {
-      const snapshot = await screen(config)
-      const target = control(snapshot, tag)
-      if (!target.enabled) {
-        throw new Error(`${tag} is present but disabled`)
-      }
-      if (target.right - target.left <= 0 || target.bottom - target.top <= 0) {
-        throw new Error(`${tag} is off screen (zero bounds). Call harold_scroll_to first.`)
-      }
-      await tap(target.x, target.y)
-      return json({ tag, x: target.x, y: target.y, screen: snapshot.screen })
-    },
+    async ({ tag }) => json(await tapTag(tag)),
   )
 
   server.registerTool(
@@ -106,29 +108,28 @@ export function registerProbeTools(server: McpServer, config: ProbeConfig): void
     {
       title: "Type into a field",
       description:
-        "Type character by character inside the app at a fixed gap. The field repaints glyph by glyph and the device records a key mark per character. Clears the field first unless append is true.",
+        "Focus the field with one adb tap, then type one adb character at a time. The field must already be empty. Fails if the fact does not match. Same function the walk uses.",
       inputSchema: {
-        field: z.string().describe("Field name from the screen facts, e.g. host, user, port"),
+        field: z.enum(typeFieldNames).describe("host, user, port, name, or composerText"),
         text: z.string(),
         gapMs: z.number().int().min(0).max(500).optional(),
-        append: z.boolean().optional(),
       },
     },
-    async ({ field, text, gapMs, append }) => {
-      const args: Record<string, string> = { field, text }
-      if (gapMs !== undefined) {
-        args.gapMs = String(gapMs)
-      }
-      if (append) {
-        args.append = "true"
-      }
-      const result = await intent(config, "type", args)
-      const landed = result.facts[field] ?? ""
-      const expected = append ? landed : text
-      if (!append && landed !== expected) {
-        throw new Error(`typed ${JSON.stringify(text)} but the field holds ${JSON.stringify(landed)}`)
-      }
-      return json({ field, value: landed, marks: result.marks })
+    async ({ field, text, gapMs }) => {
+      const value = await typeIntoField(field, text, {
+        readFact: async (name) => (await screen(config)).facts[name] ?? "",
+        focus: async (tag) => {
+          await tapTag(tag)
+        },
+        sendCharacter: sendInputCharacter,
+        clearField: clearFieldText,
+        stampKey: () => {},
+        stampKeysDone: () => {},
+        sleep,
+        gapMs: gapMs ?? TYPE_GAP_DEFAULT_MS,
+        replace: false,
+      })
+      return json({ field, value })
     },
   )
 
@@ -222,7 +223,7 @@ export function registerProbeTools(server: McpServer, config: ProbeConfig): void
     {
       title: "Read device marks",
       description:
-        "Marks recorded on the device clock: one key per typed character, keys_done, plus any anchors. Convert to host time through harold_anchor.",
+        "Marks the probe stored on the device clock. The walk does not convert these. It stamps key rows on the host clock while adb types.",
       inputSchema: { since: z.number().int().min(0).optional() },
     },
     async ({ since }) => json(await marks(config, since ?? 0)),
@@ -241,14 +242,4 @@ export function registerProbeTools(server: McpServer, config: ProbeConfig): void
     },
   )
 
-  server.registerTool(
-    "harold_anchor",
-    {
-      title: "Anchor the device clock",
-      description:
-        "Sample the device clock. Pair it with a host timestamp taken at the same moment to convert every mark exactly.",
-      inputSchema: {},
-    },
-    async () => json({ anchorNanos: await anchor(config) }),
-  )
 }
