@@ -1,5 +1,6 @@
 import { AbsoluteFill, Sequence, useVideoConfig } from "remotion"
 import { useMemo } from "react"
+import { Achievement } from "./achievement.scene"
 import { FontLoader, sansFamily } from "./fonts"
 import { Music } from "./music"
 import { Opening } from "./opening.scene"
@@ -10,8 +11,9 @@ import { Work } from "./work.scene"
 export const Demo: React.FC<DemoProps> = (props) => {
   const { fps } = useVideoConfig()
   const timeline = useMemo(() => buildTimeline(props.slices), [props.slices])
-  const hinge = timeline.scenes.find((scene) => scene.slug === "achievement")
-  const openingFrames = Math.max(1, Math.round((hinge?.from ?? 0) * fps))
+  const achievement = timeline.scenes.find((scene) => scene.slug === "achievement")
+  const openingFrames = Math.max(1, Math.round((achievement?.from ?? 0) * fps))
+  const achievementFrames = Math.max(1, achievement?.frames ?? 1)
 
   return (
     <AbsoluteFill style={{ background: ink, fontFamily: sansFamily }}>
@@ -20,7 +22,14 @@ export const Demo: React.FC<DemoProps> = (props) => {
       <Sequence durationInFrames={openingFrames} name="Opening">
         <Opening {...props} />
       </Sequence>
-      <Sequence from={openingFrames} name="Work">
+      <Sequence
+        from={openingFrames}
+        durationInFrames={achievementFrames}
+        name="Achievement"
+      >
+        <Achievement {...props} />
+      </Sequence>
+      <Sequence from={openingFrames + achievementFrames} name="Work">
         <Work {...props} />
       </Sequence>
     </AbsoluteFill>

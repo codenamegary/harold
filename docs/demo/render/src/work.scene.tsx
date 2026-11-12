@@ -9,15 +9,15 @@ import { buildTimeline, phoneLayers, type DemoProps } from "./timeline"
 const NO_WADDLE: Pose = { x: 0, y: 0, rotateZ: 0, rotateY: 0, rotateX: 0, scale: 1 }
 
 /**
- * Everything after the SSH opening. Still cut from the scene table. Local
- * frame 0 is the achievement, so times from the full timeline are offset.
+ * Everything after the opening and achievement acts. Still cut from the scene
+ * table. Local frame 0 is the new session, so full-timeline times are offset.
  */
 export const Work: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) => {
   const frame = useCurrentFrame()
   const { fps, width } = useVideoConfig()
   const timeline = useMemo(() => buildTimeline(slices), [slices])
-  const hinge = timeline.scenes.find((scene) => scene.slug === "achievement")
-  const originSec = hinge?.from ?? 0
+  const newSession = timeline.scenes.find((scene) => scene.slug === "newSession")
+  const originSec = newSession?.from ?? 0
   const sec = originSec + frame / fps
   const layers = phoneLayers(timeline.clips, sec)
   const light = lightAt(timeline.lights, sec)

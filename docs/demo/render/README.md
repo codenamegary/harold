@@ -3,9 +3,11 @@
 A 184.9 second cut at 1920x1080, 30 fps, 5548 frames. The phone screen is real
 emulator capture; the capture is raw material. The opening act lives in
 [`opening.ts`](src/opening.ts) and [`opening.scene.tsx`](src/opening.scene.tsx).
-The rest of the cut lives in [`timeline.ts`](src/timeline.ts). One shared stage
-draws pool, beam, phone, and haze. [`../script.md`](../script.md) is the script
-and the only source for scene order, copy, stage, camera and sound.
+The achievement act lives in [`achievement.ts`](src/achievement.ts) and
+[`achievement.scene.tsx`](src/achievement.scene.tsx). The rest of the cut lives
+in [`timeline.ts`](src/timeline.ts). One shared stage draws pool, beam, phone,
+and haze. [`../script.md`](../script.md) is the script and the only source for
+scene order, copy, stage, camera and sound.
 
 The cut follows the script's twelve scenes, its stage, its camera vocabulary and
 its copy. There is no cold open and no promise card.
@@ -125,8 +127,10 @@ its pose on the cut.
   punches in on Add connection at 4.1s, taps, then punches back out to the
   full form. All of these times live at the top of
   [`opening.ts`](src/opening.ts).
-- `achievement` holds in the right slot. Scale stays at 1 so the handset stays
-  off the left copy. One pop.
+- `achievement` eases from the filled handoff into the right slot at 2x, blooms
+  the pool, then holds. The phone leans in as the home screen lands and settles
+  before new-session. One pop. All of these times live at the top of
+  [`achievement.ts`](src/achievement.ts).
 - `newSession` returns to centre and holds.
 - `plan` leans in and holds: rotateY -16, rotateX -10, scale 1.07.
 - `question` sits back and holds: rotateY 14, scale 0.92.
@@ -226,10 +230,13 @@ is not sped up and not cut short to hit a runtime.
 
 ```sh
 bun install
-bun run dev        # studio, scrub HaroldDemo or HaroldOpening
+bun run dev        # studio, scrub HaroldDemo, HaroldOpening or HaroldAchievement
 bun test src       # scenes, light, parallax, body, camera, copy, sound, pacing
 bun run lint       # eslint + tsc
 ```
+
+`HaroldAchievement` previews the act from the chat landing screen. It does not
+replay the SSH form that leads into the main cut.
 
 One still, without a full render:
 

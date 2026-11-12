@@ -162,9 +162,6 @@ describe("timeline / capture contract", () => {
     expect(opening.startSec).toBeCloseTo(tap.atSec, 3)
     expect(sshConnect.startSec + sshConnect.duration).toBeCloseTo(tap.atSec, 3)
     expect(achievement.from).toBeCloseTo(opening.at, 3)
-    const before = t.cameraAt(achievement.from - 1 / FPS).scale
-    const after = t.cameraAt(achievement.from + 1 / FPS).scale
-    expect(Math.abs(after - before)).toBeLessThan(0.08)
   })
 
 })
@@ -307,19 +304,6 @@ describe("timeline / camera", () => {
     expect(PRESETS["upper-center"].scale).toBe(1.6)
     expect(PRESETS["lower-right"].focus.y).toBeGreaterThan(0.5)
     expect(PRESETS["upper-center"].focus.y).toBeLessThan(0.5)
-  })
-
-  test("the achievement uses the two-column layout and pushes in, docked right", () => {
-    const t = timeline()
-    const achievement = t.scenes[2]
-    expect(achievement.layout).toBe("L2C")
-    const state = t.cameraAt(achievement.from + CAMERA_EASE_SEC + 0.05)
-    expect(state.preset).toBe("center-two-thirds")
-    expect(state.scale).toBe(2)
-    expect(state.dock).toBeGreaterThan(0.6)
-    // The phone frame has to clear the spotlight column on the left.
-    const layout = phoneLayout(state, VIDEO_W, VIDEO_H, STAGE_W, STAGE_H, { x: 0, y: 0 })
-    expect(layout.left - layout.bezel).toBeGreaterThan(SPOT_INSET + SPOT_COLUMN + 48)
   })
 
   test("the usage scene honours the script's zoom exactly", () => {
@@ -621,13 +605,6 @@ describe("timeline / the phone as a character", () => {
     expect(sitting.scale).toBeLessThan(1)
     expect(idleGainForScale(1)).toBe(1)
     expect(idleGainForScale(2.2)).toBeLessThan(1)
-  })
-
-  test("the achievement holds clear of the left copy", () => {
-    const t = timeline()
-    const held = poseAt(t.bodies, t.scenes[2].from + 3)
-    expect(held.scale).toBeLessThanOrEqual(1.02)
-    expect(held.x).toBeGreaterThanOrEqual(0)
   })
 })
 

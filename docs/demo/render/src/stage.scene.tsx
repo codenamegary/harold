@@ -48,6 +48,8 @@ export type StageSceneProps = {
   ground?: number
   /** How much of the quiet idle walk rides on the body, 0..1. */
   idleGain: number
+  /** Keep phone freeze frames local so a short preview composition does not clamp them. */
+  localFreeze?: boolean
   layers: PhoneLayer[]
   ripples: Ripple[]
   copy: CopyItem[]
@@ -75,6 +77,7 @@ export const StageScene: React.FC<StageSceneProps> = ({
   body,
   ground = 0,
   idleGain,
+  localFreeze = false,
   layers,
   ripples,
   copy,
@@ -154,6 +157,7 @@ export const StageScene: React.FC<StageSceneProps> = ({
         opacity={phoneOpacity}
         light={light}
         rims={rims}
+        localFreeze={localFreeze}
       />
       <StageWorld view={view}>
         <StageHaze light={light} drift={drift.x} sec={sec} depth={view.scale} />

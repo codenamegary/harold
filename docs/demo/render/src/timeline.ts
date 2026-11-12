@@ -297,19 +297,18 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- achievement -----------------------------------------------------------
   //
-  // Begins on the Save SSH host tap. The pool blooms and the camera eases into
-  // the right-hand close-up. The save recording keeps playing, so the form
-  // leaves and the home screen arrives inside the move. Then the landing hold.
+  // Begins on the Save SSH host tap. The pool bloom, camera move, lean, and pop
+  // live in `achievement.ts`, along with the handoff from the opening. The
+  // camera and body here are the states new-session eases from. The save
+  // recording keeps playing, so the form leaves and the home screen arrives
+  // inside the move. Then the landing hold.
   {
     slug: "achievement",
     light: "reward",
     layout: "L2C",
     drift: 1.7,
     camera: [{ at: 0, preset: "center-two-thirds", dock: 0.66 }],
-    body: [
-      { at: 0, pose: {} },
-      { at: 0.85, pose: { rotateX: -4, rotateZ: 3, y: -6, scale: 1 } },
-    ],
+    body: [{ at: 0, pose: {} }],
     shots: [{ slice: "connect", from: "lastTap" }, { slice: "landing" }],
     copy: [
       {

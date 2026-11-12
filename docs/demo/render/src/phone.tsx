@@ -1,4 +1,4 @@
-import { Freeze, OffthreadVideo, staticFile, useVideoConfig } from "remotion"
+import { Freeze, OffthreadVideo, Sequence, staticFile, useVideoConfig } from "remotion"
 import type { Pose } from "./body"
 import type { PhoneLayout } from "./camera"
 import type { CelebrationStyle } from "./celebration"
@@ -46,7 +46,9 @@ const Screen: React.FC<{
   layers: PhoneLayer[]
   sec: number
   ripples: RippleSpec[]
-}> = ({ layout, layers, sec, ripples }) => {
+  /** Keep each freeze frame inside a local sequence. Short compositions need this. */
+  localFreeze: boolean
+}> = ({ layout, layers, sec, ripples, localFreeze }) => {
   const { fps } = useVideoConfig()
   return (
     <div
@@ -58,20 +60,32 @@ const Screen: React.FC<{
         background: "#000",
       }}
     >
-      {layers.map((layer, index) => (
-        <div
-          key={`${layer.clip.file}-${layer.clip.from}-${index}`}
-          style={{ position: "absolute", inset: 0, opacity: layer.opacity }}
-        >
-          <Freeze frame={Math.round(clipFrame(layer.clip, sec) * fps)}>
+      {layers.map((layer, index) => {
+        const freezeFrame = Math.round(clipFrame(layer.clip, sec) * fps)
+        const frozen = (
+          <Freeze frame={freezeFrame}>
             <OffthreadVideo
               src={staticFile(layer.clip.file)}
               muted
               style={{ width: layout.width, height: layout.height }}
             />
           </Freeze>
-        </div>
-      ))}
+        )
+        return (
+          <div
+            key={`${layer.clip.file}-${layer.clip.from}-${index}`}
+            style={{ position: "absolute", inset: 0, opacity: layer.opacity }}
+          >
+            {localFreeze ? (
+              <Sequence from={-freezeFrame} layout="none">
+                {frozen}
+              </Sequence>
+            ) : (
+              frozen
+            )}
+          </div>
+        )
+      })}
       {ripples.map((ripple, index) => (
         <div
           key={index}
@@ -154,7 +168,8 @@ export const PhoneView: React.FC<{
   opacity: number
   light: LightNow
   rims: RimLevels
-}> = ({ layout, layers, sec, ripples, pose, pop, opacity, light, rims }) => {
+  localFreeze?: boolean
+}> = ({ layout, layers, sec, ripples, pose, pop, opacity, light, rims, localFreeze = false }) => {
   const alpha = rimAlpha(light)
   return (
     <div
@@ -199,7 +214,13 @@ export const PhoneView: React.FC<{
               overflow: "hidden",
             }}
           >
-            <Screen layout={layout} layers={layers} sec={sec} ripples={ripples} />
+            <Screen
+              layout={layout}
+              layers={layers}
+              sec={sec}
+              ripples={ripples}
+              localFreeze={localFreeze}
+            />
           </div>
           {rims.left > 0.02 ? <Rim side="left" alpha={alpha * rims.left} /> : null}
           {rims.right > 0.02 ? <Rim side="right" alpha={alpha * rims.right} /> : null}
