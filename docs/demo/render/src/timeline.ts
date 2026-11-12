@@ -326,16 +326,14 @@ const SCENE_SPECS: SceneSpec[] = [
   //
   // The phone returns to centre and holds. The session menu opens on the cat
   // history, the form enlarges the phone, and the chat opening pulls it back.
+  // The camera moves, the light handoff, and the pose live in `newSession.ts`.
+  // The camera and body here are the states plan eases from.
   {
     slug: "newSession",
     light: "work",
     layout: "L1",
     drift: -1.6,
-    camera: [
-      { at: 0, preset: "full" },
-      { at: 1.9, preset: "center-two-thirds" },
-      { at: 3.6, preset: "full" },
-    ],
+    camera: [{ at: 0, preset: "full" }],
     body: [{ at: 0, pose: {} }],
     shots: [{ slice: "new_session" }],
     copy: [

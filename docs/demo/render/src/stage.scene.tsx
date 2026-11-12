@@ -48,6 +48,8 @@ export type StageSceneProps = {
   ground?: number
   /** How much of the quiet idle walk rides on the body, 0..1. */
   idleGain: number
+  /** Multiplies the phone's share of the camera drift. Acts that hold still pass 0. */
+  phoneDriftFactor?: number
   /** Keep phone freeze frames local so a short preview composition does not clamp them. */
   localFreeze?: boolean
   layers: PhoneLayer[]
@@ -77,6 +79,7 @@ export const StageScene: React.FC<StageSceneProps> = ({
   body,
   ground = 0,
   idleGain,
+  phoneDriftFactor = 1,
   localFreeze = false,
   layers,
   ripples,
@@ -89,7 +92,7 @@ export const StageScene: React.FC<StageSceneProps> = ({
   children,
 }) => {
   const { fps, width: stageW, height: stageH } = useVideoConfig()
-  const driftGain = phoneDriftGain(camera.scale)
+  const driftGain = phoneDriftGain(camera.scale) * phoneDriftFactor
   const phoneDrift = { x: drift.x * driftGain, y: drift.y * driftGain }
   const layout = phoneLayout(camera, videoWidth, videoHeight, stageW, stageH, phoneDrift)
   const view =

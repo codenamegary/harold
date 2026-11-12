@@ -4,7 +4,9 @@ A 184.9 second cut at 1920x1080, 30 fps, 5548 frames. The phone screen is real
 emulator capture; the capture is raw material. The opening act lives in
 [`opening.ts`](src/opening.ts) and [`opening.scene.tsx`](src/opening.scene.tsx).
 The achievement act lives in [`achievement.ts`](src/achievement.ts) and
-[`achievement.scene.tsx`](src/achievement.scene.tsx). The rest of the cut lives
+[`achievement.scene.tsx`](src/achievement.scene.tsx). The new-session act lives
+in [`newSession.ts`](src/newSession.ts) and
+[`newSession.scene.tsx`](src/newSession.scene.tsx). The rest of the cut lives
 in [`timeline.ts`](src/timeline.ts). One shared stage draws pool, beam, phone,
 and haze. [`../script.md`](../script.md) is the script and the only source for
 scene order, copy, stage, camera and sound.
@@ -131,7 +133,14 @@ its pose on the cut.
   the pool, then holds. The phone leans in as the home screen lands and settles
   before new-session. One pop. All of these times live at the top of
   [`achievement.ts`](src/achievement.ts).
-- `newSession` returns to centre and holds.
+- `newSession` eases from the achievement's framing back to centre by 0.6s,
+  pushes in on the session form at 1.9s with the top of the app screen on the
+  top edge, then pulls back to the full phone as the chat opens at 3.6s. The
+  reward pool settles into a large forward pool, widens with the push-in until
+  it runs off the bottom edge, holds through the form, then tightens back to
+  the resting pool. The phone is steady between those moves: no idle sway and
+  no camera drift. All of these times live at the top of
+  [`newSession.ts`](src/newSession.ts).
 - `plan` leans in and holds: rotateY -16, rotateX -10, scale 1.07.
 - `question` sits back and holds: rotateY 14, scale 0.92.
 - `build` watches and holds: rotateX -8, scale 1.05.
@@ -139,7 +148,8 @@ its pose on the cut.
 - `changes` turns to present and holds: rotateY -16. `worktrees` keeps that turn.
 - `pr` sits centred in the wide pool.
 
-`idleAt` keeps a quiet waddle on every held pose. Camera scale 1.5 and up uses
+`idleAt` keeps a quiet waddle on every held pose except `newSession`, which
+holds the phone dead still between camera moves. Camera scale 1.5 and up uses
 a smaller idle so a close-up stays readable.
 
 ## Layouts and camera
@@ -230,13 +240,14 @@ is not sped up and not cut short to hit a runtime.
 
 ```sh
 bun install
-bun run dev        # studio, scrub HaroldDemo, HaroldOpening or HaroldAchievement
+bun run dev        # studio, scrub HaroldDemo, HaroldOpening, HaroldAchievement or HaroldNewSession
 bun test src       # scenes, light, parallax, body, camera, copy, sound, pacing
 bun run lint       # eslint + tsc
 ```
 
 `HaroldAchievement` previews the act from the chat landing screen. It does not
-replay the SSH form that leads into the main cut.
+replay the SSH form that leads into the main cut. `HaroldNewSession` previews
+the act from the session menu.
 
 One still, without a full render:
 

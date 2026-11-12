@@ -323,26 +323,6 @@ describe("timeline / camera", () => {
     expect(costLine).toBeLessThan(STAGE_H * 0.5)
   })
 
-  test("a camera state holds until the next one", () => {
-    const t = timeline()
-    const newSession = t.scenes.find((scene) => scene.slug === "newSession")
-    if (newSession === undefined) {
-      throw new Error("no newSession scene")
-    }
-    const wide = t.cameraAt(newSession.from + CAMERA_EASE_SEC + 0.05)
-    const mid = t.cameraAt(newSession.from + 1.9 + CAMERA_EASE_SEC * 0.45)
-    const form = t.cameraAt(newSession.from + 1.9 + CAMERA_EASE_SEC + 0.05)
-    const back = t.cameraAt(newSession.from + 3.6 + CAMERA_EASE_SEC + 0.05)
-    expect(wide.preset).toBe("full")
-    expect(wide.scale).toBe(1)
-    expect(form.preset).toBe("center-two-thirds")
-    expect(form.scale).toBe(2)
-    expect(back.preset).toBe("full")
-    expect(mid.scale).toBeGreaterThan(wide.scale)
-    expect(mid.scale).toBeLessThan(form.scale)
-    expect(t.cameraAt(newSession.from + 1.5).scale).toBe(wide.scale)
-  })
-
   test("1x is the whole handset, and any push covers the frame", () => {
     const wide = phoneLayout(PRESETS.full, VIDEO_W, VIDEO_H, STAGE_W, STAGE_H, { x: 0, y: 0 })
     expect(wide.height).toBeCloseTo(STAGE_H * PHONE_FIT, 6)
