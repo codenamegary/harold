@@ -605,7 +605,7 @@ describe("timeline / the phone as a character", () => {
     const settledAt = Math.min(ssh.from + 8, ssh.to - 1)
     const settled = poseAt(t.bodies, settledAt)
     expect(settled.x).toBeCloseTo(0, 4)
-    expect(settled.rotateY).toBeCloseTo(2, 4)
+    expect(settled.rotateY).toBeCloseTo(0, 4)
     expect(settled.scale).toBeCloseTo(1, 4)
     const plan = t.scenes.find((scene) => scene.slug === "plan")
     const question = t.scenes.find((scene) => scene.slug === "question")

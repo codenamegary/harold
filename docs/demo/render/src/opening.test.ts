@@ -172,7 +172,7 @@ describe("opening / the phone as a character", () => {
     expect(end.x).toBeCloseTo(0, 6)
     expect(end.y).toBeCloseTo(0, 6)
     expect(end.scale).toBeCloseTo(1, 6)
-    expect(end.rotateY).toBeCloseTo(2, 6)
+    expect(end.rotateY).toBeCloseTo(0, 6)
   })
 
   test("the walk slows into the pool instead of stopping dead", () => {
@@ -225,7 +225,7 @@ describe("opening / the phone as a character", () => {
     const ssh = t.scenes[1]
     const settled = openingPoseAt(Math.min(ssh.from + 8, ssh.to - 1))
     expect(settled.x).toBeCloseTo(0, 4)
-    expect(settled.rotateY).toBeCloseTo(2, 4)
+    expect(settled.rotateY).toBeCloseTo(0, 4)
     expect(settled.scale).toBeCloseTo(1, 4)
     expect(openingCameraAt(ssh.to - 0.05).scale).toBeCloseTo(VERTICAL_FIT, 2)
   })
@@ -291,6 +291,12 @@ describe("opening / camera", () => {
     const wide = openingCameraAt(filledAt)
     expect(wide.scale).toBeCloseTo(VERTICAL_FIT, 2)
     expect(wide.focus.y).toBeCloseTo(0.5, 1)
+    // The phone faces the camera squarely on the button and through the form.
+    for (const pose of [openingPoseAt(tapAt), openingPoseAt(filledAt)]) {
+      expect(pose.rotateX).toBeCloseTo(0, 6)
+      expect(pose.rotateY).toBeCloseTo(0, 6)
+      expect(pose.rotateZ).toBeCloseTo(0, 6)
+    }
   })
 
   test("the camera never jumps", () => {

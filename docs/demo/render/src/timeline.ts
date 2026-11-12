@@ -279,7 +279,7 @@ const SCENE_SPECS: SceneSpec[] = [
     layout: "L1",
     drift: -1.6,
     camera: [{ at: 0, preset: "full", scale: VERTICAL_FIT, dock: 0.5 }],
-    body: [{ at: 0, pose: { x: 0, rotateY: 2, scale: 1 } }],
+    body: [{ at: 0, pose: {} }],
     shots: [
       { slice: "home_empty", holdAtSec: 0.8, holdSec: SSH_HOME_HOLD_SEC },
       { slice: "connect", to: "lastTap" },
@@ -307,7 +307,7 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: 1.7,
     camera: [{ at: 0, preset: "center-two-thirds", dock: 0.66 }],
     body: [
-      { at: 0, pose: { x: 0, rotateY: 2 } },
+      { at: 0, pose: {} },
       { at: 0.85, pose: { rotateX: -4, rotateZ: 3, y: -6, scale: 1 } },
     ],
     shots: [{ slice: "connect", from: "lastTap" }, { slice: "landing" }],

@@ -231,7 +231,7 @@ export const openingLightAt = (sec: number, frame: StageFrame): LightNow => {
 const WALK_FROM = { x: 1060, y: -44, scale: 0.72, rotateY: -22 }
 
 /** The pose the SSH scene holds, and the one the achievement picks up. */
-const SETTLED: Pose = { ...REST, rotateY: 2 }
+const SETTLED: Pose = REST
 
 const walkProgress = (sec: number): number =>
   Math.min(1, Math.max(0, (sec - INTRO_SEC) / SSH_WALK_SEC))
