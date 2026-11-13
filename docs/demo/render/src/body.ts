@@ -87,6 +87,18 @@ export const poseAt = (cues: BodyCue[], sec: number): Pose => {
   return mixPose(prev.pose, next.pose, ease(t))
 }
 
+/**
+ * The pose at `sec`, with an exit cue at the end of the act. `poseAt` holds the
+ * last authored pose, then eases to `next` over the final `POSE_EASE_SEC`, so
+ * the cut hands the next act a settled pose instead of a snap.
+ */
+export const poseAtCut = (
+  cues: BodyCue[],
+  sec: number,
+  durationSec: number,
+  next: Pose,
+): Pose => poseAt([...cues, { at: durationSec, pose: next }], sec)
+
 export type Waddle = { at: number; duration: number }
 
 /**

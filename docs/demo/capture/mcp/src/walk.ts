@@ -75,6 +75,7 @@ import type { IntentResult, ProbeControl, ScreenSnapshot } from "./probe"
 import {
   cameraSliceIndex,
   cameraSliceNames,
+  isSliceName,
   parseOnly,
   shouldRecord,
   sliceFileName,
@@ -197,8 +198,12 @@ const DWELL_FINGERPRINT_MS = 2500
 const DWELL_TRUST_MS = 2000
 const DWELL_SAVE_MS = 600
 const DWELL_LANDING_MS = 3000
-const DWELL_SESSION_MENU_MS = 1200
-const DWELL_SESSION_STARTED_MS = 1500
+const DWELL_SESSION_MENU_MS = 2200
+const DWELL_NEW_SESSION_MS = 1200
+const DWELL_WORKSPACE_MENU_MS = 2200
+const DWELL_AGENT_MENU_MS = 2800
+const DWELL_SELECTION_MS = 900
+const DWELL_SESSION_STARTED_MS = 2000
 const DWELL_PLAN_SENT_MS = 800
 const DWELL_QUESTION_MS = 1800
 const DWELL_ANSWER_MS = 1200
@@ -297,7 +302,11 @@ export type BeatContext = Readonly<{
   log: (message: string) => void
   screen: () => Promise<ScreenSnapshot>
   navigate: (route: "ssh_setup" | "chat") => Promise<void>
-  tap: (tag: string) => Promise<{ tag: string; x: number; y: number }>
+  /** Tap a tag. `xFraction` chooses the point inside a wide control; default centre. */
+  tap: (
+    tag: string,
+    point?: Readonly<{ xFraction?: number }>,
+  ) => Promise<{ tag: string; x: number; y: number }>
   scrollTo: (tag: string, direction?: ScrollDirection) => Promise<void>
   type: (field: TypeFieldName, text: string, replace?: boolean) => Promise<void>
   /**
@@ -312,6 +321,11 @@ export type BeatContext = Readonly<{
   typeComposer: (text: string) => Promise<void>
   wait: (args: WaitArgs) => Promise<WaitResult>
   waitForScreenChange: (from: string, timeoutMs?: number) => Promise<string | null>
+  /**
+   * Wait for a tagged control to exist. Dropdown option rows only register while
+   * their menu is open, so their presence is the honest "menu is open" signal.
+   */
+  waitForControl: (tag: string, timeoutMs?: number) => Promise<ProbeControl>
   dismissKeyboard: () => Promise<void>
   authorizeKey: (publicKey: string) => Promise<void>
   dwell: (ms: number) => Promise<void>
@@ -391,6 +405,12 @@ export type WalkDeps = Readonly<{
   clearField: (current: string) => Promise<void>
   out: Readonly<{ dir: string; slicesDir: string; marksPath: string; manifestPath: string }>
   only: readonly SliceName[]
+  /**
+   * Skip every beat before this one. The caller is responsible for leaving the
+   * app in the state that beat expects, so a targeted re-record does not have
+   * to replay the whole walk.
+   */
+  start?: SliceName
 }>
 
 const tapResultSchema = z.object({
@@ -486,9 +506,11 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
    * the skew without inventing a latency model. The row grammar is unchanged:
    * `tap <mono> <x> <y>`.
    */
-  const tap = async (tag: string) => {
+  const tap = async (tag: string, point?: Readonly<{ xFraction?: number }>) => {
     const beforeSec = hostNow()
-    const result = tapResultSchema.parse(await call("harold_tap", { tag }))
+    const args =
+      point?.xFraction === undefined ? { tag } : { tag, xFraction: point.xFraction }
+    const result = tapResultSchema.parse(await call("harold_tap", args))
     const afterSec = hostNow()
     if (sink.taps) {
       sink.push(tapRow({ atSec: (beforeSec + afterSec) / 2, x: result.x, y: result.y }))
@@ -566,6 +588,22 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     return poll()
   }
 
+  const waitForControl = async (tag: string, timeoutMs = FORM_TIMEOUT_MS): Promise<ProbeControl> => {
+    const deadline = Date.now() + timeoutMs
+    const poll = async (): Promise<ProbeControl> => {
+      const control = (await screen()).controls.find((candidate) => candidate.tag === tag)
+      if (control !== undefined) {
+        return control
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`no control tagged ${tag} appeared within ${timeoutMs} ms`)
+      }
+      await deps.sleep(POLL_INTERVAL_MS)
+      return poll()
+    }
+    return poll()
+  }
+
   const sleepUntilSettled = async (timeoutMs: number): Promise<void> => {
     const deadline = Date.now() + timeoutMs
     const poll = async (): Promise<void> => {
@@ -595,6 +633,7 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     typeComposer,
     wait,
     waitForScreenChange,
+    waitForControl,
     dismissKeyboard: deps.dismissKeyboard,
     authorizeKey: deps.authorizeKey,
     dwell: deps.sleep,
@@ -990,15 +1029,16 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
   },
 
   /**
-   * The `new-session` scene. The session menu, the form and the Start Session
-   * tap are all on camera; the workspace and agent picks go through the probe's
-   * own actions because the dropdown rows are composable-local and cannot be
-   * waited on as controls.
+   * The `new-session` scene. Every beat is on camera: the session menu row, the
+   * form, both dropdowns, the picked rows and the Start Session tap. The dropdown
+   * rows are real popups, so their controls are waited on by tag and tapped by
+   * screen coordinates.
    */
   new_session: async (ctx) => {
     await ctx.wait({ field: "sessionMenuOpen", equals: "false", timeoutMs: MENU_TIMEOUT_MS })
-    await ctx.intent("open_session_menu")
+    await ctx.tap("session_selector", { xFraction: 0.18 })
     await ctx.wait({ field: "sessionMenuOpen", equals: "true", timeoutMs: MENU_TIMEOUT_MS })
+    await ctx.waitForControl("session_menu_new", MENU_TIMEOUT_MS)
     const menu = await factsOf(ctx)
     const rows = Number(menu.sessionMenuCount ?? "0")
     if (rows < 1) {
@@ -1010,13 +1050,15 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
     ctx.mark("session_menu_open")
     await ctx.dwell(DWELL_SESSION_MENU_MS)
 
-    await ctx.intent("open_new_session")
+    await ctx.tap("session_menu_new", { xFraction: 0.2 })
     const form = await ctx.waitForScreenChange("chat")
     if (form !== "create_session") {
       throw new Error(
         `New session opened ${form ?? "(no instrumented screen)"} instead of create_session`,
       )
     }
+    ctx.mark("new_session_open")
+
     // The form fetches its workspace list from the host and its agent list from
     // the connection after it mounts, and `settled` only tracks `submitting`, so
     // a bare `settled` wait reads the form before either list has landed.
@@ -1026,6 +1068,8 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
       FORM_TIMEOUT_MS,
       "the new-session form offering a workspace and an agent",
     )
+    ctx.mark("form_ready")
+    await ctx.dwell(DWELL_NEW_SESSION_MS)
 
     const workspaceLabels = splitFact(offered.workspaceLabels ?? "")
     const workspaceId = labeledValue(
@@ -1034,30 +1078,51 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
       ctx.config.workspace,
       "the new-session form",
     )
-    await ctx.intent("pick_workspace", { id: workspaceId })
+    const workspaceOption = `create_session_workspace_option_${workspaceId}`
+    await ctx.tap("create_session_workspace", { xFraction: 0.25 })
+    await ctx.waitForControl(workspaceOption)
+    ctx.mark("workspace_menu_open")
+    await ctx.dwell(DWELL_WORKSPACE_MENU_MS)
+    await ctx.tap(workspaceOption, { xFraction: 0.2 })
     await ctx.wait({ field: "workspaceId", equals: workspaceId, timeoutMs: FORM_TIMEOUT_MS })
     ctx.mark("workspace_picked")
+    await ctx.dwell(DWELL_SELECTION_MS)
 
-    // Picking a workspace reloads that connection's agent list, so wait for the
-    // refreshed selection before deciding whether the agent needs a nudge.
-    await ctx.wait({ field: "agentId", timeoutMs: FORM_TIMEOUT_MS })
-    // The storyboard says the agent field already shows the configured agent.
-    // The app's default is the first enabled agent, which is not that agent on a
-    // fresh install, so the driver sets it only when the form disagrees.
-    const selectedAgent = (await factsOf(ctx)).agentLabel ?? ""
-    if (selectedAgent.toLowerCase() !== ctx.config.agent.toLowerCase()) {
-      const agentId = labeledValue(
-        splitFact((await factsOf(ctx)).agentIds ?? ""),
-        splitFact((await factsOf(ctx)).agentLabels ?? ""),
-        ctx.config.agent,
-        "the new-session form",
+    // Picking a workspace reloads the connection's agent list. Wait for that
+    // list before opening the menu, then always pick the configured agent so the
+    // choice is visible rather than silently changed behind the field.
+    const agentFacts = await waitForFacts(
+      ctx,
+      (facts) => Number(facts.agentCount ?? "0") > 0,
+      FORM_TIMEOUT_MS,
+      "the agent list after the workspace pick",
+    )
+    const agentLabels = splitFact(agentFacts.agentLabels ?? "")
+    if (!agentLabels.some((label) => label.toLowerCase() === ctx.config.agent.toLowerCase())) {
+      throw new Error(
+        `the new-session form offers ${JSON.stringify(agentLabels)}; ` +
+          `none matches ${JSON.stringify(ctx.config.agent)}`,
       )
-      await ctx.intent("pick_agent", { agentId })
-      await ctx.wait({ field: "agentId", equals: agentId, timeoutMs: FORM_TIMEOUT_MS })
     }
+    const agentId = labeledValue(
+      splitFact(agentFacts.agentIds ?? ""),
+      agentLabels,
+      ctx.config.agent,
+      "the new-session form",
+    )
+    const agentOption = `create_session_agent_option_${agentId}`
+    await ctx.tap("create_session_agent", { xFraction: 0.25 })
+    await ctx.waitForControl(agentOption)
+    ctx.mark("agent_menu_open")
+    await ctx.dwell(DWELL_AGENT_MENU_MS)
+    await ctx.tap(agentOption, { xFraction: 0.2 })
+    await ctx.wait({ field: "agentId", equals: agentId, timeoutMs: FORM_TIMEOUT_MS })
+    ctx.mark("agent_picked")
+    await ctx.dwell(DWELL_SELECTION_MS)
 
     await ctx.wait({ field: "submitEnabled", equals: "true", timeoutMs: FORM_TIMEOUT_MS })
-    await ctx.intent("submit")
+    await ctx.tap("create_session_submit")
+    ctx.mark("session_submit")
     const chat = await ctx.waitForScreenChange("create_session", FORM_TIMEOUT_MS)
     if (chat !== "chat") {
       throw new Error(
@@ -1829,9 +1894,19 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
     clearField: deps.clearField,
   })
 
-  deps.log(`driver_start${deps.only.length > 0 ? ` only=${deps.only.join(",")}` : ""}`)
+  deps.log(
+    `driver_start${deps.only.length > 0 ? ` only=${deps.only.join(",")}` : ""}` +
+      `${deps.start === undefined ? "" : ` start=${deps.start}`}`,
+  )
 
-  for (const beat of BEATS) {
+  const startIndex = deps.start === undefined
+    ? 0
+    : BEATS.findIndex((beat) => beat.name === deps.start)
+  if (startIndex < 0) {
+    throw new Error(`no beat named ${deps.start}; run with --list`)
+  }
+
+  for (const beat of BEATS.slice(startIndex)) {
     const recording = beat.kind === "onCamera" && shouldRecord(beat.name, deps.only)
 
     if (!recording) {
@@ -1885,6 +1960,7 @@ export type Cli = Readonly<{
   out: string
   serial: string | undefined
   only: readonly SliceName[]
+  start: SliceName | undefined
 }>
 
 type CliDraft = Readonly<{
@@ -1894,9 +1970,18 @@ type CliDraft = Readonly<{
   out: string
   serial: string | undefined
   onlyValues: readonly string[]
+  startValue: string | undefined
 }>
 
-const initialCli: CliDraft = { list: false, selfTest: false, help: false, out: DEFAULT_OUT, serial: undefined, onlyValues: [] }
+const initialCli: CliDraft = {
+  list: false,
+  selfTest: false,
+  help: false,
+  out: DEFAULT_OUT,
+  serial: undefined,
+  onlyValues: [],
+  startValue: undefined,
+}
 
 export const parseArgs = (argv: readonly string[]): Cli => {
   const consume = (rest: readonly string[], draft: CliDraft): CliDraft => {
@@ -1913,7 +1998,7 @@ export const parseArgs = (argv: readonly string[]): Cli => {
     if (head === "-h" || head === "--help") {
       return consume(tail, { ...draft, help: true })
     }
-    if (head === "--out" || head === "--emulator-serial" || head === "--only") {
+    if (head === "--out" || head === "--emulator-serial" || head === "--only" || head === "--start") {
       const [value, ...more] = tail
       if (value === undefined || value.startsWith("--")) {
         throw new Error(`${head} needs a value`)
@@ -1921,12 +2006,18 @@ export const parseArgs = (argv: readonly string[]): Cli => {
       if (head === "--only") {
         return consume(more, { ...draft, onlyValues: [...draft.onlyValues, value] })
       }
+      if (head === "--start") {
+        return consume(more, { ...draft, startValue: value })
+      }
       return head === "--out"
         ? consume(more, { ...draft, out: resolve(value) })
         : consume(more, { ...draft, serial: value })
     }
     if (head.startsWith("--only=")) {
       return consume(tail, { ...draft, onlyValues: [...draft.onlyValues, head.slice("--only=".length)] })
+    }
+    if (head.startsWith("--start=")) {
+      return consume(tail, { ...draft, startValue: head.slice("--start=".length) })
     }
     if (head.startsWith("--out=")) {
       return consume(tail, { ...draft, out: resolve(head.slice("--out=".length)) })
@@ -1939,7 +2030,23 @@ export const parseArgs = (argv: readonly string[]): Cli => {
 
   const draft = consume(argv, initialCli)
   const only = draft.onlyValues.length > 0 ? parseOnly(draft.onlyValues) : []
-  return { list: draft.list, selfTest: draft.selfTest, help: draft.help, out: draft.out, serial: draft.serial, only }
+  const start = draft.startValue === undefined ? undefined : parseStart(draft.startValue)
+  return {
+    list: draft.list,
+    selfTest: draft.selfTest,
+    help: draft.help,
+    out: draft.out,
+    serial: draft.serial,
+    only,
+    start,
+  }
+}
+
+const parseStart = (value: string): SliceName => {
+  if (!isSliceName(value)) {
+    throw new Error(`unknown slice ${value}; run with --list`)
+  }
+  return value
 }
 
 const usage = (): string =>
@@ -1948,6 +2055,7 @@ const usage = (): string =>
     "",
     "  --list                    print the beat plan and exit",
     "  --only <a,b>              record only these slices; repeatable",
+    "  --start <slice>           skip every beat before this slice; the app must already be in its starting state",
     "  --self-test               check beats and marks with no device",
     "  --out <dir>               output directory (default docs/demo/work/capture)",
     "  --emulator-serial <sn>    adb serial to drive",
@@ -2170,6 +2278,7 @@ const main = async (): Promise<number> => {
       },
       out,
       only: cli.only,
+      start: cli.start,
     })
     await writeFile(join(out.dir, "walk-report.json"), `${JSON.stringify(report, null, 2)}\n`)
     summarize(report)

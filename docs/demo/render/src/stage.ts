@@ -7,8 +7,9 @@ import { Easing } from "remotion"
 // ellipse where the floor meets the wall, the phone stands between the pool and
 // the haze, and the haze is the nearest layer.
 //
-// The light carries the arc, so it changes at act boundaries and then holds.
-// `lightAt` is the only place a light state becomes pixels.
+// The light carries the arc. States change at act boundaries, and some acts
+// change the shape as the camera moves. `lightAt` is the only place a state
+// becomes pixels.
 
 const ease = Easing.bezier(0.4, 0, 0.2, 1)
 
@@ -40,13 +41,22 @@ export type LightShape = {
 // frame-filling phone, whose feet are at the bottom of the frame, so only the
 // far half of the pool shows. `reward` floods the floor under the phone and is
 // the only flare. Its left edge stays right of the copy column. `work` is a
-// tight hot pool and the haze drops. `full` is a wide centred field.
+// wide hot pool under the phone's feet and the haze drops. `full` is a wider
+// centred field under the same feet.
+
+/**
+ * The handset's physical bottom edge at full framing, as a stage fraction: the
+ * screen bottom (0.91) plus the bezel. The work and full pools sit on this
+ * point, so the phone stands in the middle of the oval.
+ */
+export const HANDSET_FEET_Y = 0.9193
+
 export const LIGHTS: Record<LightState, LightShape> = {
   alone: { radiusX: 0.3, radiusY: 0.06, centreX: 0.5, centreY: 0.82, intensity: 0.4, haze: 0.5, flare: 0 },
   arrival: { radiusX: 0.34, radiusY: 0.13, centreX: 0.4, centreY: 0.985, intensity: 0.92, haze: 0.8, flare: 0 },
   reward: { radiusX: 0.3, radiusY: 0.12, centreX: 0.74, centreY: 0.83, intensity: 1, haze: 1, flare: 1 },
-  work: { radiusX: 0.125, radiusY: 0.08, centreX: 0.5, centreY: 0.84, intensity: 1, haze: 0.22, flare: 0 },
-  full: { radiusX: 0.46, radiusY: 0.13, centreX: 0.5, centreY: 0.82, intensity: 0.76, haze: 0.4, flare: 0 },
+  work: { radiusX: 0.28, radiusY: 0.12, centreX: 0.5, centreY: HANDSET_FEET_Y, intensity: 1, haze: 0.22, flare: 0 },
+  full: { radiusX: 0.46, radiusY: 0.13, centreX: 0.5, centreY: HANDSET_FEET_Y, intensity: 0.76, haze: 0.4, flare: 0 },
 }
 
 /** How far a flare ring spreads past the pool, as a multiple of the pool radius. */

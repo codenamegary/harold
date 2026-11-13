@@ -38,7 +38,8 @@ import {
   openingWaddleAt,
   type StageFrame,
 } from "./opening"
-import { FPS, buildTimeline, cards, type CaptureSlice } from "./timeline"
+import { OPENING_CUT, OPENING_DURATION } from "./opening.cut"
+import { FPS, buildTimeline, type CaptureSlice } from "./timeline"
 
 const capture = JSON.parse(
   readFileSync(new URL("../public/capture.json", import.meta.url), "utf8"),
@@ -221,13 +222,12 @@ describe("opening / the phone as a character", () => {
   })
 
   test("a settled pose holds through the rest of SSH", () => {
-    const t = timeline()
-    const ssh = t.scenes[1]
-    const settled = openingPoseAt(Math.min(ssh.from + 8, ssh.to - 1))
+    const end = OPENING_DURATION / FPS
+    const settled = openingPoseAt(Math.min(INTRO_SEC + 8, end - 1))
     expect(settled.x).toBeCloseTo(0, 4)
     expect(settled.rotateY).toBeCloseTo(0, 4)
     expect(settled.scale).toBeCloseTo(1, 4)
-    expect(openingCameraAt(ssh.to - 0.05).scale).toBeCloseTo(VERTICAL_FIT, 2)
+    expect(openingCameraAt(end - 0.05).scale).toBeCloseTo(VERTICAL_FIT, 2)
   })
 })
 
@@ -247,10 +247,11 @@ describe("opening / camera", () => {
   })
 
   test("the card lands as the phone does and leaves as the camera goes in", () => {
-    const t = timeline()
-    const ssh = t.scenes[1]
-    const card = cards(t.copy)[0]
-    expect(card.at).toBeCloseTo(ssh.from + SSH_CARD_SEC, 9)
+    const card = OPENING_CUT.copy[0]
+    if (card?.kind !== "card") {
+      throw new Error("the opening cut has no card")
+    }
+    expect(card.at).toBeCloseTo(INTRO_SEC + SSH_CARD_SEC, 9)
     expect(SSH_CARD_SEC).toBeGreaterThan(SSH_WALK_SEC * 0.6)
     expect(SSH_CARD_SEC).toBeLessThan(SSH_WALK_SEC + SSH_HOP_SEC)
     expect(SSH_CARD_HOLD_SEC).toBeGreaterThanOrEqual(1.6)
@@ -264,30 +265,35 @@ describe("opening / camera", () => {
   })
 
   test("the camera punches in on Add connection, taps, then returns to the full phone", () => {
-    const t = timeline()
-    const ssh = t.scenes[1]
     const connect = capture.slices.find((item) => item.name === "connect")
     const taps = [...(connect?.taps ?? [])].sort((a, b) => a.atSec - b.atSec)
     const addTap = taps[0]
     const nameTap = taps[1]
-    const form = t.shots.find((shot) => shot.scene === "ssh" && shot.slice === "connect")
-    if (connect === undefined || addTap === undefined || nameTap === undefined || form === undefined) {
+    const form = OPENING_CUT.clips.find(
+      (clip) => clip.kind === "play" && clip.file.endsWith("002-connect.mp4"),
+    )
+    if (
+      connect === undefined ||
+      addTap === undefined ||
+      nameTap === undefined ||
+      form?.kind !== "play"
+    ) {
       throw new Error("connect has no Add connection tap")
     }
     // The empty home holds for the walk, the card and the push. Then the recording runs.
-    expect(form.at - ssh.from).toBeCloseTo(SSH_HOME_HOLD_SEC, 6)
+    expect(form.from - INTRO_SEC).toBeCloseTo(SSH_HOME_HOLD_SEC, 6)
     expect(SSH_HOME_HOLD_SEC).toBeGreaterThan(SSH_ZOOM_SEC + SSH_ZOOM_EASE_SEC)
-    expect(SSH_PUNCH_IN_SEC).toBeCloseTo(form.at - ssh.from, 3)
-    const tapAt = form.at + (addTap.atSec - form.startSec)
-    const filledAt = form.at + (nameTap.atSec - form.startSec)
+    expect(SSH_PUNCH_IN_SEC).toBeCloseTo(form.from - INTRO_SEC, 3)
+    const tapAt = form.from + (addTap.atSec - form.startSec)
+    const filledAt = form.from + (nameTap.atSec - form.startSec)
     // The punch has landed and held a beat before the tap.
-    expect(ssh.from + SSH_PUNCH_IN_SEC + SSH_PUNCH_IN_EASE_SEC).toBeLessThan(tapAt - 0.25)
+    expect(INTRO_SEC + SSH_PUNCH_IN_SEC + SSH_PUNCH_IN_EASE_SEC).toBeLessThan(tapAt - 0.25)
     const punched = openingCameraAt(tapAt)
     expect(punched.scale).toBeGreaterThan(VERTICAL_FIT + 0.5)
     expect(punched.focus.y).toBeCloseTo(addTap.y / connect.height, 1)
     // It pulls back just after the tap, and is wide again before the next one.
-    expect(ssh.from + SSH_PUNCH_OUT_SEC).toBeGreaterThan(tapAt + 0.1)
-    expect(ssh.from + SSH_PUNCH_OUT_SEC).toBeLessThan(tapAt + 0.4)
+    expect(INTRO_SEC + SSH_PUNCH_OUT_SEC).toBeGreaterThan(tapAt + 0.1)
+    expect(INTRO_SEC + SSH_PUNCH_OUT_SEC).toBeLessThan(tapAt + 0.4)
     const wide = openingCameraAt(filledAt)
     expect(wide.scale).toBeCloseTo(VERTICAL_FIT, 2)
     expect(wide.focus.y).toBeCloseTo(0.5, 1)
@@ -300,10 +306,8 @@ describe("opening / camera", () => {
   })
 
   test("the camera never jumps", () => {
-    const t = timeline()
-    const ssh = t.scenes[1]
     const step = 1 / FPS
-    const frames = Math.round(ssh.to * FPS)
+    const frames = OPENING_DURATION
     for (let frame = 1; frame < frames; frame += 1) {
       const before = openingCameraAt((frame - 1) * step)
       const now = openingCameraAt(frame * step)

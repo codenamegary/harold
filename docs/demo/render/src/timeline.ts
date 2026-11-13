@@ -225,6 +225,14 @@ export type Shot = {
   duration: number
   /** A hold shows one frame. It does not replay the slice's taps or keys. */
   hold: boolean
+  /**
+   * Render each tap this many seconds before the frame it caused. A ripple
+   * starts on the control before a menu closes on the same tap, so the tap reads
+   * on the row instead of floating over whatever replaced it.
+   */
+  tapLead: number
+  /** Per-tap leads, in tap order. Falls back to `tapLead`. */
+  tapLeads?: readonly number[]
   /** Drift rate for this shot, percent of frame width per second. */
   drift: number
   data: CaptureSlice
@@ -242,14 +250,22 @@ type SceneSpec = {
   body: BodyCueSpec[]
   waddle?: { at: number; duration: number }
   shots: ShotSpec[]
+  /**
+   * Each tap ripples this many seconds before the frame it caused. Scenes whose
+   * taps dismiss a menu use a lead so the ripple is seen on the row.
+   */
+  tapLeadSec?: number
+  /** Per-tap leads, in tap order. Overrides `tapLeadSec` for those taps. */
+  tapLeadsSec?: readonly number[]
   copy: CopySpec[]
 }
 
 // --- The cut ----------------------------------------------------------------
 //
-// Every scene names its light state, its layout, its camera, what the phone does
-// in the light, and the copy its beats call for. Shot `at` is in frames; every
-// other scene-relative time is in seconds.
+// Every scene names its light state, its layout, its shots, and its copy. The
+// camera and body cues here are the cut's reference: the act modules own the
+// runtime camera, light, and body, and the act tests compare back to these.
+// Shot `at` is in frames; every other scene-relative time is in seconds.
 
 const SCENE_SPECS: SceneSpec[] = [
   // -- intro ----------------------------------------------------------------
@@ -327,7 +343,7 @@ const SCENE_SPECS: SceneSpec[] = [
   // The phone returns to centre and holds. The session menu opens on the cat
   // history, the form enlarges the phone, and the chat opening pulls it back.
   // The camera moves, the light handoff, and the pose live in `newSession.ts`.
-  // The camera and body here are the states plan eases from.
+  // The camera and body here are the states plan starts from.
   {
     slug: "newSession",
     light: "work",
@@ -336,27 +352,28 @@ const SCENE_SPECS: SceneSpec[] = [
     camera: [{ at: 0, preset: "full" }],
     body: [{ at: 0, pose: {} }],
     shots: [{ slice: "new_session" }],
+    // Opening a menu keeps the field on screen, so its tap only needs a small
+    // lead. Choosing a row closes the menu on the same touch, so those taps lead
+    // by most of the ripple: the ripple is seen on the row it belongs to.
+    tapLeadsSec: [0.1, 0.4, 0.1, 0.4, 0.1, 0.4, 0.1],
     copy: [
       // The note lands while the session menu is open, and slides back before
       // the form replaces it.
-      { kind: "note", at: 0.6, hold: 2.4, title: "Start something new", label: "NEW SESSION" },
+      { kind: "note", at: 0.6, hold: 3.1, title: "Start something new", label: "NEW SESSION" },
     ],
   },
 
   // -- plan ------------------------------------------------------------------
   //
-  // The composer shows the model and mode chips. The phone leans in while the
-  // prompt is typed. The slice plays at the speed it was recorded.
+  // The composer shows the model and mode chips. The phone stands straight
+  // while the prompt is typed. The slice plays at the speed it was recorded.
   {
     slug: "plan",
     light: "work",
     layout: "L1",
     drift: 1.8,
     camera: [{ at: 0, preset: "full" }],
-    body: [
-      { at: 0, pose: {} },
-      { at: 1.6, pose: { rotateY: -16, rotateX: -10, scale: 1.07, y: 22, x: -14 } },
-    ],
+    body: [{ at: 0, pose: {} }],
     shots: [{ slice: "plan" }],
     copy: [
       {
@@ -387,14 +404,14 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- question --------------------------------------------------------------
   //
-  // The phone sits back into the pool and holds while the agent works.
+  // The phone stands straight and still while the agent works.
   {
     slug: "question",
     light: "work",
     layout: "L1",
     drift: -1,
     camera: [{ at: 0, preset: "full" }],
-    body: [{ at: 0, pose: { rotateY: 14, rotateX: 8, scale: 0.92, y: -22 } }],
+    body: [{ at: 0, pose: {} }],
     shots: [{ slice: "question" }],
     copy: [
       {
@@ -417,14 +434,14 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- build -----------------------------------------------------------------
   //
-  // The phone holds still and watches the work happen.
+  // The phone holds straight and still while the work happens.
   {
     slug: "build",
     light: "work",
     layout: "L1",
     drift: 1.8,
     camera: [{ at: 0, preset: "full" }],
-    body: [{ at: 0, pose: { rotateY: -9, rotateX: -8, scale: 1.05, y: 12 } }],
+    body: [{ at: 0, pose: {} }],
     shots: [{ slice: "build" }],
     copy: [
       {
@@ -441,7 +458,7 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- usage -----------------------------------------------------------------
   //
-  // The pool tightens to the top of the phone. The script's own framing: the
+  // The pool opens out with the close-up. The script's own framing: the
   // upper-centre preset with scale and focus overridden onto the cost line.
   {
     slug: "usage",
@@ -451,7 +468,11 @@ const SCENE_SPECS: SceneSpec[] = [
     camera: [
       { at: 0, preset: "upper-center", scale: 2.2, focus: { x: 0.5, y: 0.08 } },
     ],
-    body: [{ at: 0, pose: { rotateX: -2, y: 4 } }],
+    body: [
+      { at: 0, pose: {} },
+      { at: CAMERA_EASE_SEC / 2, pose: { rotateY: -4, rotateX: -3 } },
+      { at: CAMERA_EASE_SEC, pose: {} },
+    ],
     shots: [{ slice: "usage" }],
     copy: [
       {
@@ -472,7 +493,7 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- changes ---------------------------------------------------------------
   //
-  // The phone turns slightly to present its screen. The empty scope, the branch
+  // The phone stays straight while the diff plays. The empty scope, the branch
   // scope, then the settings.js diff at the full framing the script asks for.
   {
     slug: "changes",
@@ -480,7 +501,11 @@ const SCENE_SPECS: SceneSpec[] = [
     layout: "L1",
     drift: 1.7,
     camera: [{ at: 0, preset: "full" }],
-    body: [{ at: 0, pose: { rotateY: -16, rotateZ: -3, scale: 1.02 } }],
+    body: [
+      { at: 0, pose: {} },
+      { at: CAMERA_EASE_SEC / 2, pose: { rotateY: -5 } },
+      { at: CAMERA_EASE_SEC, pose: {} },
+    ],
     shots: [{ slice: "changes" }],
     copy: [
       {
@@ -509,15 +534,15 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- worktrees -------------------------------------------------------------
   //
-  // The Changes list is back. The phone keeps the present turn. The pool holds
-  // and the haze drifts while the sheet lists main and feat/cat-mode.
+  // The Changes list is back. The phone stands straight, the pool holds, and
+  // the haze drifts while the sheet lists main and feat/cat-mode.
   {
     slug: "worktrees",
     light: "work",
     layout: "L1",
     drift: -1.7,
     camera: [{ at: 0, preset: "full" }],
-    body: [{ at: 0, pose: { rotateY: -16, rotateZ: -3, scale: 1.02 } }],
+    body: [{ at: 0, pose: {} }],
     shots: [{ slice: "worktrees" }],
     copy: [
       {
@@ -618,10 +643,10 @@ const sliceByName = (slices: CaptureSlice[]): Map<string, CaptureSlice> =>
  * `ceil` keeps the last key inside the shot. The 0.0001 avoids a float
  * landing just over an integer and adding a spare frame.
  */
-const playbackFrames = (durationSec: number): number =>
+export const playbackFrames = (durationSec: number): number =>
   Math.max(1, Math.ceil(durationSec * FPS - 1e-4))
 
-const tapSec = (data: CaptureSlice, which: "first" | "last"): number => {
+export const tapSec = (data: CaptureSlice, which: "first" | "last"): number => {
   const taps = [...(data.taps ?? [])].sort((a, b) => a.atSec - b.atSec)
   const tap = which === "first" ? taps[0] : taps[taps.length - 1]
   if (tap === undefined) {
@@ -739,6 +764,8 @@ const buildShots = (slices: CaptureSlice[], scenes: Scene[]): Shot[] => {
         rate: 1,
         duration: window.hold ? slot : Math.min(window.spanSec, slot),
         hold: window.hold,
+        tapLead: spec.tapLeadSec ?? 0,
+        tapLeads: spec.tapLeadsSec,
         drift: spec.drift,
         data,
       })
@@ -778,7 +805,7 @@ export type PhoneClip =
     }
   | { kind: "hold"; file: string; from: number; duration: number; atSec: number }
 
-const buildClips = (shots: Shot[]): PhoneClip[] => {
+export const buildClips = (shots: Shot[]): PhoneClip[] => {
   const clips: PhoneClip[] = []
   for (const shot of shots) {
     if (shot.hold) {
@@ -954,7 +981,7 @@ export type TapEvent = { at: number; x: number; y: number; slice: string }
 export type KeyEvent = { at: number; slice: string }
 export type Ripple = { at: number; x: number; y: number }
 
-export const rippleDuration = 0.55
+export const rippleDuration = 0.4
 export const rippleColor = "#B6F36B"
 
 /** Source second inside a shot -> render second. The inverse of `clipFrame`. */
@@ -966,10 +993,11 @@ const reachesSource = (shot: Shot, sourceSec: number): boolean =>
   sourceSec >= shot.startSec - 1e-6 &&
   sourceSec <= shot.startSec + shot.duration * shot.rate + 1e-6
 
-const buildTaps = (shots: Shot[]): TapEvent[] => {
+export const buildTaps = (shots: Shot[]): TapEvent[] => {
   const taps: TapEvent[] = []
   const seen = new Set<string>()
   for (const shot of shots) {
+    const ordered = [...(shot.data.taps ?? [])].sort((a, b) => a.atSec - b.atSec)
     for (const tap of shot.data.taps ?? []) {
       if (!reachesSource(shot, tap.atSec)) {
         continue
@@ -979,8 +1007,10 @@ const buildTaps = (shots: Shot[]): TapEvent[] => {
         continue
       }
       seen.add(id)
+      const index = ordered.findIndex((entry) => entry.atSec === tap.atSec)
+      const lead = shot.tapLeads?.[index] ?? shot.tapLead
       taps.push({
-        at: toRenderSec(shot, tap.atSec),
+        at: toRenderSec(shot, tap.atSec) - lead,
         x: tap.x / shot.data.width,
         y: tap.y / shot.data.height,
         slice: shot.slice,
@@ -990,7 +1020,7 @@ const buildTaps = (shots: Shot[]): TapEvent[] => {
   return taps.sort((a, b) => a.at - b.at)
 }
 
-const buildKeys = (shots: Shot[]): KeyEvent[] => {
+export const buildKeys = (shots: Shot[]): KeyEvent[] => {
   const keys: KeyEvent[] = []
   for (const shot of shots) {
     for (const key of shot.data.keys ?? []) {
@@ -1188,7 +1218,7 @@ const pingVolume = (kind: CopyItem["kind"]): number => {
   }
 }
 
-const buildSounds = (taps: TapEvent[], keys: KeyEvent[], copy: CopyItem[]): Sound[] => {
+export const buildSounds = (taps: TapEvent[], keys: KeyEvent[], copy: CopyItem[]): Sound[] => {
   const sounds: Sound[] = []
   let lastKept = Number.NEGATIVE_INFINITY
   for (const key of keys) {

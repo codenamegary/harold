@@ -140,6 +140,8 @@ type StubState = {
   agents: readonly StubRow[]
   selectedWorkspaceId: string
   selectedAgentId: string
+  workspaceMenuOpen: boolean
+  agentMenuOpen: boolean
   submittingCreate: boolean
   createError: string
   // changes
@@ -205,9 +207,17 @@ const initialState = (): StubState => ({
     { id: STUB_WORKSPACE_ID, label: "cat-screensaver" },
     { id: "ws_harold", label: "harold" },
   ],
-  agents: [{ id: STUB_AGENT_ID, label: "OpenCode" }],
+  agents: [
+    { id: "agent_claude", label: "Claude Agent" },
+    { id: "agent_codex", label: "Codex" },
+    { id: "agent_cursor", label: "Cursor" },
+    { id: "agent_gemini", label: "Gemini CLI" },
+    { id: STUB_AGENT_ID, label: "OpenCode" },
+  ],
   selectedWorkspaceId: "",
-  selectedAgentId: STUB_AGENT_ID,
+  selectedAgentId: "agent_claude",
+  workspaceMenuOpen: false,
+  agentMenuOpen: false,
   submittingCreate: false,
   createError: "",
   scope: "uncommitted",
@@ -440,13 +450,17 @@ const createSessionControls = (state: StubState): readonly ProbeControlSnapshot[
   control("create_session_screen", 120),
   control("create_session_back", 120),
   control("create_session_workspace", 500),
-  ...state.workspaces.map((row, index) =>
-    control(`create_session_workspace_option_${row.id}`, 600 + index * 160),
-  ),
+  ...(state.workspaceMenuOpen
+    ? state.workspaces.map((row, index) =>
+        control(`create_session_workspace_option_${row.id}`, 600 + index * 160),
+      )
+    : []),
   control("create_session_agent", 900),
-  ...state.agents.map((option, index) =>
-    control(`create_session_agent_option_${option.id}`, 1000 + index * 160),
-  ),
+  ...(state.agentMenuOpen
+    ? state.agents.map((option, index) =>
+        control(`create_session_agent_option_${option.id}`, 1000 + index * 160),
+      )
+    : []),
   control("create_session_submit", 1900, createSessionSubmitEnabled(state)),
 ]
 
@@ -762,6 +776,9 @@ export const makeProbeStub = (): ProbeStub => {
       case "open_new_session":
         state.sessionMenuOpen = false
         state.selectedWorkspaceId = ""
+        state.selectedAgentId = ""
+        state.workspaceMenuOpen = false
+        state.agentMenuOpen = false
         state.screen = "create_session"
         return
       case "see_all_sessions":
@@ -857,6 +874,8 @@ export const makeProbeStub = (): ProbeStub => {
         // The host answers in one step here; a real submit round trips, which
         // `submitting` and `settled()` model when it does.
         if (createSessionSubmitEnabled(state)) {
+          state.workspaceMenuOpen = false
+          state.agentMenuOpen = false
           state.screen = "chat"
           state.sessionId = STUB_SESSION_ID
           state.sessionName = "Cat mode"
@@ -976,6 +995,22 @@ export const makeProbeStub = (): ProbeStub => {
     if (tag === "create_session_submit") {
       applyCreateSessionAction("submit", {})
     }
+    if (tag === "create_session_workspace") {
+      state.workspaceMenuOpen = !state.workspaceMenuOpen
+      state.agentMenuOpen = false
+    }
+    if (tag === "create_session_agent") {
+      state.agentMenuOpen = !state.agentMenuOpen
+      state.workspaceMenuOpen = false
+    }
+    if (tag.startsWith("create_session_workspace_option_")) {
+      state.selectedWorkspaceId = tag.slice("create_session_workspace_option_".length)
+      state.workspaceMenuOpen = false
+    }
+    if (tag.startsWith("create_session_agent_option_")) {
+      state.selectedAgentId = tag.slice("create_session_agent_option_".length)
+      state.agentMenuOpen = false
+    }
     if (tag === "changes_segment_branch") {
       state.scope = "branch"
     }
@@ -985,7 +1020,13 @@ export const makeProbeStub = (): ProbeStub => {
     if (tag === "changes_worktree_control") {
       state.worktreeSheetOpen = true
     }
-    return { tag, x: target.x, y: target.y, screen: state.screen }
+    const xFraction =
+      args.xFraction === undefined ? undefined : Math.min(1, Math.max(0, Number(args.xFraction)))
+    const x =
+      xFraction === undefined
+        ? target.x
+        : Math.round(target.left + (target.right - target.left) * xFraction)
+    return { tag, x, y: target.y, screen: state.screen }
   }
 
   const currentFieldText = (field: TypeFieldName): string =>

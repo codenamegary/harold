@@ -1,15 +1,14 @@
 # Demo render
 
-A 184.9 second cut at 1920x1080, 30 fps, 5548 frames. The phone screen is real
-emulator capture; the capture is raw material. The opening act lives in
-[`opening.ts`](src/opening.ts) and [`opening.scene.tsx`](src/opening.scene.tsx).
-The achievement act lives in [`achievement.ts`](src/achievement.ts) and
-[`achievement.scene.tsx`](src/achievement.scene.tsx). The new-session act lives
-in [`newSession.ts`](src/newSession.ts) and
-[`newSession.scene.tsx`](src/newSession.scene.tsx). The rest of the cut lives
-in [`timeline.ts`](src/timeline.ts). One shared stage draws pool, beam, phone,
-and haze. [`../script.md`](../script.md) is the script and the only source for
-scene order, copy, stage, camera and sound.
+A 195.1 second cut at 1920x1080, 30 fps, 5854 frames. The phone screen is real
+emulator capture; the capture is raw material. Each act lives in its own
+`<scene>.ts` + `<scene>.scene.tsx` pair: opening, achievement, new session,
+plan, question, build, usage, changes, worktrees, PR, and outro. The act module
+owns camera, light, and body; the scene component draws it.
+[`timeline.ts`](src/timeline.ts) holds the footage, copy, sound, and scene
+lengths. One shared stage draws pool, beam, phone, and haze.
+[`../script.md`](../script.md) is the script and the only source for scene
+order, copy, stage, camera and sound.
 
 The cut follows the script's twelve scenes, its stage, its camera vocabulary and
 its copy. There is no cold open and no promise card.
@@ -37,27 +36,33 @@ here.
 
 ## The scenes
 
-The cut is 5548 frames. That is 184.9 s at 30 fps. Every scene holds one light
-state, and a state change eases over 1.2 s before it holds.
+The cut is 5854 frames. That is 195.1 s at 30 fps. Every scene holds one light
+state. A state change eases over 1.2 s before it holds. Some acts also change
+the shape of that state as the camera moves.
 
 | Scene         | Frames | Range     | Seconds | Light     | Footage                                      | Copy                                                     |
 | ------------- | ------ | --------- | ------- | --------- | -------------------------------------------- | -------------------------------------------------------- |
 | `intro`       | 126    | 1-126     | 4.2     | `alone`   | none                                         | slide: logo, subtitle, CTA                               |
 | `ssh`         | 606    | 127-732   | 20.2    | `arrival` | `home_empty` hold, `connect` to the save tap | `[CARD place=stage]` Look what I can do! |
 | `achievement` | 232    | 733-964   | 7.7     | `reward`  | `connect` from the save tap, then `landing`  | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
-| `newSession`  | 162    | 965-1126  | 5.4     | `work`    | `new_session`                                | `[NOTE]` Start something new                             |
-| `plan`        | 1662   | 1127-2788 | 55.4    | `work`    | `plan`                                       | `[CALLOUT]` Plan, Attachments                            |
-| `question`    | 171    | 2789-2959 | 5.7     | `work`    | `question`                                   | `[CALLOUT]` Agent question                               |
-| `build`       | 1330   | 2960-4289 | 44.3    | `work`    | `build`                                      | `[CALLOUT]` Build                                        |
-| `usage`       | 130    | 4290-4419 | 4.3     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
-| `changes`     | 327    | 4420-4746 | 10.9    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
-| `worktrees`   | 107    | 4747-4853 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
-| `pr`          | 545    | 4854-5398 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
-| `outro`       | 150    | 5399-5548 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
-| **Total**     | **5548** | **1-5548** | **184.9** |        |                                              |                                                          |
+| `newSession`  | 468    | 965-1432  | 15.6    | `work`    | `new_session`                                | `[NOTE]` Start something new                             |
+| `plan`        | 1662   | 1433-3094 | 55.4    | `work`    | `plan`                                       | `[CALLOUT]` Plan, Attachments                            |
+| `question`    | 171    | 3095-3265 | 5.7     | `work`    | `question`                                   | `[CALLOUT]` Agent question                               |
+| `build`       | 1330   | 3266-4595 | 44.3    | `work`    | `build`                                      | `[CALLOUT]` Build                                        |
+| `usage`       | 130    | 4596-4725 | 4.3     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
+| `changes`     | 327    | 4726-5052 | 10.9    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
+| `worktrees`   | 107    | 5053-5159 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
+| `pr`          | 545    | 5160-5704 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
+| `outro`       | 150    | 5705-5854 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
+| **Total**     | **5854** | **1-5854** | **195.1** |        |                                              |                                                          |
 
 The achievement sits third, right after the SSH scene, while the cost of setup is
 still fresh. It is the film's only `[POP]` and only `[CF]`.
+
+`HaroldDemo` is the whole cut. Studio also lists one composition per act:
+`HaroldOpening`, `HaroldAchievement`, `HaroldNewSession`, `HaroldPlan`,
+`HaroldQuestion`, `HaroldBuild`, `HaroldUsage`, `HaroldChanges`,
+`HaroldWorktrees`, `HaroldPr`, and `HaroldOutro`.
 
 ## The stage
 
@@ -91,10 +96,12 @@ Five light states, in [`stage.ts`](src/stage.ts): `alone`, `arrival`, `reward`,
 A change eases over 1.2 s and then holds exactly until the next one. `alone` is
 a wide dim pool under the lockup. `arrival` is brighter and sits a little left
 of the phone, so the phone is lit from one side. `reward` floods the floor on the phone's side and is the
-only flare. That pool stays off the left copy. `work` is a tight hot pool and
-the haze dims. `full` is a wide centred pool. `lightAt` is the only place a
-state becomes pixels. The tests assert that every scene holds the shape its
-state names.
+only flare. That pool stays off the left copy. `work` is a wide hot pool centred
+on the handset's bottom edge and the haze dims. `full` is a wider centred field
+on the same point, so the phone always stands in the middle of the oval.
+`lightAt` is the only place a state becomes pixels. The tests assert that every
+scene holds the shape its state names, and that the work and full pools sit on
+the phone's feet.
 
 The confetti is lit by the pool. `poolLit` returns how lit a stage point is, and
 `confetti.tsx` multiplies every particle's opacity by it, so the shower falls *in*
@@ -133,24 +140,35 @@ its pose on the cut.
   the pool, then holds. The phone leans in as the home screen lands and settles
   before new-session. One pop. All of these times live at the top of
   [`achievement.ts`](src/achievement.ts).
-- `newSession` eases from the achievement's framing back to centre by 0.6s,
-  pushes in on the session form at 1.9s with the top of the app screen on the
-  top edge, then pulls back to the full phone as the chat opens at 3.6s. The
-  reward pool settles into a large forward pool, widens with the push-in until
-  it runs off the bottom edge, holds through the form, then tightens back to
-  the resting pool. The phone is steady between those moves: no idle sway and
-  no camera drift. All of these times live at the top of
+- `newSession` eases from the achievement's framing back to centre, pushes in
+  on the session form as it opens with the top of the app screen on the top
+  edge, holds while the workspace and agent menus are open, then pulls back to
+  the full phone as Start Session opens the chat. The reward pool settles into
+  a large forward pool, widens with the push-in until it runs off the bottom
+  edge, holds through the form, then tightens back to the resting pool. The
+  phone is steady between those moves: no idle sway and no camera drift. The
+  push and pull follow capture marks in
   [`newSession.ts`](src/newSession.ts).
-- `plan` leans in and holds: rotateY -16, rotateX -10, scale 1.07.
-- `question` sits back and holds: rotateY 14, scale 0.92.
-- `build` watches and holds: rotateX -8, scale 1.05.
-- `usage` gives a small nod toward the header and holds. The camera does the zoom.
-- `changes` turns to present and holds: rotateY -16. `worktrees` keeps that turn.
-- `pr` sits centred in the wide pool.
+- `plan` holds the handset straight while the prompt is typed. The light
+  narrows from the new-session resting pool into work. Camera, light, and pose
+  live in [`plan.ts`](src/plan.ts).
+- `question` holds straight while the question is answered.
+- `build` holds straight while the build runs.
+- `usage` leans in slightly while the camera pushes in, then straightens for the
+  hold. The pool opens out with the move.
+- `changes` turns slightly while the camera pulls back, then straightens for the
+  diff. The pool pulls back with it. `worktrees` holds straight.
+- `pr` sits straight while the pool opens from work to full.
+- `outro` has no phone. It draws the closing slide in the alone pool.
 
-`idleAt` keeps a quiet waddle on every held pose except `newSession`, which
-holds the phone dead still between camera moves. Camera scale 1.5 and up uses
-a smaller idle so a close-up stays readable.
+Every pose and handoff above lives in the act module beside its scene
+component.
+
+Every act after `newSession` passes `idleGain={0}` and `phoneDriftFactor={0}`.
+The phone is straight and still for every demo hold. The only body rotation is
+the short tilt that rides the `usage` push-in and the `changes` pull-back, and
+it is gone before the hold. No cut leaves a lean or turn behind. The opening and
+achievement keep their own entrance walk and lean.
 
 ## Layouts and camera
 
@@ -240,7 +258,7 @@ is not sped up and not cut short to hit a runtime.
 
 ```sh
 bun install
-bun run dev        # studio, scrub HaroldDemo, HaroldOpening, HaroldAchievement or HaroldNewSession
+bun run dev        # studio, scrub HaroldDemo or any Harold<Act> composition
 bun test src       # scenes, light, parallax, body, camera, copy, sound, pacing
 bun run lint       # eslint + tsc
 ```

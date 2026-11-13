@@ -3,8 +3,9 @@ package harold.android.ui.debug
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -13,8 +14,9 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * A control the debug control plane can address by tag.
  *
- * Bounds are device pixels in window space, which is what `adb shell input tap`
- * expects. The app is edge to edge, so window space and display space agree.
+ * Bounds are device pixels on the screen, which is what `adb shell input tap`
+ * expects. Screen space matters for controls inside a Popup, because a popup is
+ * its own window and `boundsInWindow` would report popup-local coordinates.
  */
 data class ProbeControl(
     val tag: String,
@@ -140,15 +142,18 @@ fun Modifier.probeTag(tag: String, enabled: Boolean = true): Modifier {
     if (!Probe.enabled) {
         return tagged
     }
+    val view = LocalView.current
     return tagged.onGloballyPositioned { coordinates ->
-        val bounds = coordinates.boundsInWindow()
+        val origin = IntArray(2)
+        view.getLocationOnScreen(origin)
+        val bounds = coordinates.boundsInRoot()
         Probe.record(
             ProbeControl(
                 tag = tag,
-                left = bounds.left.toInt(),
-                top = bounds.top.toInt(),
-                right = bounds.right.toInt(),
-                bottom = bounds.bottom.toInt(),
+                left = origin[0] + bounds.left.toInt(),
+                top = origin[1] + bounds.top.toInt(),
+                right = origin[0] + bounds.right.toInt(),
+                bottom = origin[1] + bounds.bottom.toInt(),
                 enabled = enabled,
             ),
         )

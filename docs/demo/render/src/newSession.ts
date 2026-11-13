@@ -1,5 +1,6 @@
 import { Easing, interpolate } from "remotion"
 import { REST, idleGainForScale, type Pose } from "./body"
+import { markAt } from "./capture"
 import {
   CAMERA_EASE_SEC,
   PRESETS,
@@ -19,10 +20,11 @@ import {
 //
 // The short act between the achievement and the working cut. It opens on the
 // achievement's two-column framing, returns to centre, pushes in on the session
-// form, then pulls back to the full phone as the chat opens. Between those moves
-// the phone holds still. The pool widens with the push-in and lands with the
-// full phone standing in a wide, forward resting pool. Times are seconds from
-// the new-session cut, the frame the achievement ends.
+// form and holds while the workspace and agent menus are open, then pulls back
+// to the full phone as the chat opens. Between those moves the phone holds
+// still. The pool widens with the push-in and lands with the full phone standing
+// in a wide, forward resting pool. Times are seconds from the new-session cut,
+// the frame the achievement ends.
 
 /** The framing the achievement hands off: docked right at 2x. */
 export const NEW_SESSION_HANDOFF: CameraState = {
@@ -46,11 +48,14 @@ export const NEW_SESSION_FORM: CameraState = {
 /** The act settles back to the full phone by this time. */
 export const NEW_SESSION_SETTLE_SEC = 0.6
 
-/** The camera reaches centre, then pushes in on the form. */
-export const NEW_SESSION_PUSH_SEC = 1.9
+/**
+ * The camera reaches centre, then pushes in as the form lands. The mark is the
+ * screen change, so the move starts a beat early and lands as the form settles.
+ */
+export const NEW_SESSION_PUSH_SEC = markAt("new_session", "new_session_open") - 0.1
 
-/** The chat opening pulls the camera back to the full phone. */
-export const NEW_SESSION_BACK_SEC = 3.6
+/** Start Session is tapped; the chat opens during the pull-back. */
+export const NEW_SESSION_BACK_SEC = markAt("new_session", "session_submit")
 
 /**
  * The first cue sits before zero so the act opens on the achievement's

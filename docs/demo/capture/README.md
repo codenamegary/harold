@@ -50,6 +50,17 @@ else, and exits once they are done. It skips the full-set check and the
 `capture.json` rebuild. Each file keeps its `NNN-<name>.mp4` name from the plan,
 so a later full run sees the same slice as before.
 
+When the app is already sitting in the state a slice expects, a recovery run can
+skip the earlier beats with `--start`:
+
+```sh
+cd docs/demo/capture/mcp
+bun run src/walk.ts --only new_session --start new_session
+```
+
+`--start` does no setup of its own. Use it only after driving the app to the
+right screen by hand.
+
 The driver also runs on its own, without the emulator bring-up:
 
 ```sh
@@ -130,8 +141,11 @@ against them, and the Remotion timeline reads the same names out of
 `capture.json`.
 
 The driver is [`mcp/src/walk.ts`](./mcp/src/walk.ts). It drives the app through
-the probe's MCP tools. Every tap is a real adb tap resolved from a tag. Every
-on-camera character is one `adb shell input text` into the focused field.
+the probe's MCP tools. Every tap is a real adb tap resolved from a tag. A tap
+lands on the control's centre unless the beat passes an `xFraction`, which moves
+it horizontally inside the control; wide menu rows use it to tap the label
+rather than the empty right-hand side. Every on-camera character is one
+`adb shell input text` into the focused field.
 
 Per slice the driver:
 

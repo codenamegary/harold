@@ -35,7 +35,7 @@ function satisfied(snapshot: ScreenSnapshot, field: string, equals?: string): bo
 export function registerProbeTools(server: McpServer, config: ProbeConfig): void {
   const packageId = process.env.HAROLD_PACKAGE ?? "harold.android.debug"
 
-  const tapTag = async (tag: string) => {
+  const tapTag = async (tag: string, xFraction?: number) => {
     const snapshot = await screen(config)
     const target = control(snapshot, tag)
     if (!target.enabled) {
@@ -44,8 +44,15 @@ export function registerProbeTools(server: McpServer, config: ProbeConfig): void
     if (target.right - target.left <= 0 || target.bottom - target.top <= 0) {
       throw new Error(`${tag} is off screen (zero bounds). Call harold_scroll_to first.`)
     }
-    await tap(target.x, target.y)
-    return { tag, x: target.x, y: target.y, screen: snapshot.screen }
+    // A full-width row's center is often far to the right of its label, so the
+    // ripple reads as a miss even though the row was hit. `xFraction` keeps the
+    // real tap on the part of the control a person would actually touch.
+    const x =
+      xFraction === undefined
+        ? target.x
+        : Math.round(target.left + (target.right - target.left) * xFraction)
+    await tap(x, target.y)
+    return { tag, x, y: target.y, screen: snapshot.screen }
   }
 
   server.registerTool(
@@ -64,10 +71,18 @@ export function registerProbeTools(server: McpServer, config: ProbeConfig): void
     {
       title: "Tap a control by tag",
       description:
-        "Resolve a tag to its rect and issue a real adb tap. Returns the coordinates used, so the recording keeps a true touch and ripple.",
-      inputSchema: { tag: z.string().describe("Compose test tag, as listed by harold_screen") },
+        "Resolve a tag to its rect and issue a real adb tap. Returns the coordinates used, so the recording keeps a true touch and ripple. `xFraction` moves the tap horizontally inside the control, 0 at the left edge and 1 at the right; omit it for the centre.",
+      inputSchema: {
+        tag: z.string().describe("Compose test tag, as listed by harold_screen"),
+        xFraction: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe("Horizontal position inside the control, 0 left to 1 right. Omit for the centre."),
+      },
     },
-    async ({ tag }) => json(await tapTag(tag)),
+    async ({ tag, xFraction }) => json(await tapTag(tag, xFraction)),
   )
 
   server.registerTool(

@@ -8,6 +8,7 @@ import type { MarkRow } from "./marks"
 import { sliceNames } from "./slices"
 import {
   makeProbeStub,
+  STUB_AGENT_ID,
   STUB_ANSWER_VALUE,
   STUB_BRANCH_FILE,
   STUB_PR_URL,
@@ -299,9 +300,16 @@ describe("parseArgs", () => {
   it("defaults to the work capture directory and every slice", () => {
     const cli = parseArgs([])
     expect(cli.only).toEqual([])
+    expect(cli.start).toBeUndefined()
     expect(cli.list).toBe(false)
     expect(cli.selfTest).toBe(false)
     expect(cli.out.endsWith("work/capture")).toBe(true)
+  })
+
+  it("accepts a start beat in both forms", () => {
+    expect(parseArgs(["--start", "new_session"]).start).toBe("new_session")
+    expect(parseArgs(["--start=new_session"]).start).toBe("new_session")
+    expect(() => parseArgs(["--start", "nope"])).toThrow(/unknown slice nope/)
   })
 
   it("accepts a comma list, repeated flags and the equals form", () => {
@@ -442,11 +450,22 @@ describe("probe contract coverage", () => {
 })
 
 describe("story beats", () => {
-  it("starts a session on the configured workspace without touching the agent", async () => {
+  it("opens the session menu and picks the workspace and agent from their menus", async () => {
     const { stub } = await runThrough("new_session")
-    const picked = intentCalls(stub).filter((call) => call.action === "pick_workspace")
-    expect(picked.map((call) => call.args.id)).toEqual([STUB_WORKSPACE_ID])
-    expect(actionsOf(stub)).not.toContain("pick_agent")
+    const taps = tappedTags(stub)
+    expect(taps).toContain("session_selector")
+    expect(taps).toContain("session_menu_new")
+    expect(taps).toContain("create_session_workspace")
+    expect(taps).toContain(`create_session_workspace_option_${STUB_WORKSPACE_ID}`)
+    expect(taps).toContain("create_session_agent")
+    expect(taps).toContain(`create_session_agent_option_${STUB_AGENT_ID}`)
+    expect(taps).toContain("create_session_submit")
+    const menuIntents = intentCalls(stub).filter((call) =>
+      ["open_session_menu", "open_new_session", "pick_workspace", "pick_agent", "submit"].includes(
+        call.action,
+      ),
+    )
+    expect(menuIntents).toEqual([])
     expect((stub.facts().sessionId ?? "").length).toBeGreaterThan(0)
   })
 

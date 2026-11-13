@@ -235,38 +235,98 @@
       "width": 1080
     },
     {
-      "driftRate": 0.959,
-      "durationSec": 5.367,
+      "driftRate": 0.955,
+      "durationSec": 15.567,
       "file": "slices/004-new_session.mp4",
       "height": 2400,
       "keys": [],
       "marks": [
         {
-          "atSec": 0.8,
+          "atSec": 0.815,
           "name": "slice_start_new_session"
         },
         {
-          "atSec": 0.895,
+          "atSec": 1.387,
           "name": "session_menu_open"
         },
         {
-          "atSec": 2.395,
+          "atSec": 3.783,
+          "name": "new_session_open"
+        },
+        {
+          "atSec": 4.321,
+          "name": "form_ready"
+        },
+        {
+          "atSec": 5.742,
+          "name": "workspace_menu_open"
+        },
+        {
+          "atSec": 7.917,
           "name": "workspace_picked"
         },
         {
-          "atSec": 3.301,
+          "atSec": 9.05,
+          "name": "agent_menu_open"
+        },
+        {
+          "atSec": 11.8,
+          "name": "agent_picked"
+        },
+        {
+          "atSec": 12.734,
+          "name": "session_submit"
+        },
+        {
+          "atSec": 12.983,
           "name": "session_started"
         },
         {
-          "atSec": 4.74,
+          "atSec": 14.896,
           "name": "slice_end_new_session"
         }
       ],
       "name": "new_session",
       "still": false,
-      "syncOffsetSec": 0.69,
-      "taps": [],
-      "trimSec": 4.533,
+      "syncOffsetSec": 0.536,
+      "taps": [
+        {
+          "atSec": 0.915,
+          "x": 196,
+          "y": 212
+        },
+        {
+          "atSec": 3.53,
+          "x": 204,
+          "y": 359
+        },
+        {
+          "atSec": 5.503,
+          "x": 291,
+          "y": 422
+        },
+        {
+          "atSec": 7.879,
+          "x": 241,
+          "y": 993
+        },
+        {
+          "atSec": 8.816,
+          "x": 291,
+          "y": 622
+        },
+        {
+          "atSec": 11.76,
+          "x": 241,
+          "y": 1294
+        },
+        {
+          "atSec": 12.702,
+          "x": 540,
+          "y": 803
+        }
+      ],
+      "trimSec": 6.767,
       "width": 1080
     },
     {

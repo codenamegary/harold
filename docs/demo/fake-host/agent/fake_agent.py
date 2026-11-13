@@ -30,6 +30,8 @@ AGENT_NAMES = {
     "opencode": "OpenCode",
     "claude-acp": "Claude Agent",
     "codex-acp": "Codex",
+    "cursor": "Cursor",
+    "gemini": "Gemini CLI",
 }
 
 CHAR_DELAY = float(os.environ.get("HAROLD_FAKE_CHAR_DELAY", "0.012"))

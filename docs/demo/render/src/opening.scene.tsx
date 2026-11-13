@@ -1,11 +1,17 @@
-import { AbsoluteFill, Easing, interpolate, Sequence, useCurrentFrame, useVideoConfig } from "remotion"
-import { useMemo } from "react"
+import {
+  AbsoluteFill,
+  Easing,
+  interpolate,
+  Sequence,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion"
 import { addPose } from "./body"
-import { FontLoader, sansFamily } from "./fonts"
-import { Music } from "./music"
+import { VIDEO } from "./capture"
+import { FilmClockProvider, StageProvider, useGlobalStage } from "./global-stage"
+import { FilmShell } from "./film"
 import {
   FILLED,
-  INTRO_SEC,
   LOCKUP_FADE_SEC,
   LOCKUP_IN_SEC,
   LOCKUP_OUT_SEC,
@@ -15,10 +21,10 @@ import {
   openingPoseAt,
   openingWaddleAt,
 } from "./opening"
+import { OPENING_CUT } from "./opening.cut"
 import { Slide } from "./slides"
-import { StageScene } from "./stage.scene"
-import { buildTimeline, driftAt, phoneLayers, type DemoProps } from "./timeline"
-import { ink } from "./theme"
+import { FrontStage, PhoneStage, StageFrame, phonePlacement } from "./stage.scene"
+import { phoneLayers } from "./timeline"
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 const leave = Easing.bezier(0.4, 0, 0.7, 0.2)
@@ -45,61 +51,69 @@ export const IntroLockup: React.FC = () => {
 }
 
 /**
- * Intro lockup, then the SSH walk-on. One stage. Camera, light, and body live
- * in this act, not in the scene table. The world is locked to the filled
- * frame, so the wide shot sees the same stage from further back and the
- * push-in carries the floor, the pool and the shaft with the phone.
+ * The opening's local performance. The intro lockup is a local overlay, the
+ * SSH walk is local, and the camera and light are the scene's direction for the
+ * global stage machinery.
  */
-export const Opening: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) => {
+export const OpeningScene: React.FC = () => {
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
-  const sec = frame / fps
-  const timeline = useMemo(() => buildTimeline(slices), [slices])
-  const hinge = timeline.scenes.find((scene) => scene.slug === "achievement")
-  const until = hinge?.from ?? INTRO_SEC
-  const stand = openingPoseAt(sec)
+  const localSec = frame / fps
+  const stand = openingPoseAt(localSec)
+  const body = addPose(stand, openingWaddleAt(localSec))
+  const layers = phoneLayers(OPENING_CUT.clips, localSec)
+
+  const stage = useGlobalStage({
+    localSec,
+    camera: openingCameraAt(localSec),
+    light: openingLightAt(localSec, {
+      stageWidth: width,
+      stageHeight: height,
+      videoWidth: VIDEO.width,
+      videoHeight: VIDEO.height,
+    }),
+    worldLock: FILLED,
+  })
+
+  const placement = phonePlacement(stage, {
+    body,
+    ground: stand.y,
+    idleGain: openingIdleGainAt(localSec),
+    layers,
+    phoneFade: OPENING_CUT.phoneFade,
+    ripples: OPENING_CUT.ripples,
+  })
 
   return (
-    <StageScene
-      videoWidth={videoWidth}
-      videoHeight={videoHeight}
-      sec={sec}
-      light={openingLightAt(sec, {
-        stageWidth: width,
-        stageHeight: height,
-        videoWidth,
-        videoHeight,
-      })}
-      camera={openingCameraAt(sec)}
-      worldLock={FILLED}
-      drift={driftAt(sec, width)}
-      body={addPose(stand, openingWaddleAt(sec))}
-      ground={stand.y}
-      idleGain={openingIdleGainAt(sec)}
-      layers={phoneLayers(timeline.clips, sec)}
-      ripples={timeline.ripples}
-      copy={timeline.copy.filter((item) => item.at < until)}
-      sounds={timeline.sounds.filter((sound) => sound.at < until)}
-      soundOriginSec={0}
-      celebrations={[]}
-      confetti={[]}
-      phoneFade={[[0, 1]]}
-    >
-      <Sequence
-        durationInFrames={Math.ceil((LOCKUP_OUT_SEC + LOCKUP_FADE_SEC) * fps)}
-        name="Intro lockup"
-        layout="none"
-      >
-        <IntroLockup />
-      </Sequence>
-    </StageScene>
+    <StageProvider value={stage}>
+      <StageFrame
+        phone={
+          <PhoneStage placement={placement} layers={layers} />
+        }
+        front={
+          <FrontStage
+            placement={placement}
+            copy={OPENING_CUT.copy}
+            sounds={OPENING_CUT.sounds}
+          >
+            <Sequence
+              durationInFrames={Math.ceil((LOCKUP_OUT_SEC + LOCKUP_FADE_SEC) * fps)}
+              name="Intro lockup"
+              layout="none"
+            >
+              <IntroLockup />
+            </Sequence>
+          </FrontStage>
+        }
+      />
+    </StageProvider>
   )
 }
 
-export const OpeningFilm: React.FC<DemoProps> = (props) => (
-  <AbsoluteFill style={{ background: ink, fontFamily: sansFamily }}>
-    <FontLoader />
-    <Music />
-    <Opening {...props} />
-  </AbsoluteFill>
+export const OpeningFilm: React.FC = () => (
+  <FilmShell>
+    <FilmClockProvider startSec={0}>
+      <OpeningScene />
+    </FilmClockProvider>
+  </FilmShell>
 )

@@ -79,8 +79,8 @@ describe("new session / camera", () => {
 
   test("a camera state holds until the next one", () => {
     const wide = newSessionCameraAt(NEW_SESSION_SETTLE_SEC)
-    expect(newSessionCameraAt(1).scale).toBe(wide.scale)
-    expect(newSessionCameraAt(1.8).scale).toBe(wide.scale)
+    expect(newSessionCameraAt(NEW_SESSION_SETTLE_SEC + 0.1).scale).toBe(wide.scale)
+    expect(newSessionCameraAt(NEW_SESSION_PUSH_SEC - 0.05).scale).toBe(wide.scale)
   })
 })
 
@@ -100,7 +100,7 @@ describe("new session / light", () => {
 
   test("widens with the push-in, holds, then settles wider than work", () => {
     const work = LIGHTS.work
-    expect(newSessionLightAt(1.5).shape).toEqual(NEW_SESSION_REST_LIGHT)
+    expect(newSessionLightAt(NEW_SESSION_PUSH_SEC - 0.1).shape).toEqual(NEW_SESSION_REST_LIGHT)
     const widening = newSessionLightAt(NEW_SESSION_PUSH_SEC + 0.4).shape
     expect(widening.radiusX).toBeGreaterThan(work.radiusX)
     expect(widening.radiusX).toBeLessThan(NEW_SESSION_WIDE_LIGHT.radiusX)
@@ -109,14 +109,18 @@ describe("new session / light", () => {
     )
     expect(NEW_SESSION_WIDE_LIGHT.centreY).toBeGreaterThan(work.centreY)
     expect(NEW_SESSION_WIDE_LIGHT.centreY + NEW_SESSION_WIDE_LIGHT.radiusY).toBeGreaterThan(1)
-    expect(newSessionLightAt(3.5).shape).toEqual(NEW_SESSION_WIDE_LIGHT)
+    expect(newSessionLightAt((NEW_SESSION_PUSH_SEC + NEW_SESSION_BACK_SEC) / 2).shape).toEqual(
+      NEW_SESSION_WIDE_LIGHT,
+    )
     const narrowing = newSessionLightAt(NEW_SESSION_BACK_SEC + 0.4).shape
     expect(narrowing.radiusX).toBeGreaterThan(NEW_SESSION_REST_LIGHT.radiusX)
     expect(narrowing.radiusX).toBeLessThan(NEW_SESSION_WIDE_LIGHT.radiusX)
     expect(newSessionLightAt(NEW_SESSION_BACK_SEC + CAMERA_EASE_SEC).shape).toEqual(
       NEW_SESSION_REST_LIGHT,
     )
-    expect(newSessionLightAt(5).shape).toEqual(NEW_SESSION_REST_LIGHT)
+    expect(newSessionLightAt(NEW_SESSION_BACK_SEC + CAMERA_EASE_SEC + 0.1).shape).toEqual(
+      NEW_SESSION_REST_LIGHT,
+    )
     expect(NEW_SESSION_REST_LIGHT.radiusX).toBeGreaterThan(work.radiusX)
   })
 

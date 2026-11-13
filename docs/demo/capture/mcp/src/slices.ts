@@ -79,7 +79,7 @@ export const slicePlan: readonly SliceSpec[] = [
   {
     name: "new_session",
     kind: "onCamera",
-    title: "Open the session menu and start a session on cat-screensaver",
+    title: "Open the session menu, pick the workspace and agent, and start a session",
   },
   {
     name: "plan_stage",

@@ -120,6 +120,7 @@ write_agent() {
 case "\$1 \$2" in
   "auth status") echo '{"loggedIn":true,"status":"authenticated"}'; exit 0 ;;
   "auth list") echo 'Logged in'; exit 0 ;;
+  "status --format") echo '{"isAuthenticated":true,"status":"authenticated"}'; exit 0 ;;
 esac
 exec python3 $DEMO_HOME/agent/fake_agent.py $agent "\$@"
 SCRIPT
@@ -129,6 +130,8 @@ SCRIPT
 write_agent opencode opencode
 write_agent claude claude-acp
 write_agent codex-acp codex-acp
+write_agent cursor-agent cursor
+write_agent gemini gemini
 
 install -o root -g root -m 0755 "$DEMO_HOME/tools/gh" /usr/local/bin/gh
 

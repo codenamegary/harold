@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
-import { REST, idleGainForScale, poseAt, waddleAt, type BodyCue } from "./body"
+import { REST, poseAt, waddleAt, type BodyCue } from "./body"
 import {
   CAMERA_EASE_SEC,
   ENTRANCE_SCALE,
@@ -131,6 +131,8 @@ describe("timeline / capture contract", () => {
     const byScene = (scene: SceneSlug): string[] => shotsOf(t, scene).map((shot) => shot.slice)
     expect(byScene("intro")).toEqual([])
     expect(byScene("ssh")).toEqual(["home_empty", "connect"])
+    // The achievement is now a local cut; see scene-cut.test.ts. The global
+    // timeline keeps its old shots while the rest of the scenes migrate.
     expect(byScene("achievement")).toEqual(["connect", "landing"])
     expect(byScene("newSession")).toEqual(["new_session"])
     expect(byScene("plan")).toEqual(["plan"])
@@ -141,27 +143,6 @@ describe("timeline / capture contract", () => {
     expect(byScene("worktrees")).toEqual(["worktrees"])
     expect(byScene("pr")).toEqual(["pr"])
     expect(byScene("outro")).toEqual([])
-  })
-
-  test("the achievement opens on the save tap and keeps playing", () => {
-    const t = timeline()
-    const connect = capture.slices.find((slice) => slice.name === "connect")
-    const taps = [...(connect?.taps ?? [])].sort((a, b) => a.atSec - b.atSec)
-    const tap = taps[taps.length - 1]
-    if (connect === undefined || tap === undefined) {
-      throw new Error("connect has no save tap")
-    }
-    const achievement = t.scenes.find((scene) => scene.slug === "achievement")
-    const opening = shotsOf(t, "achievement")[0]
-    const sshConnect = shotsOf(t, "ssh").find((shot) => shot.slice === "connect")
-    if (achievement === undefined || sshConnect === undefined) {
-      throw new Error("the save tap is not split across the hinge")
-    }
-    expect(opening.slice).toBe("connect")
-    expect(opening.hold).toBe(false)
-    expect(opening.startSec).toBeCloseTo(tap.atSec, 3)
-    expect(sshConnect.startSec + sshConnect.duration).toBeCloseTo(tap.atSec, 3)
-    expect(achievement.from).toBeCloseTo(opening.at, 3)
   })
 
 })
@@ -388,24 +369,43 @@ describe("timeline / the stage", () => {
     const { alone, arrival, reward, work, full } = LIGHTS
     // Alone is wide and dim, centred under the lockup.
     expect(alone.intensity).toBeLessThan(0.5)
-    expect(alone.radiusX).toBeGreaterThan(work.radiusX * 2)
+    expect(alone.radiusX).toBeGreaterThan(work.radiusX)
     expect(alone.centreX).toBeCloseTo(0.5, 2)
     expect(alone.haze).toBeLessThan(arrival.haze)
     // Arrival is brighter and sits to one side of the centred phone.
     expect(arrival.intensity).toBeGreaterThan(alone.intensity + 0.3)
     expect(arrival.centreX).toBeLessThan(work.centreX - 0.05)
-    expect(arrival.radiusX).toBeGreaterThan(work.radiusX + 0.08)
+    expect(arrival.radiusX).toBeGreaterThan(work.radiusX)
     expect(arrival.haze).toBeGreaterThan(work.haze + 0.3)
     expect(work.haze).toBeLessThan(0.35)
-    expect(work.radiusX).toBeLessThan(0.16)
+    expect(work.radiusX).toBeLessThan(0.3)
     expect(reward.flare).toBeGreaterThan(0.5)
     expect(arrival.flare).toBeLessThan(0.5)
     expect(work.flare).toBeLessThan(0.5)
     expect(full.flare).toBeLessThan(0.5)
     expect(reward.centreX - reward.radiusX * FLARE_SPREAD).toBeGreaterThan(0.4)
-    expect(full.radiusX).toBeGreaterThan(work.radiusX * 2.5)
+    expect(full.radiusX).toBeGreaterThan(work.radiusX * 1.5)
     expect(full.centreX).toBeCloseTo(0.5, 1)
     expect(reward.haze).toBeGreaterThan(work.haze)
+  })
+
+  test("the work and full pools sit on the handset's bottom edge", () => {
+    const layout = phoneLayout(
+      PRESETS.full,
+      capture.width,
+      capture.height,
+      STAGE_W,
+      STAGE_H,
+      { x: 0, y: 0 },
+    )
+    const feet = {
+      x: (layout.left + layout.width / 2) / STAGE_W,
+      y: (layout.top + layout.height + layout.bezel) / STAGE_H,
+    }
+    for (const shape of [LIGHTS.work, LIGHTS.full]) {
+      expect(shape.centreX).toBeCloseTo(feet.x, 3)
+      expect(shape.centreY).toBeCloseTo(feet.y, 3)
+    }
   })
 
   test("a side light hits one edge harder, a pool under the phone hits both", () => {
@@ -529,62 +529,51 @@ describe("timeline / the phone as a character", () => {
     }
   })
 
-  test("it leans in while working and sits back when the agent works", () => {
+  test("every working scene holds a straight, stable pose", () => {
     const t = timeline()
-    const plan = t.scenes.find((scene) => scene.slug === "plan")
-    const question = t.scenes.find((scene) => scene.slug === "question")
-    if (plan === undefined || question === undefined) {
-      throw new Error("missing scenes")
+    const hold: SceneSlug[] = ["plan", "question", "build", "worktrees", "pr"]
+    for (const slug of hold) {
+      const scene = t.scenes.find((entry) => entry.slug === slug)
+      if (scene === undefined) {
+        throw new Error(`missing ${slug} scene`)
+      }
+      const middle = scene.from + (scene.to - scene.from) / 2
+      for (const at of [scene.from, middle, scene.to - 1e-3]) {
+        expect(poseAt(t.bodies, at)).toEqual(REST)
+      }
     }
-    // plan leans in: turned towards the camera and scaled up.
-    const leaning = poseAt(t.bodies, plan.from + 3)
-    expect(leaning.rotateY).toBeLessThan(0)
-    expect(leaning.scale).toBeGreaterThan(1)
-    // question sits back: turned away and pushed back.
-    const sitting = poseAt(t.bodies, question.from + 0.5)
-    expect(sitting.rotateY).toBeGreaterThan(0)
-    expect(sitting.scale).toBeLessThan(1)
   })
 
-  test("it turns to present its screen when it has something to show", () => {
+  test("rotation only rides the camera move, never the demo hold", () => {
     const t = timeline()
-    const changes = t.scenes.find((scene) => scene.slug === "changes")
-    if (changes === undefined) {
-      throw new Error("no changes scene")
+    for (const slug of ["usage", "changes"] as const) {
+      const scene = t.scenes.find((entry) => entry.slug === slug)
+      if (scene === undefined) {
+        throw new Error(`missing ${slug} scene`)
+      }
+      expect(poseAt(t.bodies, scene.from)).toEqual(REST)
+      expect(poseAt(t.bodies, scene.from + CAMERA_EASE_SEC / 2)).not.toEqual(REST)
+      expect(poseAt(t.bodies, scene.from + CAMERA_EASE_SEC)).toEqual(REST)
+      expect(poseAt(t.bodies, scene.to - 1e-3)).toEqual(REST)
     }
-    const turning = poseAt(t.bodies, changes.from + 0.1)
-    const presented = poseAt(t.bodies, changes.from + 6)
-    expect(turning.rotateY).toBeLessThan(-8)
-    expect(presented.rotateY).toBeLessThan(-8)
   })
 
-  test("a held pose is still animated by the sway", () => {
+  test("a straight cue stays at rest", () => {
     const cues: BodyCue[] = [{ at: 0, pose: { ...REST } }]
     expect(poseAt(cues, 4)).toEqual(REST)
   })
 
-  test("a pose holds through the scene instead of drifting toward the next one", () => {
+  test("the worktrees and PR handoffs stay straight", () => {
     const t = timeline()
-    const ssh = t.scenes[1]
-    const settledAt = Math.min(ssh.from + 8, ssh.to - 1)
-    const settled = poseAt(t.bodies, settledAt)
-    expect(settled.x).toBeCloseTo(0, 4)
-    expect(settled.rotateY).toBeCloseTo(0, 4)
-    expect(settled.scale).toBeCloseTo(1, 4)
-    const plan = t.scenes.find((scene) => scene.slug === "plan")
-    const question = t.scenes.find((scene) => scene.slug === "question")
-    if (plan === undefined || question === undefined) {
+    const worktrees = t.scenes.find((scene) => scene.slug === "worktrees")
+    const pr = t.scenes.find((scene) => scene.slug === "pr")
+    if (worktrees === undefined || pr === undefined) {
       throw new Error("missing scenes")
     }
-    const leaning = poseAt(t.bodies, Math.min(plan.from + 3, plan.to - 1))
-    const stillLeaning = poseAt(t.bodies, Math.min(plan.from + 10, plan.to - 1))
-    expect(stillLeaning.rotateY).toBeCloseTo(leaning.rotateY, 4)
-    expect(stillLeaning.scale).toBeCloseTo(leaning.scale, 4)
-    const sitting = poseAt(t.bodies, Math.min(question.from + 4, question.to - 1))
-    expect(sitting.rotateY).toBeGreaterThan(8)
-    expect(sitting.scale).toBeLessThan(1)
-    expect(idleGainForScale(1)).toBe(1)
-    expect(idleGainForScale(2.2)).toBeLessThan(1)
+    expect(poseAt(t.bodies, worktrees.from + 1)).toEqual(REST)
+    expect(poseAt(t.bodies, worktrees.to - 1e-3)).toEqual(REST)
+    expect(poseAt(t.bodies, pr.from + 1)).toEqual(REST)
+    expect(poseAt(t.bodies, pr.to - 1e-3)).toEqual(REST)
   })
 })
 
@@ -796,7 +785,22 @@ describe("timeline / sound", () => {
     expect(t.sounds.filter((sound) => sound.name === "tap").length).toBe(t.taps.length)
   })
 
-  test("each ripple lands on the exact source frame of its tap", () => {
+  test("the new-session menu taps lead their frames so the ripple stays on the row", () => {
+    const t = timeline()
+    const scene = t.scenes.find((entry) => entry.slug === "newSession")
+    const source = capture.slices.find((entry) => entry.name === "new_session")
+    if (scene === undefined || source === undefined) {
+      throw new Error("the cut has no new-session capture")
+    }
+    const taps = t.taps.filter((entry) => entry.slice === "new_session")
+    const leads = [0.1, 0.4, 0.1, 0.4, 0.1, 0.4, 0.1]
+    for (const [index, tap] of (source.taps ?? []).entries()) {
+      const lead = leads[index] ?? 0
+      expect(taps[index]?.at).toBeCloseTo(scene.from + tap.atSec - lead, 6)
+    }
+  })
+
+  test("each recorded tap inside a shot is one ripple on its own slice", () => {
     const t = timeline()
     for (const item of capture.slices) {
       const inEdit = t.shots.filter((shot) => shot.slice === item.name)
