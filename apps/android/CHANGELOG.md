@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.0.1](https://github.com/codenamegary/harold/compare/harold-android-v4.0.0...harold-android-v4.0.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **acp:** keep list errors when a replacement fails to start ([#506](https://github.com/codenamegary/harold/issues/506)) ([287da12](https://github.com/codenamegary/harold/commit/287da128c69fd5a8faaf7dbbf190f4e3c1fb5123))
+* **acp:** settle elicitation replies and rebuild the SSH demo ([#504](https://github.com/codenamegary/harold/issues/504)) ([49a8ffc](https://github.com/codenamegary/harold/commit/49a8ffc7b8979dc9c4e9bf31742229df06fc7279))
+
 ## [4.0.0](https://github.com/codenamegary/harold/compare/harold-android-v3.4.0...harold-android-v4.0.0) (2026-11-10)
 
 
