@@ -1,6 +1,6 @@
 # Demo render
 
-A 122.5 second cut at 1920x1080, 30 fps, 3674 frames. The phone screen is real
+A 124.1 second cut at 1920x1080, 30 fps, 3722 frames. The phone screen is real
 emulator capture; the capture is raw material. Each act lives in its own
 `<scene>.ts` + `<scene>.scene.tsx` pair: opening, achievement, new session,
 plan, question, build, usage, changes, worktrees, PR, and outro. The act module
@@ -36,25 +36,25 @@ here.
 
 ## The scenes
 
-The cut is 3674 frames. That is 122.5 s at 30 fps. Every scene holds one light
+The cut is 3722 frames. That is 124.1 s at 30 fps. Every scene holds one light
 state. A state change eases over 1.2 s before it holds. Some acts also change
 the shape of that state as the camera moves.
 
 | Scene         | Frames | Range     | Seconds | Light     | Footage                                      | Copy                                                     |
 | ------------- | ------ | --------- | ------- | --------- | -------------------------------------------- | -------------------------------------------------------- |
 | `intro`       | 126    | 1-126     | 4.2     | `alone`   | none                                         | slide: logo, subtitle, CTA                               |
-| `ssh`         | 606    | 127-732   | 20.2    | `arrival` | `home_empty` hold, `connect` to the save tap | `[CARD place=stage]` Look what I can do! |
-| `achievement` | 232    | 733-964   | 7.7     | `reward`  | `connect` from the save tap, then `landing`  | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
-| `newSession`  | 468    | 965-1432  | 15.6    | `work`    | `new_session`                                | `[NOTE]` Start something new                             |
-| `plan`        | 573    | 1433-2005 | 19.1    | `work`    | `plan`                                       | `[CALLOUT]` Attachments, Plan                            |
-| `question`    | 261    | 2006-2266 | 8.7     | `work`    | `question`: card, answer and reply           | `[CALLOUT]` Agent question                               |
-| `build`       | 366    | 2267-2632 | 12.2    | `work`    | `build`: caption hold, fast prompt, reply     | `[CALLOUT]` Build                                        |
-| `usage`       | 136    | 2633-2768 | 4.5     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
-| `changes`     | 392    | 2769-3160 | 13.1    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
-| `worktrees`   | 107    | 3161-3267 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
-| `pr`          | 257    | 3268-3524 | 8.6     | `full`    | `pr`: field tap, fast prompt, URL and close  | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
-| `outro`       | 150    | 3525-3674 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
-| **Total**     | **3674** | **1-3674** | **122.5** |        |                                              |                                                          |
+| `ssh`         | 654    | 127-780   | 21.8    | `arrival` | `home_empty` hold, `connect` to the save tap | `[CARD place=stage]` Look what I can do! |
+| `achievement` | 232    | 781-1012  | 7.7     | `reward`  | `connect` from the save tap, then `landing`  | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
+| `newSession`  | 468    | 1013-1480 | 15.6    | `work`    | `new_session`                                | `[NOTE]` Start something new                             |
+| `plan`        | 573    | 1481-2053 | 19.1    | `work`    | `plan`                                       | `[CALLOUT]` Attachments, Plan                            |
+| `question`    | 261    | 2054-2314 | 8.7     | `work`    | `question`: card, answer and reply           | `[CALLOUT]` Agent question                               |
+| `build`       | 366    | 2315-2680 | 12.2    | `work`    | `build`: caption hold, fast prompt, reply     | `[CALLOUT]` Build                                        |
+| `usage`       | 136    | 2681-2816 | 4.5     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
+| `changes`     | 392    | 2817-3208 | 13.1    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
+| `worktrees`   | 107    | 3209-3315 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
+| `pr`          | 257    | 3316-3572 | 8.6     | `full`    | `pr`: field tap, fast prompt, URL and close  | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
+| `outro`       | 150    | 3573-3722 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
+| **Total**     | **3722** | **1-3722** | **124.1** |        |                                              |                                                          |
 
 The achievement sits third, right after the SSH scene, while the cost of setup is
 still fresh. It is the film's only `[POP]` and only `[CF]`.
@@ -130,11 +130,12 @@ its pose on the cut.
   rises word by word, then the lockup lifts away at 3.15s and the pool slides
   right and tightens for the phone.
 - `ssh` waddles in small and further back over 1.6s, seven snappy steps, then
-  hops and lands in the pool. The card pops in beside it at 1.2s. The camera
-  pushes in from 2.85s until the phone fills the frame. After the push, the
-  idle walk stops and the phone no longer takes the camera drift. The camera
-  punches in on Add connection at 4.1s, taps, then punches back out to the
-  full form. All of these times live at the top of
+  lifts into a 2.34s angel beat. A gold halo rises over the phone and two wings
+  rotate out from behind it, then tuck back. The card pops in on the far left at
+  1.75s, clear of the wings. The camera pushes in from 4.49s until the phone
+  fills the frame. After the push, the idle walk stops and the phone no longer
+  takes the camera drift. The camera punches in on Add connection at 5.7s, taps,
+  then punches back out to the full form. All of these times live at the top of
   [`opening.ts`](src/opening.ts).
 - `achievement` eases from the filled handoff into the right slot at 2x, blooms
   the pool, then holds. The phone leans in as the home screen lands and settles
@@ -244,6 +245,7 @@ with its curly apostrophe and `Pretty diffs!` with its exclamation mark.
 - One tap sound and one ripple per recorded tap in a played slice.
 - One key sound per recorded keystroke, thinned when two land closer than
   0.16 s. Keystrokes are never interpolated.
+- One `angel.mp3` cue on the frame the SSH phone starts to lift.
 - `[POP]` and `[CF]` are silent.
 - The music bed is measured, not dialled: `MUSIC_VOLUME = 0.16` puts `music.mp3`
   at -26.3 LUFS, a measured 11 dB under a tap.

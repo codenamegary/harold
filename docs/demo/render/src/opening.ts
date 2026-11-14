@@ -41,26 +41,32 @@ export const LIGHT_MOVE_EASE_SEC = 1.3
 export const SSH_WALK_SEC = 1.6
 export const SSH_STEPS = 7
 
-/** The little hop on the spot once the walk is done. */
-export const SSH_HOP_SEC = 0.34
+/** The lift, the hover and the fall. The halo and wings live inside this beat. */
+export const SSH_ANGEL_LIFT_SEC = 0.28
+export const SSH_ANGEL_HOVER_SEC = 1.56
+export const SSH_ANGEL_FALL_SEC = 0.5
+export const SSH_ANGEL_SEC = SSH_ANGEL_LIFT_SEC + SSH_ANGEL_HOVER_SEC + SSH_ANGEL_FALL_SEC
 
-/** The stage card. It lands as the phone does and leaves as the camera goes in. */
-export const SSH_CARD_SEC = 1.2
-export const SSH_CARD_HOLD_SEC = 1.7
+/** A beat on the floor after the angel lands, before the camera starts in. */
+export const SSH_ANGEL_SETTLE_SEC = 0.55
+
+/** The stage card. It lands while the phone lifts and leaves as the camera goes in. */
+export const SSH_CARD_SEC = SSH_WALK_SEC + 0.15
+export const SSH_CARD_HOLD_SEC = 2.2
 
 /** The camera starts to push in. It ends with the phone filling the frame. */
-export const SSH_ZOOM_SEC = 2.85
+export const SSH_ZOOM_SEC = SSH_WALK_SEC + SSH_ANGEL_SEC + SSH_ANGEL_SETTLE_SEC
 export const SSH_ZOOM_EASE_SEC = 1.05
 
 /** How long the empty home holds before the connect recording starts. */
-export const SSH_HOME_HOLD_SEC = 4.1
+export const SSH_HOME_HOLD_SEC = 5.7
 
 /** The camera punches onto Add connection as the connect recording starts. */
 export const SSH_PUNCH_IN_SEC = SSH_HOME_HOLD_SEC
 export const SSH_PUNCH_IN_EASE_SEC = 0.42
 
 /** The camera returns to the full form, just after the Add connection tap. */
-export const SSH_PUNCH_OUT_SEC = 5.12
+export const SSH_PUNCH_OUT_SEC = SSH_HOME_HOLD_SEC + 1.02
 export const SSH_PUNCH_OUT_EASE_SEC = 0.5
 
 export const SSH_PUNCH_SCALE = 2.4
@@ -236,9 +242,6 @@ const SETTLED: Pose = REST
 const walkProgress = (sec: number): number =>
   Math.min(1, Math.max(0, (sec - INTRO_SEC) / SSH_WALK_SEC))
 
-const hopProgress = (sec: number): number =>
-  Math.min(1, Math.max(0, (sec - INTRO_SEC - SSH_WALK_SEC) / SSH_HOP_SEC))
-
 /**
  * Where the phone stands. It comes from further back, so it grows and moves
  * down the floor as it comes, and it turns to face the camera over the last
@@ -248,31 +251,26 @@ export const openingPoseAt = (sec: number): Pose => {
   const t = walkProgress(sec)
   const left = Math.pow(1 - t, 1.6)
   const turn = interpolate(t, [0.45, 1], [0, 1], { ...clamp, easing: turnEase })
-  const swell = Math.sin(hopProgress(sec) * Math.PI)
   return {
     x: WALK_FROM.x * left,
     y: WALK_FROM.y * left,
     rotateZ: 0,
     rotateY: mix(WALK_FROM.rotateY, SETTLED.rotateY, turn),
     rotateX: 0,
-    scale: mix(1, WALK_FROM.scale, left) * (1 + swell * 0.05),
+    scale: mix(1, WALK_FROM.scale, left),
   }
 }
 
 /**
  * The waddle. The phone rocks from corner to corner, and the rock is squared
  * off so it snaps over instead of swaying. Each rock lifts it, the way
- * tipping onto a corner would. The steps shrink as it arrives. Then one hop
- * on the spot. Additive, so it rides on `openingPoseAt` and ends clean.
+ * tipping onto a corner would. The steps shrink as it arrives. Additive, so it
+ * rides on `openingPoseAt` and ends clean.
  */
 export const openingWaddleAt = (sec: number): Pose => {
   const local = sec - INTRO_SEC
-  if (local <= 0 || local >= SSH_WALK_SEC + SSH_HOP_SEC) {
+  if (local <= 0 || local >= SSH_WALK_SEC) {
     return REST
-  }
-  if (local >= SSH_WALK_SEC) {
-    const hop = Math.sin(hopProgress(sec) * Math.PI)
-    return { ...REST, y: -24 * hop, rotateX: -5 * hop }
   }
   const t = local / SSH_WALK_SEC
   const swing = Math.sin(t * SSH_STEPS * Math.PI)
@@ -286,6 +284,88 @@ export const openingWaddleAt = (sec: number): Pose => {
   }
 }
 
+// --- The angel beat ---------------------------------------------------------
+
+/** The height the phone holds above the floor, and the quiet bob while it hangs. */
+const ANGEL_PEAK_PX = 56
+const ANGEL_BOB_PX = 3
+
+/** Where the halo and wings are on their way out, and on their way back. */
+const ANGEL_SPREAD_IN_START_SEC = 0.08
+const ANGEL_SPREAD_IN_END_SEC = 0.62
+const ANGEL_SPREAD_OUT_START_SEC = SSH_ANGEL_SEC - SSH_ANGEL_FALL_SEC - 0.02
+const ANGEL_SPREAD_OUT_END_SEC = SSH_ANGEL_SEC - 0.04
+const ANGEL_HALO_IN_START_SEC = 0.16
+const ANGEL_HALO_IN_END_SEC = 0.5
+const ANGEL_HALO_OUT_START_SEC = SSH_ANGEL_SEC - SSH_ANGEL_FALL_SEC - 0.06
+const ANGEL_HALO_OUT_END_SEC = SSH_ANGEL_SEC - SSH_ANGEL_FALL_SEC + 0.36
+
+/**
+ * The angel beat, from the moment the phone leaves the floor to the moment it
+ * lands. The pose is additive on top of the walk. `spread` and `halo` drive the
+ * decoration, so the phone and its wings never drift apart.
+ */
+export type AngelNow = {
+  /** Additive pose: the lift, the tip, and the swell. */
+  pose: Pose
+  /** Wing spread, 0..1. */
+  spread: number
+  /** Halo presence, 0..1. */
+  halo: number
+  /** A slow float for the halo, in stage px. */
+  float: number
+}
+
+export const openingAngelAt = (sec: number): AngelNow => {
+  const local = sec - INTRO_SEC - SSH_WALK_SEC
+  if (local <= 0 || local >= SSH_ANGEL_SEC) {
+    return { pose: REST, spread: 0, halo: 0, float: 0 }
+  }
+  const rise = interpolate(local, [0, SSH_ANGEL_LIFT_SEC], [0, 1], {
+    ...clamp,
+    easing: Easing.out(Easing.cubic),
+  })
+  const fall = interpolate(local, [SSH_ANGEL_SEC - SSH_ANGEL_FALL_SEC, SSH_ANGEL_SEC], [0, 1], {
+    ...clamp,
+    easing: Easing.in(Easing.cubic),
+  })
+  const hover = Math.min(rise, 1 - fall)
+  const bob =
+    Math.sin(((local - SSH_ANGEL_LIFT_SEC) / 0.9) * Math.PI * 2) * ANGEL_BOB_PX * hover
+  const spreadIn = interpolate(
+    local,
+    [ANGEL_SPREAD_IN_START_SEC, ANGEL_SPREAD_IN_END_SEC],
+    [0, 1],
+    { ...clamp, easing: Easing.out(Easing.cubic) },
+  )
+  const spreadOut = interpolate(
+    local,
+    [ANGEL_SPREAD_OUT_START_SEC, ANGEL_SPREAD_OUT_END_SEC],
+    [0, 1],
+    { ...clamp, easing: Easing.inOut(Easing.cubic) },
+  )
+  const haloIn = interpolate(local, [ANGEL_HALO_IN_START_SEC, ANGEL_HALO_IN_END_SEC], [0, 1], clamp)
+  const haloOut = interpolate(
+    local,
+    [ANGEL_HALO_OUT_START_SEC, ANGEL_HALO_OUT_END_SEC],
+    [0, 1],
+    clamp,
+  )
+  const halo = Math.min(haloIn, 1 - haloOut)
+  return {
+    pose: {
+      ...REST,
+      y: -(rise - fall) * ANGEL_PEAK_PX - bob,
+      rotateX: -4 * hover,
+      // A small swell on the way up and on the way down, none while it hangs.
+      scale: 1 + 0.04 * Math.sin(Math.PI * rise) + 0.04 * Math.sin(Math.PI * fall),
+    },
+    spread: Math.min(spreadIn, 1 - spreadOut),
+    halo,
+    float: Math.sin(local * 2.2) * 3 * halo,
+  }
+}
+
 /** How much of the idle walk the phone keeps while it waits for the camera. */
 export const SSH_IDLE_GAIN = 0.5
 
@@ -295,8 +375,8 @@ export const SSH_IDLE_GAIN = 0.5
  */
 export const openingIdleGainAt = (sec: number): number => {
   const local = sec - INTRO_SEC
-  const landed = SSH_WALK_SEC + SSH_HOP_SEC
-  const rise = interpolate(local, [landed, landed + 0.5], [0, SSH_IDLE_GAIN], clamp)
+  const landed = SSH_WALK_SEC + SSH_ANGEL_SEC
+  const rise = interpolate(local, [landed, landed + 0.3], [0, SSH_IDLE_GAIN], clamp)
   const fall = interpolate(local, [SSH_ZOOM_SEC - 0.15, SSH_ZOOM_SEC + 0.4], [1, 0], clamp)
   return rise * fall
 }

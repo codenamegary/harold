@@ -3,6 +3,7 @@ import {
   SSH_CARD_HOLD_SEC,
   SSH_CARD_SEC,
   SSH_HOME_HOLD_SEC,
+  SSH_WALK_SEC,
 } from "./opening"
 import { buildSceneCut } from "./scene-cut"
 import type { CopyItem } from "./timeline"
@@ -29,6 +30,7 @@ export const OPENING_CUT = buildSceneCut({
     { slice: "connect", to: "lastTap" },
   ],
   copy: OPENING_COPY,
+  sounds: [{ at: INTRO_SEC + SSH_WALK_SEC, name: "angel", volume: 0.8 }],
 })
 
 export const OPENING_DURATION = OPENING_CUT.durationInFrames

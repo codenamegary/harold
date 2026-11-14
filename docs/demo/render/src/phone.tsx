@@ -168,8 +168,22 @@ export const PhoneView: React.FC<{
   opacity: number
   light: LightNow
   rims: RimLevels
+  /** Art that moves with the phone but sits behind the handset body. */
+  decor?: React.ReactNode
   localFreeze?: boolean
-}> = ({ layout, layers, sec, ripples, pose, pop, opacity, light, rims, localFreeze = false }) => {
+}> = ({
+  layout,
+  layers,
+  sec,
+  ripples,
+  pose,
+  pop,
+  opacity,
+  light,
+  rims,
+  decor,
+  localFreeze = false,
+}) => {
   const alpha = rimAlpha(light)
   return (
     <div
@@ -186,6 +200,7 @@ export const PhoneView: React.FC<{
     >
       <div
         style={{
+          position: "relative",
           width: layout.frameWidth,
           height: layout.frameHeight,
           transformOrigin: "50% 100%",
@@ -194,6 +209,7 @@ export const PhoneView: React.FC<{
           transform: `rotateX(${pose.rotateX}deg) rotateY(${pose.rotateY}deg) rotateZ(${pose.rotateZ + pop.rotate}deg)`,
         }}
       >
+        {decor}
         <div
           style={{
             position: "relative",

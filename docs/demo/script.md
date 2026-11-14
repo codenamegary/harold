@@ -165,13 +165,18 @@ Beats:
 
 Enter: [LIGHT:arrival]. The intro slide is gone. The phone, on the empty home,
 starts small and further back. It waddles in from the right, quicker, with a
-snappier rock, and settles in the pool, lit from that side. Once it fills the
-frame it holds still. No parallax on the phone after that.
+snappier rock, and settles in the pool, lit from that side. Then it lifts into
+a short angel beat. Once it fills the frame it holds still. No parallax on the
+phone after that.
 
 Beats:
 
 - The phone waddles into the light on the empty home (no connections yet)
-- [CARD "Look what I can do!" place=stage]
+- The phone lifts. A gold halo rises over it and two wings rotate out from
+  behind the phone, then tuck back. `angel.mp3` plays as the lift starts. It
+  lands.
+- [CARD "Look what I can do!" place=stage] lands on the far left while the
+  phone is airborne, clear of the wings
 - The camera eases in until the phone fills the frame vertically, centered
 - The phone stops moving
 - The camera punches in on Add connection

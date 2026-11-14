@@ -16,10 +16,11 @@ import {
   LOCKUP_FADE_SEC,
   LOCKUP_IN_SEC,
   LOCKUP_OUT_SEC,
+  SSH_ANGEL_LIFT_SEC,
+  SSH_ANGEL_SEC,
   SSH_CARD_HOLD_SEC,
   SSH_CARD_SEC,
   SSH_HOME_HOLD_SEC,
-  SSH_HOP_SEC,
   SSH_IDLE_GAIN,
   SSH_PUNCH_IN_EASE_SEC,
   SSH_PUNCH_IN_SEC,
@@ -30,6 +31,7 @@ import {
   SSH_ZOOM_SEC,
   entranceView,
   lampAt,
+  openingAngelAt,
   openingCameraAt,
   openingIdleFrozenAt,
   openingIdleGainAt,
@@ -189,7 +191,7 @@ describe("opening / the phone as a character", () => {
   test("the waddle snaps from corner to corner and rings down", () => {
     expect(SSH_WALK_SEC / SSH_STEPS).toBeLessThan(0.26)
     expect(openingWaddleAt(INTRO_SEC - 0.1)).toEqual(REST)
-    expect(openingWaddleAt(INTRO_SEC + SSH_WALK_SEC + SSH_HOP_SEC + 0.01)).toEqual(REST)
+    expect(openingWaddleAt(INTRO_SEC + SSH_WALK_SEC + 0.01)).toEqual(REST)
     const stepSec = SSH_WALK_SEC / SSH_STEPS
     const first = openingWaddleAt(INTRO_SEC + stepSec * 0.5)
     const second = openingWaddleAt(INTRO_SEC + stepSec * 1.5)
@@ -202,16 +204,44 @@ describe("opening / the phone as a character", () => {
     expect(Math.abs(quarter.rotateZ)).toBeGreaterThan(Math.abs(first.rotateZ) * 0.8)
     // Tipping onto a corner lifts it.
     expect(first.y).toBeLessThan(-10)
-    // The last step lands flat, and the hop starts and ends on the floor.
+    // The last step lands flat, and the waddle is gone before the lift.
     expect(Math.abs(openingWaddleAt(INTRO_SEC + SSH_WALK_SEC - 0.001).rotateZ)).toBeLessThan(0.5)
-    expect(openingWaddleAt(INTRO_SEC + SSH_WALK_SEC + SSH_HOP_SEC / 2).y).toBeLessThan(-15)
-    expect(Math.abs(openingWaddleAt(INTRO_SEC + SSH_WALK_SEC + 0.001).y)).toBeLessThan(1)
+    expect(openingWaddleAt(INTRO_SEC + SSH_WALK_SEC).y).toBe(0)
+  })
+
+  test("the angel beat lifts, hangs, spreads, folds, and lands", () => {
+    const start = INTRO_SEC + SSH_WALK_SEC
+    expect(SSH_ANGEL_SEC).toBeGreaterThan(2)
+    expect(openingAngelAt(start - 0.01)).toEqual({ pose: REST, spread: 0, halo: 0, float: 0 })
+    expect(openingAngelAt(start + SSH_ANGEL_SEC + 0.01)).toEqual({
+      pose: REST,
+      spread: 0,
+      halo: 0,
+      float: 0,
+    })
+    const rising = openingAngelAt(start + SSH_ANGEL_LIFT_SEC / 2)
+    expect(rising.pose.y).toBeLessThan(-20)
+    expect(rising.pose.scale).toBeGreaterThan(1)
+    const hover = openingAngelAt(start + SSH_ANGEL_SEC / 2)
+    expect(hover.pose.y).toBeLessThan(-40)
+    expect(hover.spread).toBeCloseTo(1, 6)
+    expect(hover.halo).toBeCloseTo(1, 6)
+    const folded = openingAngelAt(start + SSH_ANGEL_SEC - 0.51)
+    expect(folded.spread).toBeGreaterThan(0.9)
+    const landing = openingAngelAt(start + SSH_ANGEL_SEC - 0.001)
+    expect(landing.pose.y).toBeGreaterThan(-1)
+    expect(landing.spread).toBeLessThan(0.02)
+    expect(landing.halo).toBe(0)
+    const sound = OPENING_CUT.sounds.find((item) => item.name === "angel")
+    expect(sound?.at).toBeCloseTo(start, 9)
+    expect(sound?.volume).toBeGreaterThan(0)
   })
 
   test("the idle walk eases in after the landing and out before the frame is filled", () => {
     expect(openingIdleGainAt(INTRO_SEC - 0.1)).toBe(0)
     expect(openingIdleGainAt(INTRO_SEC + SSH_WALK_SEC)).toBe(0)
-    expect(openingIdleGainAt(INTRO_SEC + SSH_ZOOM_SEC - 0.3)).toBeCloseTo(SSH_IDLE_GAIN, 6)
+    expect(openingIdleGainAt(INTRO_SEC + SSH_WALK_SEC + SSH_ANGEL_SEC - 0.1)).toBe(0)
+    expect(openingIdleGainAt(INTRO_SEC + SSH_ZOOM_SEC - 0.2)).toBeCloseTo(SSH_IDLE_GAIN, 6)
     const leaving = openingIdleGainAt(INTRO_SEC + SSH_ZOOM_SEC + 0.1)
     expect(leaving).toBeGreaterThan(0)
     expect(leaving).toBeLessThan(SSH_IDLE_GAIN)
@@ -236,7 +266,7 @@ describe("opening / camera", () => {
     const ssh = INTRO_SEC
     expect(openingCameraAt(1).scale).toBeCloseTo(ENTRANCE_SCALE, 6)
     expect(openingCameraAt(ssh + SSH_WALK_SEC).scale).toBeCloseTo(ENTRANCE_SCALE, 6)
-    expect(SSH_ZOOM_SEC).toBeGreaterThan(SSH_WALK_SEC + SSH_HOP_SEC + 0.5)
+    expect(SSH_ZOOM_SEC).toBeGreaterThan(SSH_WALK_SEC + SSH_ANGEL_SEC + 0.5)
     const half = openingCameraAt(ssh + SSH_ZOOM_SEC + SSH_ZOOM_EASE_SEC / 2)
     expect(half.scale).toBeGreaterThan(ENTRANCE_SCALE)
     expect(half.scale).toBeLessThan(VERTICAL_FIT)
@@ -252,16 +282,21 @@ describe("opening / camera", () => {
       throw new Error("the opening cut has no card")
     }
     expect(card.at).toBeCloseTo(INTRO_SEC + SSH_CARD_SEC, 9)
-    expect(SSH_CARD_SEC).toBeGreaterThan(SSH_WALK_SEC * 0.6)
-    expect(SSH_CARD_SEC).toBeLessThan(SSH_WALK_SEC + SSH_HOP_SEC)
+    // The card lands during the lift and is gone before the camera starts in.
+    expect(SSH_CARD_SEC).toBeGreaterThan(SSH_WALK_SEC)
+    expect(SSH_CARD_SEC).toBeLessThan(SSH_WALK_SEC + SSH_ANGEL_SEC)
+    expect(SSH_CARD_SEC + SSH_CARD_HOLD_SEC).toBeGreaterThanOrEqual(
+      SSH_WALK_SEC + SSH_ANGEL_SEC,
+    )
+    expect(SSH_CARD_SEC + SSH_CARD_HOLD_SEC).toBeLessThan(SSH_ZOOM_SEC)
     expect(SSH_CARD_HOLD_SEC).toBeGreaterThanOrEqual(1.6)
-    expect(Math.abs(SSH_CARD_SEC + SSH_CARD_HOLD_SEC - SSH_ZOOM_SEC)).toBeLessThan(0.2)
-    // It stands beside the phone on the wide shot, clear of the handset and the frame.
+    // It stands on the left of the wide shot, clear of the handset, the wings,
+    // and the frame edge.
     const wide = layoutOf(ENTRANCE)
     const box = stageCardBox(wide, FRAME.stageWidth)
     expect(box.onLeft).toBe(true)
     expect(box.left).toBeGreaterThan(48)
-    expect(box.left + box.width).toBeLessThan(wide.left - wide.bezel - 48)
+    expect(box.left + box.width).toBeLessThan(wide.left - wide.bezel - wide.width * 1.7)
   })
 
   test("the camera punches in on Add connection, taps, then returns to the full phone", () => {

@@ -6,6 +6,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion"
+import { AngelDecor } from "./angel"
 import { addPose } from "./body"
 import { VIDEO } from "./capture"
 import { FilmClockProvider, StageProvider, useGlobalStage } from "./global-stage"
@@ -15,6 +16,7 @@ import {
   LOCKUP_FADE_SEC,
   LOCKUP_IN_SEC,
   LOCKUP_OUT_SEC,
+  openingAngelAt,
   openingCameraAt,
   openingIdleGainAt,
   openingLightAt,
@@ -60,7 +62,8 @@ export const OpeningScene: React.FC = () => {
   const { fps, width, height } = useVideoConfig()
   const localSec = frame / fps
   const stand = openingPoseAt(localSec)
-  const body = addPose(stand, openingWaddleAt(localSec))
+  const angel = openingAngelAt(localSec)
+  const body = addPose(addPose(stand, openingWaddleAt(localSec)), angel.pose)
   const layers = phoneLayers(OPENING_CUT.clips, localSec)
 
   const stage = useGlobalStage({
@@ -88,7 +91,11 @@ export const OpeningScene: React.FC = () => {
     <StageProvider value={stage}>
       <StageFrame
         phone={
-          <PhoneStage placement={placement} layers={layers} />
+          <PhoneStage
+            placement={placement}
+            layers={layers}
+            decor={<AngelDecor layout={placement.layout} angel={angel} />}
+          />
         }
         front={
           <FrontStage

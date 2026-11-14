@@ -37,6 +37,8 @@ export type SceneCutSpec = {
   /** Hold the last source frame for this many local seconds after the shots. */
   tailHoldSec?: number
   copy?: CopyItem[]
+  /** Sounds that are not derived from taps, keys, or copy. */
+  sounds?: Sound[]
   celebrations?: Celebration[]
   confetti?: Confetti[]
   phoneFade?: Keyframes
@@ -157,12 +159,15 @@ export const buildSceneCut = (spec: SceneCutSpec): SceneCut => {
   const copy = spec.copy ?? []
   const taps = buildTaps(shots)
   const keys = buildKeys(shots)
+  const sounds = [...buildSounds(taps, keys, copy), ...(spec.sounds ?? [])].sort(
+    (a, b) => a.at - b.at,
+  )
 
   return {
     durationInFrames,
     clips: buildClips(shots),
     copy,
-    sounds: buildSounds(taps, keys, copy),
+    sounds,
     ripples: taps.map((tap) => ({ at: tap.at, x: tap.x, y: tap.y })),
     celebrations: spec.celebrations ?? [],
     confetti: spec.confetti ?? [],

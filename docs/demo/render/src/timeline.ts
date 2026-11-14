@@ -1247,15 +1247,24 @@ export const LIGHT_SHAPES = LIGHTS
 
 // --- Sounds -----------------------------------------------------------------
 //
-// Three sources only: a ping for every copy primitive, the real taps, and the
-// real keystrokes. [POP] and [CF] are silent by design.
+// A ping for every copy primitive, the real taps, the real keystrokes, and one
+// angel cue on the SSH lift. [POP] and [CF] are silent by design.
 //
 // The bed is normalised against these, not the other way round. music.mp3
 // measures -10.43 LUFS integrated with a +0.80 dBTP peak, so MUSIC_VOLUME lands
 // it at -26.3 LUFS, a measured 11 dB below a tap.
 
-export type SoundName = "key" | "tap" | "ping"
+export type SoundName = "key" | "tap" | "ping" | "angel"
+
 export type Sound = { at: number; name: SoundName; volume: number }
+
+/** Every sound's file, relative to public/. */
+export const SOUND_FILES: Record<SoundName, string> = {
+  key: "sfx/key.wav",
+  tap: "sfx/tap.wav",
+  ping: "sfx/ping.wav",
+  angel: "sfx/angel.mp3",
+}
 
 export const MUSIC_VOLUME = 0.16
 

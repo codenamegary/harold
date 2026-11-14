@@ -21,8 +21,14 @@ const CARD_GAP = 72
 const CARD_WIDTH = 480
 
 /**
- * A stage card stands on the open side of the handset, close beside it and
- * level with the top of the screen. It stops short of the frame edge.
+ * The opening card shares the frame with the angel wings. Leave a wing's reach
+ * between the card and the handset so the copy never sits under a feather.
+ */
+const CARD_WING_GAP = 2.4
+
+/**
+ * A stage card stands on the open side of the handset, level with the top of
+ * the screen and clear of the phone's wings. It stops short of the frame edge.
  */
 export const stageCardBox = (
   layout: PhoneLayout,
@@ -30,14 +36,15 @@ export const stageCardBox = (
 ): { left: number; top: number; width: number; onLeft: boolean } => {
   const frameLeft = layout.left - layout.bezel
   const frameRight = layout.left + layout.width + layout.bezel
-  const roomLeft = frameLeft - CARD_MARGIN - CARD_GAP
-  const roomRight = stageW - frameRight - CARD_MARGIN - CARD_GAP
+  const gap = Math.max(CARD_GAP, layout.width * CARD_WING_GAP)
+  const roomLeft = frameLeft - CARD_MARGIN - gap
+  const roomRight = stageW - frameRight - CARD_MARGIN - gap
   const onLeft = roomLeft >= roomRight
   const open = Math.max(0, onLeft ? roomLeft : roomRight)
   const width = Math.min(CARD_WIDTH, Math.max(280, open))
   const left = onLeft
-    ? Math.max(CARD_MARGIN, frameLeft - CARD_GAP - width)
-    : Math.min(stageW - CARD_MARGIN - width, frameRight + CARD_GAP)
+    ? Math.max(CARD_MARGIN, frameLeft - gap - width)
+    : Math.min(stageW - CARD_MARGIN - width, frameRight + gap)
   const top = Math.max(96, layout.top + layout.height * 0.1)
   return { left, top, width, onLeft }
 }

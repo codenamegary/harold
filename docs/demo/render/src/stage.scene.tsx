@@ -23,6 +23,7 @@ import {
   StageWorld,
 } from "./stage-view"
 import {
+  SOUND_FILES,
   channel,
   type Celebration,
   type Confetti,
@@ -195,8 +196,10 @@ export const PhoneStage: React.FC<{
   placement: PhonePlacement
   layers: PhoneLayer[]
   copy?: CopyItem[]
+  /** Art that moves with the phone but sits behind the handset body. */
+  decor?: React.ReactNode
   localFreeze?: boolean
-}> = ({ placement, layers, copy = [], localFreeze = false }) => {
+}> = ({ placement, layers, copy = [], decor, localFreeze = false }) => {
   const stage = useStage()
   return (
     <>
@@ -225,6 +228,7 @@ export const PhoneStage: React.FC<{
         opacity={placement.phoneOpacity}
         light={stage.light}
         rims={placement.rims}
+        decor={decor}
         localFreeze={localFreeze}
       />
     </>
@@ -264,7 +268,7 @@ export const FrontStage: React.FC<{
       {children}
       {sounds.map((sound, index) => (
         <Sequence key={`sfx-${index}`} from={Math.round((sound.at - soundOriginSec) * fps)}>
-          <Audio src={staticFile(`sfx/${sound.name}.wav`)} volume={sound.volume} />
+          <Audio src={staticFile(SOUND_FILES[sound.name])} volume={sound.volume} />
         </Sequence>
       ))}
     </>
