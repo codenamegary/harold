@@ -334,7 +334,12 @@ class AgentRuntime @Inject constructor(
         processes.values.filter { process -> !process.isDead }
 
     private fun onProcessClosed(process: AgentProcess) {
-        processes.remove(process.key, process)
+        // Only the process that is still registered owns the catalog rows. A
+        // failed replacement was never registered, so it must leave any error
+        // from the list call in place.
+        if (!processes.remove(process.key, process)) {
+            return
+        }
         connections
             .filterValues { poolKey -> poolKey == process.poolKey }
             .keys

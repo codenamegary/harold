@@ -132,7 +132,6 @@ class AgentProcess internal constructor(
     suspend fun start() {
         check(started.compareAndSet(false, true)) { "Agent process already started" }
         acp.start()
-        scope.launch { onProcessClosed() }
 
         val initialize = try {
             acp.request(
@@ -153,6 +152,9 @@ class AgentProcess internal constructor(
         canList = initialize.advertisesSessionCapability("list")
         canDelete = initialize.advertisesSessionCapability("delete")
         touch()
+        // A failed handshake never enters the runtime, so it has no catalog
+        // state to clear. Watch for closure only after the process is live.
+        scope.launch { onProcessClosed() }
     }
 
     /**

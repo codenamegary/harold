@@ -425,6 +425,9 @@ class AgentRuntimeTest {
             runtime.listSessions(FIRST_ROW).getOrThrow()
 
             assertEquals(2, launcher.launchCount)
+            // A late close callback from the failed replacement must not clear
+            // the error the list call just recorded.
+            delay(50)
             val error = catalog.snapshot(FIRST_ROW, AGENT_ID)?.error
             assertNotNull(error)
             assertFalse(error.orEmpty().contains("Read end dead"))
