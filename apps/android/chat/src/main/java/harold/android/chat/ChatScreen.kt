@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -40,9 +41,7 @@ import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -54,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.debug.probeTag
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
 import androidx.compose.runtime.Composable
@@ -113,7 +113,7 @@ private fun HeaderIconAction(
             modifier = Modifier
                 .width(HeaderActionSize)
                 .height(MIN_TOUCH_TARGET)
-                .testTag(testTag)
+                .probeTag(testTag)
                 .semantics { this.contentDescription = contentDescription },
             content = content,
         )
@@ -135,7 +135,7 @@ private fun SessionMenuRow(
             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(SessionMenuItemPadding)
-            .testTag(testTag),
+            .probeTag(testTag),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -152,6 +152,13 @@ private fun SessionMenuRow(
     }
 }
 
+private const val ChangesBadgeMax = 99
+private val ChangesBadgeOffsetX = 20.dp
+private val ChangesBadgeOffsetY = 4.dp
+
+internal fun changesBadgeLabel(count: Int): String =
+    if (count > ChangesBadgeMax) "$ChangesBadgeMax+" else count.toString()
+
 @Composable
 private fun ChangesAction(
     count: Int,
@@ -166,28 +173,34 @@ private fun ChangesAction(
     } else {
         stringResource(R.string.chat_changes_content_description)
     }
-    HeaderIconAction(
-        onClick = onClick,
-        contentDescription = contentDescription,
-        testTag = "chat_changes",
-    ) {
-        BadgedBox(
-            badge = {
-                if (count > 0) {
-                    Badge(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.testTag("chat_changes_badge"),
-                    ) {
-                        Text(text = count.toString())
-                    }
-                }
-            },
+    // The badge sits beside the button, not inside it: IconButton clips its
+    // content to the button shape, which cuts off multi-digit badges.
+    Box {
+        HeaderIconAction(
+            onClick = onClick,
+            contentDescription = contentDescription,
+            testTag = "chat_changes",
         ) {
             Icon(
                 imageVector = Icons.Filled.Difference,
                 contentDescription = null,
             )
+        }
+        if (count > 0) {
+            Badge(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = ChangesBadgeOffsetX, y = ChangesBadgeOffsetY)
+                    .probeTag("chat_changes_badge"),
+            ) {
+                Text(
+                    text = changesBadgeLabel(count),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
         }
     }
 }
@@ -212,7 +225,7 @@ private fun ContextUsageLine(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
-                .testTag("context_usage"),
+                .probeTag("context_usage"),
         )
         HorizontalDivider(
             thickness = 1.dp,
@@ -238,7 +251,7 @@ private fun SessionDropdownItem(
             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp)
-            .testTag("session_menu_row_${session.id}"),
+            .probeTag(sessionMenuRowTag(session.id)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -586,7 +599,7 @@ fun ChatScreen(
                                     .height(MIN_TOUCH_TARGET)
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable(onClick = onSessionSelectorClick)
-                                    .testTag("session_selector")
+                                    .probeTag("session_selector")
                                     .semantics {
                                         contentDescription = sessionSelectorContentDescription
                                     },
@@ -615,7 +628,7 @@ fun ChatScreen(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .testTag("chat_session_label"),
+                                        .probeTag("chat_session_label"),
                                 )
                                 Icon(
                                     imageVector = Icons.Filled.ArrowDropDown,
@@ -629,7 +642,7 @@ fun ChatScreen(
                                 onDismissRequest = onDismissSessionMenu,
                                 modifier = Modifier
                                     .widthIn(min = SessionMenuMinWidth, max = 340.dp)
-                                    .testTag("session_menu"),
+                                    .probeTag("session_menu"),
                             ) {
                                 SessionMenuRow(
                                     text = stringResource(R.string.chat_new_session),
@@ -856,45 +869,17 @@ fun ChatScreen(
                                             variant = HaroldButtonVariant.Primary,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .testTag("new_session_cta"),
+                                                .probeTag("new_session_cta"),
                                         )
+                                        // Opening the picker is instant, so this
+                                        // button never shows progress.
                                         HaroldButton(
                                             text = stringResource(R.string.chat_select_session),
                                             onClick = onSessionSelectorClick,
                                             variant = HaroldButtonVariant.Secondary,
-                                            leadingIcon = if (uiState.isRefreshing) {
-                                                {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier
-                                                            .requiredSize(16.dp)
-                                                            .testTag("select_session_refreshing"),
-                                                        strokeWidth = 2.dp,
-                                                        color = MaterialTheme.colorScheme.onSurface,
-                                                    )
-                                                }
-                                            } else {
-                                                null
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                        HaroldButton(
-                                            text = disconnectLabel,
-                                            onClick = { disconnectConfirmVisible = true },
-                                            variant = HaroldButtonVariant.Ghost,
-                                            leadingIcon = if (hasDisconnectBadge) {
-                                                {
-                                                    HaroldBadge(
-                                                        colorId = disconnectColorId,
-                                                        iconId = disconnectIconId,
-                                                        size = 20.dp,
-                                                    )
-                                                }
-                                            } else {
-                                                null
-                                            },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .testTag("disconnect_cta"),
+                                                .testTag("select_session_cta_button"),
                                         )
                                     }
                                 },

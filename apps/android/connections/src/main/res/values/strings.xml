@@ -46,6 +46,7 @@
     <string name="ssh_auth_import">Import key</string>
     <string name="ssh_auth_import_short">Import</string>
     <string name="ssh_auth_password">Password</string>
+    <string name="ssh_auth_select_label">Sign-in method</string>
     <string name="ssh_public_key_label">Public key</string>
     <string name="ssh_public_key_hint">Append this line to ~/.ssh/authorized_keys on the host.</string>
     <string name="ssh_copy_public_key">Copy public key</string>
@@ -65,8 +66,6 @@
     <string name="ssh_credential_new">Create new</string>
     <string name="ssh_credential_manage">Manage</string>
     <string name="ssh_credential_name_label">Credential name</string>
-    <string name="ssh_credential_save_for_reuse">Save for reuse on this device</string>
-    <string name="ssh_credential_save_for_reuse_subtitle">Encrypted with Android Keystore for future SSH hosts.</string>
     <string name="ssh_credential_kind_key">Private key</string>
     <string name="ssh_credential_kind_password">Password</string>
     <string name="ssh_credential_public_key_label">Public key</string>

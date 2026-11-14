@@ -78,20 +78,19 @@ class CreateSessionViewModel @Inject constructor(
 
     fun onWorkspaceChanged(workspaceId: String) {
         val workspace = _uiState.value.workspaces.firstOrNull { row -> row.id == workspaceId }
-        _uiState.update { current ->
-            current.copy(
-                selectedWorkspaceId = workspaceId,
-                error = null,
-                agents = if (workspace?.connectionId.isNullOrEmpty()) current.agents else emptyList(),
-                selectedAgentId = if (workspace?.connectionId.isNullOrEmpty()) current.selectedAgentId else null,
-            )
-        }
         if (workspace == null || workspace.connectionId.isEmpty()) {
+            _uiState.update { current ->
+                current.copy(
+                    selectedWorkspaceId = workspaceId,
+                    error = null,
+                )
+            }
             return
         }
-        viewModelScope.launch {
-            loadAgents(workspace)
-        }
+        // Agents are scoped to the connection, not the workspace. `selectWorkspace`
+        // keeps the loaded list when the origin has not changed, so picking another
+        // workspace on the same host no longer blanks the agent field.
+        selectWorkspace(workspace)
     }
 
     fun onAgentChanged(agentId: AgentId) {

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ws_moonlit_garden",
+    "name": "moonlit-garden",
+    "path": "/home/gary/sites/moonlit-garden",
+    "createdAt": "2026-11-09T22:40:00Z",
+    "lastUsedAt": "2026-11-09T23:20:00Z"
+  },
+  {
+    "id": "ws_meow",
+    "name": "meow",
+    "path": "/home/gary/sites/meow",
+    "createdAt": "2026-11-09T22:41:00Z",
+    "lastUsedAt": "2026-11-09T23:10:00Z"
+  },
+  {
+    "id": "ws_cat_screensaver",
+    "name": "cat-screensaver",
+    "path": "/home/gary/sites/cat-screensaver-worktrees/cat-mode",
+    "createdAt": "2026-11-09T22:42:00Z",
+    "lastUsedAt": "2026-11-09T23:30:00Z"
+  },
+  {
+    "id": "ws_fish_screensaver",
+    "name": "fish-screensaver-for-cats",
+    "path": "/home/gary/sites/fish-screensaver-for-cats",
+    "createdAt": "2026-11-09T22:43:00Z",
+    "lastUsedAt": "2026-11-09T23:00:00Z"
+  }
+]

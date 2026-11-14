@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# Authorize or clear SSH public keys for the demo user.
+#
+# The image installs this script twice:
+#
+#   add-authorized-key '<type> <base64> [comment]'
+#   reset-authorized-keys
+#
+# The command name selects the action, so the capture driver can call either
+# one without extra arguments. `add-authorized-key` also accepts the key on
+# stdin. The key is validated with `ssh-keygen`, deduplicated by type and body,
+# and written to the demo user's ~/.ssh/authorized_keys with 0700/0600 modes
+# and correct ownership.
+set -euo pipefail
+
+DEMO_USER=${HAROLD_DEMO_USER:-gary}
+HOME_DIR=$(getent passwd "$DEMO_USER" | cut -d: -f6)
+SSH_DIR="$HOME_DIR/.ssh"
+AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
+KEY_TYPES='^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|sk-ssh-ed25519@openssh.com|sk-ecdsa-sha2-nistp256@openssh.com)$'
+
+die() {
+  printf '%s: %s\n' "$(basename "$0")" "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: add-authorized-key '<type> <base64> [comment]'
+       add-authorized-key < key.pub
+       reset-authorized-keys
+USAGE
+}
+
+require_user() {
+  [ -n "$HOME_DIR" ] || die "no such user: $DEMO_USER"
+  if [ "$(id -u)" -ne 0 ] && [ "$(id -un)" != "$DEMO_USER" ]; then
+    die "run as root (the default with docker exec) or as $DEMO_USER"
+  fi
+}
+
+ensure_ssh_dir() {
+  mkdir -p "$SSH_DIR"
+  chown "$DEMO_USER:$DEMO_USER" "$SSH_DIR"
+  chmod 700 "$SSH_DIR"
+}
+
+own_authorized_keys() {
+  chown "$DEMO_USER:$DEMO_USER" "$AUTHORIZED_KEYS"
+  chmod 600 "$AUTHORIZED_KEYS"
+}
+
+add_key() {
+  local key type blob tmp existing_type existing_blob
+  if [ "$#" -gt 0 ]; then
+    key=$*
+  else
+    key=$(cat)
+  fi
+  key=$(printf '%s' "$key" | tr -d '\r')
+  key=${key#"${key%%[![:space:]]*}"}
+  key=${key%"${key##*[![:space:]]}"}
+  if [ -z "$key" ]; then
+    usage
+    exit 2
+  fi
+  case "$key" in
+    *$'\n'*) die "expected exactly one key line" ;;
+  esac
+  read -r type blob _ <<<"$key" || true
+  if [ -z "${type:-}" ] || [ -z "${blob:-}" ]; then
+    die "expected '<type> <base64> [comment]'"
+  fi
+  [[ "$type" =~ $KEY_TYPES ]] || die "unsupported key type: $type"
+  [[ "$blob" =~ ^[A-Za-z0-9+/]+={0,2}$ ]] || die "key body is not base64"
+
+  tmp=$(mktemp)
+  printf '%s\n' "$key" >"$tmp"
+  if ! ssh-keygen -l -f "$tmp" >/dev/null 2>&1; then
+    rm -f "$tmp"
+    die "ssh-keygen rejected the public key"
+  fi
+  rm -f "$tmp"
+
+  ensure_ssh_dir
+  if [ -f "$AUTHORIZED_KEYS" ]; then
+    while read -r existing_type existing_blob _; do
+      if [ "$existing_type" = "$type" ] && [ "$existing_blob" = "$blob" ]; then
+        own_authorized_keys
+        printf 'add-authorized-key: already authorized for %s\n' "$DEMO_USER"
+        return 0
+      fi
+    done <"$AUTHORIZED_KEYS"
+  else
+    install -o "$DEMO_USER" -g "$DEMO_USER" -m 0600 /dev/null "$AUTHORIZED_KEYS"
+  fi
+
+  printf '%s\n' "$key" >>"$AUTHORIZED_KEYS"
+  own_authorized_keys
+  printf 'add-authorized-key: authorized for %s\n' "$DEMO_USER"
+}
+
+reset_keys() {
+  ensure_ssh_dir
+  install -o "$DEMO_USER" -g "$DEMO_USER" -m 0600 /dev/null "$AUTHORIZED_KEYS"
+  printf 'reset-authorized-keys: cleared %s\n' "$AUTHORIZED_KEYS"
+}
+
+case "$(basename "$0")" in
+  add-authorized-key)
+    require_user
+    add_key "$@"
+    ;;
+  reset-authorized-keys)
+    require_user
+    reset_keys
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac

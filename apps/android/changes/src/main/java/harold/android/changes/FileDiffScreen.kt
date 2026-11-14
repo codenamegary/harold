@@ -60,6 +60,7 @@ import harold.android.contracts.GitFileDiff
 import harold.android.contracts.GitScope
 import harold.android.ui.components.HaroldCard
 import harold.android.ui.components.LoadingSkeletonList
+import harold.android.ui.debug.probeTag
 import harold.android.ui.theme.DiffColors
 import harold.android.ui.theme.diffColors
 
@@ -110,7 +111,7 @@ fun FileDiffScreen(
                         onClick = onBack,
                         modifier = Modifier
                             .defaultMinSize(minHeight = MinTouchTarget)
-                            .testTag("file_diff_back")
+                            .probeTag("file_diff_back")
                             .semantics { contentDescription = backContentDescription },
                     ) {
                         Icon(
@@ -143,7 +144,7 @@ fun FileDiffScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .testTag("file_diff_screen"),
+                .probeTag("file_diff_screen"),
         ) {
             when {
                 uiState.loading -> {
@@ -151,7 +152,7 @@ fun FileDiffScreen(
                         contentDescription = stringResource(R.string.file_diff_loading),
                         modifier = Modifier
                             .padding(16.dp)
-                            .testTag("file_diff_loading")
+                            .probeTag("file_diff_loading")
                             .semantics { liveRegion = LiveRegionMode.Polite },
                         rows = 10,
                         rowHeight = 18.dp,
@@ -230,7 +231,7 @@ private fun DiffHunks(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(24.dp)
-                        .testTag("file_diff_empty"),
+                        .probeTag("file_diff_empty"),
                     textAlign = TextAlign.Center,
                 )
             }
@@ -310,7 +311,7 @@ private fun DiffGutter(
         modifier = Modifier
             .width(GutterWidth)
             .background(colors.gutterBackground)
-            .testTag("diff_gutter"),
+            .probeTag("diff_gutter"),
     ) {
         hunk.lines.forEach { line ->
             Row(
@@ -421,7 +422,7 @@ private fun TruncationNotice() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
-            .testTag("file_diff_truncated"),
+            .probeTag("file_diff_truncated"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

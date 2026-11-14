@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import harold.android.live.Elicitation
+import harold.android.ui.debug.probeTag
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -85,7 +86,7 @@ fun ElicitationCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("elicitation_card"),
+            .probeTag("elicitation_card"),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
@@ -104,7 +105,7 @@ fun ElicitationCard(
                 Text(
                     text = elicitation.cardTitle(),
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.testTag("elicitation_card_title"),
+                    modifier = Modifier.probeTag("elicitation_card_title"),
                 )
                 if (extra > 0) {
                     Text(
@@ -119,7 +120,7 @@ fun ElicitationCard(
                 onClick = onAnswer,
                 modifier = Modifier
                     .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                    .testTag("elicitation_answer_button"),
+                    .probeTag("elicitation_answer_button"),
             ) {
                 Text(
                     text = if (elicitation is Elicitation.Form) "Answer" else "Open",

@@ -284,7 +284,17 @@ internal fun friendlyToolLabel(tool: TranscriptToolRow): String {
 
 internal fun friendlyToolVerb(tool: TranscriptToolRow): String {
     val tokens = tool.toolName.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+    val firstToken = tokens.firstOrNull()
     return when {
+        firstToken in setOf("grep", "search", "find", "glob") -> "Search"
+        firstToken in setOf("read", "view", "cat") -> "Read"
+        firstToken in setOf("edit", "write", "patch", "replace") -> "Edit"
+        firstToken in setOf("shell", "bash", "exec", "execute", "run", "terminal") -> "Run"
+        tool.toolName.contains('/') || tool.toolName.contains('.') -> when (tool.toolKind) {
+            ToolKind.Read -> "Read"
+            ToolKind.Edit -> "Edit"
+            ToolKind.Execute -> "Run"
+        }
         tokens.any { it in setOf("grep", "search", "find", "glob") } -> "Search"
         tokens.any { it in setOf("read", "view", "cat") } -> "Read"
         tokens.any { it in setOf("edit", "write", "patch", "replace") } -> "Edit"

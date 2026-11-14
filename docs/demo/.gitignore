@@ -1,0 +1,8 @@
+.env
+node_modules/
+
+# Everything the pipeline generates that is not deliberately kept: capture
+# scratch and logs, renders, spot-check stills, bundle output. Safe to delete
+# at any time. The fixtures a fresh clone renders from are tracked in
+# render/public/ (slices/, capture.json, music.mp3, sfx/).
+work/

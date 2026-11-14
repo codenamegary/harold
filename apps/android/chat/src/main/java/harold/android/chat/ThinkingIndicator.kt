@@ -12,8 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
+import harold.android.ui.debug.probeTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.em
 
@@ -46,6 +46,6 @@ fun ThinkingIndicator(
         color = lerp(dim, accent, pulse),
         maxLines = 1,
         overflow = TextOverflow.Clip,
-        modifier = modifier.testTag("thinking_indicator"),
+        modifier = modifier.probeTag("thinking_indicator"),
     )
 }

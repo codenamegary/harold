@@ -1,7 +1,6 @@
 package harold.android.connections
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -24,7 +23,7 @@ class SshSetupScreenTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsAuthModeSegmentedControlAndGeneratedPublicKey() {
+    fun showsAuthDropdownAndGeneratedPublicKey() {
         var selectedMode = SshAuthMode.GeneratedKey
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
@@ -52,15 +51,15 @@ class SshSetupScreenTest {
                     onSave = {},
                     onCredentialSelected = {},
                     onCredentialNameChanged = {},
-                    onSaveCredentialForReuseChanged = {},
                     onDeleteCredential = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithTag("ssh_auth_generate").performScrollTo().assertIsDisplayed().assertIsSelected()
         composeTestRule.onNodeWithTag("ssh_public_key").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithTag("ssh_auth_password").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("ssh_auth_dropdown").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("ssh_auth_generate").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("ssh_auth_password").performClick()
         assertEquals(SshAuthMode.Password, selectedMode)
     }
 
@@ -95,15 +94,15 @@ class SshSetupScreenTest {
                     onSave = {},
                     onCredentialSelected = { selectedCredentialId = it },
                     onCredentialNameChanged = {},
-                    onSaveCredentialForReuseChanged = {},
                     onDeleteCredential = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithTag("ssh_credential_mode_saved").performScrollTo().assertIsDisplayed().assertIsSelected()
-        composeTestRule.onNodeWithTag("ssh_saved_credential_key_1").performScrollTo().assertIsDisplayed().assertIsSelected()
-        composeTestRule.onNodeWithTag("ssh_auth_generate").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("ssh_public_key").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("ssh_auth_dropdown").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("ssh_saved_credential_key_1").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("ssh_auth_generate").performClick()
         assertEquals(null, selectedCredentialId)
     }
 
@@ -131,7 +130,6 @@ class SshSetupScreenTest {
                     onSave = {},
                     onCredentialSelected = {},
                     onCredentialNameChanged = {},
-                    onSaveCredentialForReuseChanged = {},
                     onDeleteCredential = {},
                 )
             }

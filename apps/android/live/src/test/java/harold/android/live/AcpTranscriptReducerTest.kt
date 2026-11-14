@@ -288,4 +288,42 @@ class AcpTranscriptReducerTest {
         assertEquals(SessionState.Running, live.sessionState)
         assertEquals("history more", (live.rows.single() as TranscriptAssistantRow).text)
     }
+
+    @Test
+    fun aRestoredQuestionAnswerSettlesWithoutLightingTheActivityLine() {
+        var state = applySubscribed(emptyAcpTranscript)
+        state = applyElicitationRequested(state)
+        assertEquals(SessionState.AwaitingAnswer, state.sessionState)
+
+        state = applyElicitationResolved(state, hasPending = false)
+        assertEquals(SessionState.Idle, state.sessionState)
+
+        state = foldAcpUpdate(
+            state,
+            ParsedAcpUpdate.AgentMessageChunk(
+                "Settings toggle it is. I can't continue in plan mode.",
+            ),
+        )
+
+        assertEquals(SessionState.Idle, state.sessionState)
+        assertEquals(
+            "Settings toggle it is. I can't continue in plan mode.",
+            (state.rows.single() as TranscriptAssistantRow).text,
+        )
+    }
+
+    @Test
+    fun aLiveQuestionAnswerKeepsRunningUntilThePromptCompletes() {
+        var state = beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go")
+        state = applySubscribed(state)
+        state = applyElicitationRequested(state)
+        state = applyElicitationResolved(state, hasPending = false)
+
+        assertEquals(SessionState.Running, state.sessionState)
+
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("done"))
+        assertEquals(SessionState.Running, state.sessionState)
+
+        assertEquals(SessionState.Idle, applyPromptComplete(state).sessionState)
+    }
 }

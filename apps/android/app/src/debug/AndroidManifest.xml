@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Debug only: the attachment fixture reads the pushed demo photo out of the
+      photo library so the capture driver never has to film a system picker.
+      Release builds never declare or request these.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <application>
         <activity
             android:name=".debug.AuthFixtureActivity"
@@ -10,6 +20,13 @@
             android:name=".debug.VoiceFixtureActivity"
             android:exported="true"
             android:theme="@style/Theme.Harold" />
+
+        <!-- Loopback debug control plane. Debug variants only. -->
+        <provider
+            android:name=".debug.ProbeInitializer"
+            android:authorities="${applicationId}.harold-probe"
+            android:exported="false"
+            android:initOrder="100" />
     </application>
 
 </manifest>

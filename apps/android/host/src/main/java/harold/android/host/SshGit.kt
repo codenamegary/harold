@@ -34,7 +34,11 @@ class SshGit(
         val branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.trim().ifBlank { null }
         val head = git(root, "rev-parse", "HEAD").stdout.trim()
         val defaultBranch = defaultBranch(root)
-        val uncommitted = statusEntries(root).files.size
+        val status = statusEntries(root)
+        // A committed agent turn still leaves a branch diff to review. Count the
+        // union of working-tree files and committed branch files, once each.
+        val changedPaths = status.files.map { file -> file.path }.toSet() +
+            branchChangedPaths(root)
         GitSummary(
             repository = GitRepository(
                 root = root,
@@ -43,7 +47,8 @@ class SshGit(
                 defaultBranch = defaultBranch,
                 headSha = head,
             ),
-            uncommittedFileCount = uncommitted,
+            uncommittedFileCount = status.files.size,
+            changedFileCount = changedPaths.size,
         )
     }
 
@@ -269,6 +274,19 @@ class SshGit(
         return merged.values.fold(0 to 0) { total, value ->
             total.first + value.first to total.second + value.second
         }
+    }
+
+    /** Paths committed on this branch since it left its default branch. */
+    private suspend fun branchChangedPaths(root: String): Set<String> {
+        val base = defaultBranch(root) ?: return emptySet()
+        val mergeBase = git(root, "merge-base", base, "HEAD").stdout.trim()
+            .takeIf { sha -> sha.isNotBlank() }
+            ?: return emptySet()
+        return git(root, "diff", "--name-only", "--find-renames", mergeBase, "HEAD").stdout
+            .lineSequence()
+            .map { line -> line.trim() }
+            .filter { line -> line.isNotEmpty() }
+            .toSet()
     }
 
     private suspend fun defaultBranch(root: String): String? {

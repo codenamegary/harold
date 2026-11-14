@@ -438,7 +438,26 @@ class ChatScreenTest {
 
         composeTestRule.onNodeWithTag("select_session_cta").assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_welcome").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("select_session_refreshing").assertIsDisplayed()
+        // The picker button opens instantly, so it never shows progress.
+        composeTestRule.onNodeWithTag("select_session_cta_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("select_session_refreshing").assertDoesNotExist()
+    }
+
+    @Test
+    fun homeScreenHasNoRemoveConnectionButton() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = null,
+                        activeConnectionName = "laptop",
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("disconnect_cta").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Remove laptop").assertDoesNotExist()
     }
 
     @Test
@@ -1480,6 +1499,29 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("chat_changes").performClick()
 
         assertTrue(clicked)
+    }
+
+    @Test
+    fun changesBadgeCapsLargeCounts() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(selectedSession = elicitationSession()),
+                    changesAvailable = true,
+                    changesBadgeCount = 90020,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("99+", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("90020", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun changesBadgeLabelShowsExactCountUpToTheCap() {
+        assertEquals("9", changesBadgeLabel(9))
+        assertEquals("99", changesBadgeLabel(99))
+        assertEquals("99+", changesBadgeLabel(100))
     }
 
     @Test

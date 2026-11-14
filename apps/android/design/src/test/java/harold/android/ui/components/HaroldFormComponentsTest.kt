@@ -99,6 +99,93 @@ class HaroldFormComponentsTest {
     }
 
     @Test
+    fun dropdownFieldShowsLabelAndReportsSelection() {
+        var selected by mutableStateOf("alpha")
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                HaroldDropdownField(
+                    label = "Sign-in method",
+                    options = listOf(
+                        HaroldDropdownOption(value = "alpha", label = "Alpha", testTag = "option_alpha"),
+                        HaroldDropdownOption(value = "beta", label = "Beta", testTag = "option_beta"),
+                    ),
+                    selectedValue = selected,
+                    onOptionSelected = { selected = it },
+                    anchorTestTag = "dropdown_anchor",
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Sign-in method").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("dropdown_anchor").performClick()
+        composeTestRule.onNodeWithTag("option_beta").performClick()
+        assertEquals("beta", selected)
+    }
+
+    @Test
+    fun readOnlyFieldShowsLabelAndValue() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                HaroldReadOnlyField(
+                    label = "Host",
+                    value = "127.0.0.1",
+                    fieldTestTag = "readonly_host",
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Host").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("readonly_host").assertIsDisplayed()
+        composeTestRule.onNodeWithText("127.0.0.1").assertIsDisplayed()
+    }
+
+    @Test
+    fun checkboxRowWithoutContainerStillToggles() {
+        var checked by mutableStateOf(false)
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                HaroldCheckboxRow(
+                    checked = checked,
+                    onCheckedChange = { checked = it },
+                    label = "Save for reuse",
+                    showContainer = false,
+                    checkboxTestTag = "inline_cb",
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("inline_cb").assertIsOff()
+        composeTestRule.onNodeWithText("Save for reuse").performClick()
+        assertTrue(checked)
+        composeTestRule.onNodeWithTag("inline_cb").assertIsOn()
+    }
+
+    @Test
+    fun codeBoxWithoutContainerStillCopies() {
+        var copied = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                HaroldCodeBox(
+                    code = "ssh-ed25519 AAAA",
+                    label = "Public key",
+                    hint = "Add to authorized_keys",
+                    copyLabel = "Copy public key",
+                    copiedLabel = "Copied",
+                    onCopy = { copied = true },
+                    codeTestTag = "inline_code",
+                    copyButtonTestTag = "inline_copy",
+                    showContainer = false,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("inline_code").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("inline_copy").performClick()
+        assertTrue(copied)
+        composeTestRule.onNodeWithText("Copied").assertIsDisplayed()
+    }
+
+    @Test
     fun checkboxRowTogglesWhenRowOrBoxClicked() {
         var checked by mutableStateOf(false)
         composeTestRule.setContent {

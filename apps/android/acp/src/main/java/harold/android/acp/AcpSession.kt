@@ -5,11 +5,13 @@ import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigValue
+import harold.android.contracts.ElicitationResolvedReason
 import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.contracts.SessionStreamServerMessage.Cancelled
 import harold.android.contracts.SessionStreamServerMessage.ElicitationCompleted
 import harold.android.contracts.SessionStreamServerMessage.ElicitationRequest
+import harold.android.contracts.SessionStreamServerMessage.ElicitationResolved
 import harold.android.contracts.SessionStreamServerMessage.Error
 import harold.android.contracts.SessionStreamServerMessage.PermissionRequest
 import harold.android.contracts.SessionStreamServerMessage.PromptComplete
@@ -394,6 +396,15 @@ class AcpSession internal constructor(
         val deferred = pendingElicitations.remove(requestId)
             ?: return Result.failure(IllegalStateException("Elicitation is no longer active."))
         deferred.complete(result)
+        emitFrame(
+            ElicitationResolved(
+                requestId = requestId,
+                agentId = agentId,
+                sessionId = sessionId,
+                reason = ElicitationResolvedReason.Replied,
+                result = result,
+            ),
+        )
         settleStatusAfterReply()
         return Result.success(Unit)
     }

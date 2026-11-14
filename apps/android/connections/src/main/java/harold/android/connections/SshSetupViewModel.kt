@@ -52,7 +52,6 @@ data class SshSetupUiState(
     val savedCredentials: List<SavedSshCredential> = emptyList(),
     val selectedCredentialId: String? = null,
     val credentialName: String = defaultCredentialName(SshAuthMode.GeneratedKey),
-    val saveCredentialForReuse: Boolean = true,
     val testedFingerprint: String? = null,
     val trusted: Boolean = false,
     val testing: Boolean = false,
@@ -180,10 +179,6 @@ class SshSetupViewModel @Inject constructor(
         _uiState.update { state -> state.copy(credentialName = value) }
     }
 
-    fun onSaveCredentialForReuseChanged(value: Boolean) {
-        _uiState.update { state -> state.copy(saveCredentialForReuse = value) }
-    }
-
     fun onDeleteCredential(id: String) {
         viewModelScope.launch {
             credentials.remove(id)
@@ -256,7 +251,7 @@ class SshSetupViewModel @Inject constructor(
         }
         _uiState.update { current -> current.copy(saving = true, errorMessage = null) }
         viewModelScope.launch {
-            val savedCredential = if (state.selectedCredentialId == null && state.saveCredentialForReuse) {
+            val savedCredential = if (state.selectedCredentialId == null) {
                 val credential = buildCredential(state, config.auth)
                 runCatching { credentials.save(credential) }.onFailure { error ->
                     _uiState.update { current ->

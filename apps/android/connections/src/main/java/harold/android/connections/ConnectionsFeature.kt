@@ -26,6 +26,7 @@ class ConnectionsEntryProvider @Inject constructor() : FeatureEntryProvider {
         scope.entry<SshSetup> {
             val viewModel: SshSetupViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            SshSetupProbeEffect(viewModel)
             SshSetupScreen(
                 uiState = uiState,
                 onBack = viewModel::onBack,
@@ -43,7 +44,6 @@ class ConnectionsEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSave = viewModel::save,
                 onCredentialSelected = viewModel::onCredentialSelected,
                 onCredentialNameChanged = viewModel::onCredentialNameChanged,
-                onSaveCredentialForReuseChanged = viewModel::onSaveCredentialForReuseChanged,
                 onDeleteCredential = viewModel::onDeleteCredential,
             )
         }

@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
+import harold.android.ui.debug.probeTag
 import androidx.compose.ui.unit.dp
 import harold.android.live.TranscriptAssistantRow
 import harold.android.live.TranscriptRow
@@ -188,7 +189,7 @@ fun ChatTranscript(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .testTag("chat_transcript"),
+                        .probeTag("chat_transcript"),
                 ) {
                     itemsIndexed(
                         items = blocks,
@@ -293,7 +294,7 @@ private fun TranscriptBlockRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp)
-                    .testTag("transcript_assistant"),
+                    .probeTag("transcript_assistant"),
                 streaming = streaming,
             )
         }

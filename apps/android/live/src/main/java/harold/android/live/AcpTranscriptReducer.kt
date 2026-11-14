@@ -12,6 +12,14 @@ data class AcpTranscriptState(
     val segmentBoundary: Boolean = false,
     /** Latest context usage. Null until the agent sends its first `usage_update`. */
     val usage: ContextUsage? = null,
+    /** True while this client has a `session/prompt` request awaiting its response. */
+    val promptInFlight: Boolean = false,
+    /**
+     * A reopened session's question was answered, but its original prompt died
+     * with the old connection. The reply tail is a replay: it must not light the
+     * activity line back up after the question is resolved.
+     */
+    val settledTail: Boolean = false,
 )
 
 val emptyAcpTranscript = AcpTranscriptState()
@@ -30,6 +38,8 @@ fun beginUserTurn(
     sessionState = SessionState.Running,
     currentTurnId = turnId,
     segmentBoundary = false,
+    promptInFlight = true,
+    settledTail = false,
 )
 
 fun foldAcpUpdate(
@@ -168,10 +178,10 @@ fun foldAcpUpdate(
 }
 
 fun applyPromptComplete(state: AcpTranscriptState): AcpTranscriptState =
-    state.copy(sessionState = SessionState.Idle)
+    state.copy(sessionState = SessionState.Idle, promptInFlight = false, settledTail = false)
 
 fun applyCancelled(state: AcpTranscriptState): AcpTranscriptState =
-    state.copy(sessionState = SessionState.Idle)
+    state.copy(sessionState = SessionState.Idle, promptInFlight = false, settledTail = false)
 
 fun applyPermissionRequested(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(
@@ -191,12 +201,13 @@ fun applyElicitationRequested(state: AcpTranscriptState): AcpTranscriptState =
 fun applyElicitationResolved(
     state: AcpTranscriptState,
     hasPending: Boolean,
-): AcpTranscriptState =
-    if (hasPending) {
-        state.copy(sessionState = SessionState.AwaitingAnswer)
-    } else {
-        state.copy(sessionState = SessionState.Running)
-    }
+): AcpTranscriptState = when {
+    hasPending -> state.copy(sessionState = SessionState.AwaitingAnswer)
+    // A live prompt resumes. A question restored by `session/load` has no prompt
+    // on this connection, so its answer is the end of the client's turn.
+    state.promptInFlight -> state.copy(sessionState = SessionState.Running)
+    else -> state.copy(sessionState = SessionState.Idle, settledTail = true)
+}
 
 /** Adds a resolved question row once per request. */
 fun appendTranscriptQuestion(
@@ -267,7 +278,7 @@ fun applySubscribed(state: AcpTranscriptState): AcpTranscriptState {
 }
 
 private fun withLiveRunning(state: AcpTranscriptState): AcpTranscriptState {
-    if (!state.live) {
+    if (!state.live || state.settledTail) {
         return state
     }
 

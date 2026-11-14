@@ -49,6 +49,7 @@ class ShellEntryProvider @Inject constructor() : FeatureEntryProvider {
             val activity = LocalActivity.current as? ComponentActivity ?: return@entry
             val viewModel: ShellViewModel = hiltViewModel(viewModelStoreOwner = activity)
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            ShellProbeEffect(viewModel)
             ShellScreen(
                 uiState = uiState,
                 onAddConnectionClick = viewModel::onAddConnectionClick,

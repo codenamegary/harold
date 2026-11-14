@@ -40,6 +40,7 @@ import harold.android.chat.PendingAttachmentUi
 import harold.android.chat.R
 import harold.android.contracts.SelectOption
 import harold.android.ui.components.AgentButtonVariant
+import harold.android.ui.debug.probeTag
 import harold.android.ui.components.AgentIconButton
 import harold.android.ui.components.AudioPill
 import harold.android.ui.promptinput.PromptInput
@@ -198,7 +199,7 @@ private fun TextSlot(
             plugins = plugins,
             enabled = composerEnabled,
             placeholder = stringResource(R.string.composer_placeholder),
-            modifier = Modifier.testTag("chat_composer"),
+            modifier = Modifier.probeTag("chat_composer"),
         )
     }
 }
@@ -281,7 +282,7 @@ private fun TextActionRail(
                 onClick = onAttachPhoto,
                 enabled = composerEnabled,
                 contentDescription = stringResource(R.string.chat_attach_photo_content_description),
-                modifier = Modifier.testTag("chat_attach_photo_button"),
+                modifier = Modifier.probeTag("chat_attach_photo_button"),
                 icon = {
                     Icon(
                         imageVector = Icons.Filled.Image,
@@ -296,7 +297,7 @@ private fun TextActionRail(
                 onClick = onAttachFiles,
                 enabled = composerEnabled,
                 contentDescription = stringResource(R.string.chat_attach_files_content_description),
-                modifier = Modifier.testTag("chat_attach_files_button"),
+                modifier = Modifier.probeTag("chat_attach_files_button"),
                 icon = {
                     Icon(
                         imageVector = Icons.Filled.AttachFile,
@@ -313,7 +314,7 @@ private fun TextActionRail(
                 onClick = onCancel,
                 enabled = !cancelSubmitting,
                 contentDescription = stringResource(R.string.chat_cancel_content_description),
-                modifier = Modifier.testTag("chat_cancel_button"),
+                modifier = Modifier.probeTag("chat_cancel_button"),
                 icon = {
                     Icon(
                         imageVector = Icons.Filled.Stop,
@@ -342,7 +343,7 @@ private fun TextActionRail(
             enabled = sendEnabled,
             variant = AgentButtonVariant.Primary,
             contentDescription = stringResource(R.string.chat_send_content_description),
-            modifier = Modifier.testTag("chat_send_button"),
+            modifier = Modifier.probeTag("chat_send_button"),
             icon = {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
@@ -482,14 +483,17 @@ private fun PendingAttachmentChips(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 2.dp),
+            .padding(top = 2.dp)
+            .probeTag("attachment_chips"),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         attachments.forEach { attachment ->
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .probeTag("attachment_chip"),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),

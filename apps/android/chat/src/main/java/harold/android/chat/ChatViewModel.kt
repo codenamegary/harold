@@ -393,7 +393,7 @@ class ChatViewModel @Inject constructor(
                         ) {
                             current.copy(
                                 changesAvailable = true,
-                                changesBadgeCount = summary.uncommittedFileCount,
+                                changesBadgeCount = summary.changedFileCount,
                             )
                         } else {
                             current
