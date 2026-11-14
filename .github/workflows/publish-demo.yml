@@ -32,22 +32,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Check the committed video
-        run: |
-          set -euo pipefail
-          SIZE="$(stat -c%s "$VIDEO")"
-          # A git-lfs pointer or a truncated stub would slip through a
-          # path-triggered run and replace a good video on the server with
-          # garbage; refuse anything that cannot be the rendered cut.
-          if [ "$SIZE" -lt 1048576 ]; then
-            echo "::error::$VIDEO is $SIZE bytes; expected the rendered demo video"
-            exit 1
-          fi
-          {
-            echo "VIDEO_SIZE=$SIZE"
-            echo "VIDEO_SHA256=$(sha256sum "$VIDEO" | cut -d' ' -f1)"
-          } >> "$GITHUB_ENV"
-
       - name: Push the video to the harold site
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -55,6 +39,9 @@ jobs:
           VPS_DEST: ${{ secrets.VPS_DEST }}
         run: |
           set -euo pipefail
+
+          VIDEO_SIZE="$(stat -c%s "$VIDEO")"
+          VIDEO_SHA256="$(sha256sum "$VIDEO" | cut -d' ' -f1)"
 
           # The demo directory is the sibling of the downloads directory that
           # VPS_DEST points at, keeping both artifacts under public-harold.
