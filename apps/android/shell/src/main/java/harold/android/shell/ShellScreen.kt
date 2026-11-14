@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import harold.android.ui.debug.probeTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -176,7 +177,7 @@ fun ShellScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                    .testTag("shell_add_connection_button")
+                    .probeTag("shell_add_connection_button", uiState.addConnectionEnabled)
                     .semantics {
                         contentDescription = addConnectionContentDescription
                     },

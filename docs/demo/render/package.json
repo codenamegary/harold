@@ -1,0 +1,32 @@
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "description": "Harold Remotion Video",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/cli": "4.0.534",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.534"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.534",
+    "@types/bun": "1.4.3",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.39.5",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle --out-dir=../work/render/bundle",
+    "render": "mkdir -p ../work/render && remotion render src/index.ts HaroldDemo ../work/render/harold-master.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k --x264-preset=medium && bun run compress",
+    "compress": "ffmpeg -y -i ../work/render/harold-master.mp4 -c:v libx264 -preset slow -crf 26 -profile:v high -level 4.0 -pix_fmt yuv420p -c:a aac -ac 2 -b:a 96k -movflags +faststart ../harold.mp4",
+    "upgrade": "remotion upgrade",
+    "test": "bun test src",
+    "lint": "eslint src && tsc"
+  }
+}

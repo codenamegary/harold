@@ -5,6 +5,7 @@
 .tmp/
 coverage/
 .argent/
+docs/demo/render/out/
 *.jks
 *.keystore
 keystore.properties

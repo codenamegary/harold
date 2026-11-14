@@ -25,13 +25,13 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.contracts.GitWorktree
+import harold.android.ui.debug.probeTag
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +46,7 @@ internal fun WorktreeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.testTag("changes_worktree_sheet"),
+        modifier = Modifier.probeTag("changes_worktree_sheet"),
     ) {
         Column(
             modifier = Modifier
@@ -78,7 +78,7 @@ private fun WorktreeRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .testTag("changes_worktree_row_${worktree.branch ?: worktree.headSha}"),
+            .probeTag(changesWorktreeRowTag(worktree.branch ?: worktree.headSha)),
         shape = RoundedCornerShape(14.dp),
         border = if (selected) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))

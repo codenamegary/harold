@@ -141,6 +141,37 @@ class CreateSessionViewModelTest {
     }
 
     @Test
+    fun pickingAWorkspaceOnTheSameConnectionKeepsTheSelectedAgent() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_laptop", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("claude", enabled = true),
+                    agent("opencode", enabled = true),
+                ),
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        assertEquals(listOf("claude", "opencode"), viewModel.uiState.value.agents.map { it.id })
+        assertEquals("claude", viewModel.uiState.value.selectedAgentId)
+
+        val other = viewModel.uiState.value.workspaces.single { row -> row.id == "$LAPTOP|ws_other" }
+        viewModel.onWorkspaceChanged(other.id)
+
+        assertEquals(listOf("claude", "opencode"), viewModel.uiState.value.agents.map { it.id })
+        assertEquals("claude", viewModel.uiState.value.selectedAgentId)
+    }
+
+    @Test
     fun agentLoadFailureShowsAnErrorAndDoesNotStartASession() = runTest {
         val repository = FakeCreateRepository(
             workspaces = mapOf(

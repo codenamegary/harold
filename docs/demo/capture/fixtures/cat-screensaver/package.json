@@ -1,0 +1,10 @@
+{
+  "name": "cat-screensaver",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A tiny screensaver with a settings panel.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

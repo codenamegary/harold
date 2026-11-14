@@ -1,0 +1,26 @@
+Port 2222
+AddressFamily any
+ListenAddress 0.0.0.0
+
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+AuthenticationMethods publickey
+UsePAM no
+AllowUsers gary
+AuthorizedKeysFile .ssh/authorized_keys
+StrictModes no
+
+PermitEmptyPasswords no
+MaxAuthTries 6
+MaxSessions 64
+
+Subsystem sftp internal-sftp
+
+PrintMotd no
+PrintLastLog no
+UseDNS no
+LogLevel VERBOSE

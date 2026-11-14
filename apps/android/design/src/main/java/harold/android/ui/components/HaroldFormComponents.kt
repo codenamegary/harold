@@ -58,6 +58,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import harold.android.ui.debug.probeTag
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -179,13 +180,48 @@ fun HaroldTextField(
                 .fillMaxWidth()
                 .then(
                     if (fieldTestTag != null) {
-                        Modifier.testTag(fieldTestTag)
+                        Modifier.probeTag(fieldTestTag, enabled)
                     } else {
                         Modifier
                     },
                 ),
         )
     }
+}
+
+/**
+ * A labelled value the user cannot edit. Matches [HaroldTextField] so a form
+ * can mix editable and fixed rows without changing the visual rhythm.
+ */
+@Composable
+fun HaroldReadOnlyField(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    leadingIcon: (@Composable () -> Unit)? = null,
+    fieldTestTag: String? = null,
+    monospace: Boolean = false,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+) {
+    HaroldTextField(
+        value = value,
+        onValueChange = {},
+        label = label,
+        enabled = false,
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = maxLines,
+        leadingIcon = leadingIcon,
+        textStyle = if (monospace) {
+            MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace)
+        } else {
+            MaterialTheme.typography.bodyLarge
+        },
+        fieldTestTag = fieldTestTag,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -272,7 +308,7 @@ fun HaroldPasswordField(
                 .fillMaxWidth()
                 .then(
                     if (fieldTestTag != null) {
-                        Modifier.testTag(fieldTestTag)
+                        Modifier.probeTag(fieldTestTag, enabled)
                     } else {
                         Modifier
                     },
@@ -293,127 +329,178 @@ fun HaroldCodeBox(
     codeTestTag: String? = null,
     copyButtonTestTag: String? = null,
     maxLines: Int = Int.MAX_VALUE,
+    showContainer: Boolean = true,
 ) {
     var copied by remember(code) { mutableStateOf(false) }
+    val handleCopy: (() -> Unit)? = onCopy?.let { copy ->
+        {
+            copy()
+            copied = true
+        }
+    }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    if (showContainer) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
-            if (!label.isNullOrBlank() || (onCopy != null && !copyLabel.isNullOrBlank())) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+            HaroldCodeBoxContent(
+                code = code,
+                label = label,
+                hint = hint,
+                copyLabel = copyLabel,
+                copiedLabel = copiedLabel,
+                copied = copied,
+                onCopy = handleCopy,
+                codeTestTag = codeTestTag,
+                copyButtonTestTag = copyButtonTestTag,
+                maxLines = maxLines,
+                padded = true,
+            )
+        }
+    } else {
+        HaroldCodeBoxContent(
+            code = code,
+            label = label,
+            hint = hint,
+            copyLabel = copyLabel,
+            copiedLabel = copiedLabel,
+            copied = copied,
+            onCopy = handleCopy,
+            codeTestTag = codeTestTag,
+            copyButtonTestTag = copyButtonTestTag,
+            maxLines = maxLines,
+            padded = false,
+            modifier = modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun HaroldCodeBoxContent(
+    code: String,
+    label: String?,
+    hint: String?,
+    copyLabel: String?,
+    copiedLabel: String,
+    copied: Boolean,
+    onCopy: (() -> Unit)?,
+    codeTestTag: String?,
+    copyButtonTestTag: String?,
+    maxLines: Int,
+    padded: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (padded) Modifier.padding(14.dp) else Modifier),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (!label.isNullOrBlank() || (onCopy != null && !copyLabel.isNullOrBlank())) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    if (!label.isNullOrBlank()) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    if (!hint.isNullOrBlank()) {
+                        Text(
+                            text = hint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (onCopy != null && !copyLabel.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onCopy)
+                            .then(
+                                if (copyButtonTestTag != null) {
+                                    Modifier.testTag(copyButtonTestTag)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .semantics { role = Role.Button },
                     ) {
-                        if (!label.isNullOrBlank()) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                                contentDescription = null,
+                                tint = if (copied) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.size(14.dp),
+                            )
                             Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelLarge.copy(
+                                text = if (copied) copiedLabel else copyLabel,
+                                style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
                                 ),
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (copied) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
                             )
-                        }
-                        if (!hint.isNullOrBlank()) {
-                            Text(
-                                text = hint,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    if (onCopy != null && !copyLabel.isNullOrBlank()) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    onCopy()
-                                    copied = true
-                                }
-                                .then(
-                                    if (copyButtonTestTag != null) {
-                                        Modifier.testTag(copyButtonTestTag)
-                                    } else {
-                                        Modifier
-                                    },
-                                )
-                                .semantics { role = Role.Button },
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Icon(
-                                    imageVector = if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                                    contentDescription = null,
-                                    tint = if (copied) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Text(
-                                    text = if (copied) copiedLabel else copyLabel,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                    ),
-                                    color = if (copied) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                )
-                            }
                         }
                     }
                 }
-            } else if (!hint.isNullOrBlank()) {
-                Text(
-                    text = hint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
+        } else if (!hint.isNullOrBlank()) {
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Box(modifier = Modifier.padding(10.dp)) {
-                    SelectionContainer {
-                        Text(
-                            text = code,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = maxLines,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = if (codeTestTag != null) {
-                                Modifier.testTag(codeTestTag)
-                            } else {
-                                Modifier
-                            },
-                        )
-                    }
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Box(modifier = Modifier.padding(10.dp)) {
+                SelectionContainer {
+                    Text(
+                        text = code,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = maxLines,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (codeTestTag != null) {
+                            Modifier.testTag(codeTestTag)
+                        } else {
+                            Modifier
+                        },
+                    )
                 }
             }
         }
@@ -429,55 +516,98 @@ fun HaroldCheckboxRow(
     subtitle: String? = null,
     enabled: Boolean = true,
     checkboxTestTag: String? = null,
+    showContainer: Boolean = true,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled) { onCheckedChange(!checked) },
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
+    if (showContainer) {
+        Surface(
+            modifier = modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                .padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(enabled = enabled) { onCheckedChange(!checked) },
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            ),
         ) {
-            Checkbox(
+            HaroldCheckboxRowContent(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
+                label = label,
+                subtitle = subtitle,
                 enabled = enabled,
-                modifier = if (checkboxTestTag != null) {
-                    Modifier.testTag(checkboxTestTag)
-                } else {
-                    Modifier
-                },
+                checkboxTestTag = checkboxTestTag,
+                showContainer = true,
             )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
+        }
+    } else {
+        HaroldCheckboxRowContent(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            label = label,
+            subtitle = subtitle,
+            enabled = enabled,
+            checkboxTestTag = checkboxTestTag,
+            showContainer = false,
+            modifier = modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled) { onCheckedChange(!checked) },
+        )
+    }
+}
+
+@Composable
+private fun HaroldCheckboxRowContent(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    label: String,
+    subtitle: String?,
+    enabled: Boolean,
+    checkboxTestTag: String?,
+    showContainer: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .padding(
+                start = if (showContainer) 6.dp else 0.dp,
+                end = 14.dp,
+                top = 6.dp,
+                bottom = 6.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = if (checkboxTestTag != null) {
+                Modifier.probeTag(checkboxTestTag, enabled)
+            } else {
+                Modifier
+            },
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (!subtitle.isNullOrBlank()) {
                 Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Medium,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         }
     }
@@ -757,5 +887,48 @@ fun <T> HaroldExposedDropdown(
             }
             footerItem?.invoke { expanded = false }
         }
+    }
+}
+
+/**
+ * A [HaroldExposedDropdown] with the same visible label treatment as
+ * [HaroldTextField], so forms read as one column of labelled controls.
+ */
+@Composable
+fun <T> HaroldDropdownField(
+    label: String,
+    options: List<HaroldDropdownOption<T>>,
+    selectedValue: T?,
+    onOptionSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    enabled: Boolean = true,
+    anchorTestTag: String? = null,
+    headerItem: (@Composable (dismiss: () -> Unit) -> Unit)? = null,
+    footerItem: (@Composable (dismiss: () -> Unit) -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.Medium,
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        HaroldExposedDropdown(
+            options = options,
+            selectedValue = selectedValue,
+            onOptionSelected = onOptionSelected,
+            label = label,
+            placeholder = placeholder,
+            enabled = enabled,
+            anchorTestTag = anchorTestTag,
+            headerItem = headerItem,
+            footerItem = footerItem,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }

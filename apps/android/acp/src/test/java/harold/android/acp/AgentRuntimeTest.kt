@@ -37,13 +37,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -154,6 +157,50 @@ class AgentRuntimeTest {
             assertEquals(2, launcher.agents.single().promptsStarted.get())
             collectorA.cancel()
             collectorB.cancel()
+        }
+    }
+
+    @Test
+    fun replyingToElicitationEmitsResolvedFrame() = runBlocking {
+        withRuntime { runtime, _ ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/elicit").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+            val subscribed = CompletableDeferred<Unit>()
+            val requested = CompletableDeferred<SessionStreamServerMessage.ElicitationRequest>()
+            val resolved = CompletableDeferred<SessionStreamServerMessage.ElicitationResolved>()
+            val collector = launch {
+                session.attach().events.collect { message ->
+                    when (message) {
+                        is SessionStreamServerMessage.Subscribed -> subscribed.complete(Unit)
+                        is SessionStreamServerMessage.ElicitationRequest -> requested.complete(message)
+                        is SessionStreamServerMessage.ElicitationResolved -> resolved.complete(message)
+                        else -> Unit
+                    }
+                }
+            }
+            withTimeout(10_000) { subscribed.await() }
+
+            assertEquals(
+                PromptResult.Accepted,
+                session.prompt(PromptRequestBody("please elicit")).getOrThrow(),
+            )
+            val request = withTimeout(10_000) { requested.await() }
+            session.replyElicitation(
+                request.requestId,
+                buildJsonObject {
+                    put("action", "accept")
+                    putJsonObject("content") { put("mode", "settings-toggle") }
+                },
+            ).getOrThrow()
+
+            val frame = withTimeout(10_000) { resolved.await() }
+            assertEquals(request.requestId, frame.requestId)
+            assertEquals(created.sessionId, frame.sessionId)
+            assertEquals(
+                harold.android.contracts.ElicitationResolvedReason.Replied,
+                frame.reason,
+            )
+            collector.cancel()
         }
     }
 
@@ -787,6 +834,33 @@ private class FakeAgent(
                 promptsStarted.incrementAndGet()
                 promptReceived.complete(Unit)
                 if (!answerPrompts) {
+                    return
+                }
+                val promptText = (params["prompt"] as? JsonArray)
+                    ?.joinToString(" ") { element ->
+                        ((element as? JsonObject)?.get("text") as? JsonPrimitive)?.content.orEmpty()
+                    }
+                    .orEmpty()
+                if (promptText.contains("elicit")) {
+                    val answer = requestClient(
+                        method = "elicitation/create",
+                        params = buildJsonObject {
+                            put("sessionId", sessionId)
+                            put("mode", "form")
+                            putJsonObject("requestedSchema") {
+                                put("type", "object")
+                                putJsonObject("properties") {
+                                    putJsonObject("mode") {
+                                        put("type", "string")
+                                        putJsonArray("enum") { add("settings-toggle") }
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    require(answer != JsonNull)
+                    notifyUpdate(sessionId, "elicitation answered")
+                    respond(id, buildJsonObject { put("stopReason", "end_turn") })
                     return
                 }
                 val permission = requestClient(

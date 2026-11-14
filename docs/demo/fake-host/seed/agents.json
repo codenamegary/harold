@@ -1,0 +1,62 @@
+[
+  {
+    "id": "claude-acp",
+    "displayName": null,
+    "path": "/usr/local/bin/claude",
+    "args": ["acp"],
+    "binDir": null,
+    "enabled": true,
+    "dismissed": false,
+    "custom": false,
+    "present": true,
+    "updatedAt": "2026-11-09T22:30:00Z"
+  },
+  {
+    "id": "codex-acp",
+    "displayName": null,
+    "path": "/usr/local/bin/codex-acp",
+    "args": [],
+    "binDir": null,
+    "enabled": true,
+    "dismissed": false,
+    "custom": false,
+    "present": true,
+    "updatedAt": "2026-11-09T22:30:00Z"
+  },
+  {
+    "id": "cursor",
+    "displayName": null,
+    "path": "/usr/local/bin/cursor-agent",
+    "args": ["acp"],
+    "binDir": null,
+    "enabled": true,
+    "dismissed": false,
+    "custom": false,
+    "present": true,
+    "updatedAt": "2026-11-09T22:30:00Z"
+  },
+  {
+    "id": "gemini",
+    "displayName": null,
+    "path": "/usr/local/bin/gemini",
+    "args": ["acp"],
+    "binDir": null,
+    "enabled": true,
+    "dismissed": false,
+    "custom": false,
+    "present": true,
+    "updatedAt": "2026-11-09T22:30:00Z"
+  },
+  {
+    "id": "opencode",
+    "displayName": null,
+    "path": "/usr/local/bin/opencode",
+    "args": ["acp"],
+    "binDir": null,
+    "enabled": true,
+    "dismissed": false,
+    "custom": false,
+    "present": true,
+    "updatedAt": "2026-11-09T22:30:00Z"
+  }
+]

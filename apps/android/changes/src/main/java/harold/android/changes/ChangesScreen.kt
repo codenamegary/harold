@@ -54,7 +54,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -70,6 +69,7 @@ import androidx.compose.ui.unit.sp
 import harold.android.contracts.GitChangedFile
 import harold.android.contracts.GitScope
 import harold.android.ui.components.LoadingSkeletonList
+import harold.android.ui.debug.probeTag
 import harold.android.ui.theme.diffColors
 
 private val MinTouchTarget = 48.dp
@@ -132,7 +132,7 @@ fun ChangesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .testTag("changes_screen"),
+                .probeTag("changes_screen"),
         ) {
             ScopeHeader(
                 uiState = uiState,
@@ -150,7 +150,7 @@ fun ChangesScreen(
                             contentDescription = stringResource(R.string.changes_loading),
                             modifier = Modifier
                                 .padding(16.dp)
-                                .testTag("changes_loading")
+                                .probeTag("changes_loading")
                                 .semantics {
                                     liveRegion = LiveRegionMode.Polite
                                 },
@@ -176,7 +176,7 @@ fun ChangesScreen(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .testTag("changes_list"),
+                                    .probeTag("changes_list"),
                                 contentPadding = PaddingValues(bottom = 32.dp),
                             ) {
                                 if (uiState.error != null) {
@@ -265,7 +265,7 @@ private fun ChangesTopBar(
                 onClick = onBack,
                 modifier = Modifier
                     .defaultMinSize(minHeight = MinTouchTarget)
-                    .testTag("changes_back")
+                    .probeTag("changes_back")
                     .semantics { contentDescription = backContentDescription },
             ) {
                 Icon(
@@ -279,7 +279,7 @@ private fun ChangesTopBar(
                 onClick = onToggleAllFolders,
                 modifier = Modifier
                     .defaultMinSize(minHeight = MinTouchTarget)
-                    .testTag("changes_collapse_all")
+                    .probeTag("changes_collapse_all")
                     .semantics { contentDescription = collapseDescription },
             ) {
                 Icon(
@@ -295,7 +295,7 @@ private fun ChangesTopBar(
                 onClick = onRefresh,
                 modifier = Modifier
                     .defaultMinSize(minHeight = MinTouchTarget)
-                    .testTag("changes_refresh")
+                    .probeTag("changes_refresh")
                     .semantics { contentDescription = refreshContentDescription },
             ) {
                 Icon(
@@ -340,7 +340,7 @@ private fun WorktreeFooter(
                 .fillMaxWidth()
                 .clickable(onClick = onWorktreeClick)
                 .padding(horizontal = 16.dp, vertical = 10.dp)
-                .testTag("changes_worktree_control")
+                .probeTag("changes_worktree_control")
                 .semantics { contentDescription = worktreeDescription },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -451,7 +451,7 @@ private fun ScopeHeader(
                 onClick = { onScopeSelect(GitScope.Uncommitted) },
                 modifier = Modifier
                     .weight(1f)
-                    .testTag("changes_segment_uncommitted"),
+                    .probeTag("changes_segment_uncommitted"),
             )
             if (showBranchScope) {
                 Box(
@@ -466,7 +466,7 @@ private fun ScopeHeader(
                     onClick = { onScopeSelect(GitScope.Branch) },
                     modifier = Modifier
                         .weight(1f)
-                        .testTag("changes_segment_branch"),
+                        .probeTag("changes_segment_branch"),
                 )
             }
         }
@@ -474,7 +474,7 @@ private fun ScopeHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("changes_summary"),
+                .probeTag("changes_summary"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -574,7 +574,7 @@ private fun FolderRow(
             .fillMaxWidth()
             .defaultMinSize(minHeight = 52.dp)
             .clickable(onClick = onClick)
-            .testTag("changes_folder_${node.path}")
+            .probeTag(changesFolderTag(node.path))
             .padding(
                 start = 12.dp + (TreeIndent * node.depth),
                 end = 16.dp,
@@ -646,7 +646,7 @@ private fun FileRow(
             .fillMaxWidth()
             .defaultMinSize(minHeight = 54.dp)
             .clickable(onClick = onClick)
-            .testTag("changes_file_${node.path}")
+            .probeTag(changesFileTag(node.path))
             .padding(
                 start = 34.dp + (TreeIndent * node.depth),
                 end = 16.dp,
@@ -709,7 +709,7 @@ private fun ChangesEmptyState(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 40.dp, vertical = 64.dp)
-            .testTag("changes_empty")
+            .probeTag("changes_empty")
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -748,7 +748,7 @@ private fun ChangesEmptyState(
                 onClick = { onScopeSelect(GitScope.Branch) },
                 modifier = Modifier
                     .defaultMinSize(minHeight = MinTouchTarget)
-                    .testTag("changes_empty_branch_link"),
+                    .probeTag("changes_empty_branch_link"),
             ) {
                 Text(text = stringResource(R.string.changes_scope_against, branchLabel))
             }
@@ -765,7 +765,7 @@ private fun ChangesErrorState(
         modifier = Modifier
             .fillMaxSize()
             .padding(32.dp)
-            .testTag("changes_error")
+            .probeTag("changes_error")
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -794,7 +794,7 @@ private fun ChangesErrorState(
             onClick = onRetry,
             modifier = Modifier
                 .defaultMinSize(minHeight = MinTouchTarget)
-                .testTag("changes_retry"),
+                .probeTag("changes_retry"),
         ) {
             Text(text = stringResource(R.string.changes_retry))
         }

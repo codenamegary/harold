@@ -6,6 +6,10 @@ Liberate your agents, work from the couch.
 
 Harold is an Android app that connects to your machines over SSH and runs ACP coding agents. Add a host, sign in with your SSH credentials, and drive your agents from the phone.
 
+## Demo
+
+https://github.com/user-attachments/assets/901d72f4-4d77-43ac-9957-02fd0a315e52
+
 ## Install
 
 Download `harold-android-<version>.apk` from [https://harold.codenamegary.com](https://harold.codenamegary.com) and open it on the phone. Android asks once to allow installs from your browser.
