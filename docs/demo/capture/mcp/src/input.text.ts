@@ -81,6 +81,19 @@ export const sendInputCharacter = async (character: string): Promise<void> => {
 }
 
 /**
+ * One `input text` for several characters. The plan prompt uses this after the
+ * emulator's per-character adb round trip proved too slow for the cut. The
+ * caller still stamps one key row per character.
+ */
+export const sendInputChunk = async (text: string): Promise<void> => {
+  if (text.length === 0) {
+    return
+  }
+  const token = escapeInputChunk(text.replaceAll(" ", "%s"))
+  await adb(["shell", "input", "text", token], { retry: false })
+}
+
+/**
  * Delete `current` from the focused field, one backspace at a time.
  * Used when the app has already written a suggestion, so the recorded
  * field can be typed over. Does not send BACK. BACK leaves the form.
@@ -96,11 +109,16 @@ export type TypeIntoFieldDeps = Readonly<{
   readFact: (field: TypeFieldName) => Promise<string>
   focus: (tag: string) => Promise<void>
   sendCharacter: (character: string) => Promise<void>
+  /** One adb call for several characters. Required when `chunkSize` is above 1. */
+  sendChunk?: (text: string) => Promise<void>
   clearField: (current: string) => Promise<void>
-  stampKey: () => void
-  stampKeysDone: () => void
+  /** `offsetSec` spreads a chunk's key rows inside the chunk. */
+  stampKey: (offsetSec?: number) => void
+  stampKeysDone: (offsetSec?: number) => void
   sleep: (ms: number) => Promise<void>
   gapMs: number
+  /** Characters per adb call. Defaults to one. */
+  chunkSize?: number
   /** Clock for the gap. Tests pin it. The walk uses `Date.now`. */
   now?: () => number
   /** When the field holds a suggestion, backspace it and type over it. */
@@ -128,13 +146,30 @@ export const typeIntoField = async (
   }
   const gapMs = clampTypeGapMs(deps.gapMs)
   const now = deps.now ?? Date.now
-  for (const character of [...text]) {
-    const started = now()
-    deps.stampKey()
-    await deps.sendCharacter(character)
-    await deps.sleep(remainingGapMs(now() - started, gapMs))
+  const characters = [...text]
+  const chunkSize = Math.max(1, deps.chunkSize ?? 1)
+  if (chunkSize > 1 && deps.sendChunk !== undefined) {
+    for (let start = 0; start < characters.length; start += chunkSize) {
+      const chunk = characters.slice(start, start + chunkSize)
+      const started = now()
+      await deps.sendChunk(chunk.join(""))
+      const elapsedSec = Math.max(0.001, (now() - started) / 1000)
+      // Spread the chunk's key rows across the time its adb call actually took.
+      // They then stay behind keys_done even when the send is faster than the gap.
+      const spacingSec = elapsedSec / chunk.length
+      chunk.forEach((_, index) => deps.stampKey(-elapsedSec + index * spacingSec))
+      await deps.sleep(remainingGapMs(now() - started, gapMs))
+    }
+    deps.stampKeysDone()
+  } else {
+    for (const character of characters) {
+      const started = now()
+      deps.stampKey()
+      await deps.sendCharacter(character)
+      await deps.sleep(remainingGapMs(now() - started, gapMs))
+    }
+    deps.stampKeysDone()
   }
-  deps.stampKeysDone()
   const landed = await deps.readFact(field)
   if (landed !== text) {
     throw new Error(`${field} holds ${JSON.stringify(landed)} after typing ${JSON.stringify(text)}`)

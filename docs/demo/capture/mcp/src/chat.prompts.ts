@@ -10,17 +10,11 @@
  * it first.
  */
 
-/** The `plan` scene prompt. Asks for a plan, one question, and no edits. */
-export const PLAN_PROMPT = [
-  "Read the attached spec and the photo of Mia.",
-  "Plan only; do not edit files.",
-  "Plan a small cat mode for this screensaver.",
-  "Do not build yet.",
-  "Use your question tool exactly once, for one question only:",
-  "should cat mode be a settings toggle or automatic?",
-  "The options must be exactly Settings toggle and Automatic.",
-  "Do not ask about anything else.",
-].join(" ")
+/**
+ * The `plan` scene prompt. Short enough to read on screen, and no instruction
+ * for the elicitation: the scripted agent asks that as part of its plan turn.
+ */
+export const PLAN_PROMPT = "Plan a small cat mode for the cat screensaver."
 
 /** The `build` scene prompt. Answers the question and scopes the change. */
 export const BUILD_PROMPT = [
@@ -34,10 +28,3 @@ export const BUILD_PROMPT = [
 /** The `pr` scene prompt. Pushes the branch and opens the draft PR. */
 export const PR_PROMPT =
   "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL."
-
-/**
- * The contingency prompt from the `question` scene, used only when the agent
- * skipped its question. It is here so a future retry beat does not invent copy.
- */
-export const QUESTION_CONTINGENCY_PROMPT =
-  "Before you build, use your question tool to ask whether cat mode should be a settings toggle or automatic."

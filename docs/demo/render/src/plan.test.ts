@@ -1,14 +1,21 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { REST } from "./body"
-import { PRESETS } from "./camera"
+import { CAMERA_EASE_SEC, PRESETS, VERTICAL_FIT } from "./camera"
 import {
   NEW_SESSION_REST_LIGHT,
   newSessionCameraAt,
   newSessionLightAt,
   newSessionPoseAt,
 } from "./newSession"
-import { PLAN_CAMERA, planCameraAt, planLightAt, planPoseAt } from "./plan"
+import {
+  PLAN_CAMERA,
+  PLAN_CLOSE,
+  PLAN_PUSH_SEC,
+  planCameraAt,
+  planLightAt,
+  planPoseAt,
+} from "./plan"
 import { LIGHTS, LIGHT_FADE_SEC } from "./stage"
 import { buildTimeline, type CaptureSlice } from "./timeline"
 
@@ -33,17 +40,20 @@ describe("plan / the handoff from new-session", () => {
     expect(scene.from).toBeCloseTo(previous.to, 9)
     expect(duration).toBeGreaterThan(0)
     expect(PLAN_CAMERA).toEqual(PRESETS.full)
-    expect(planCameraAt()).toEqual(newSessionCameraAt(previousDuration))
-    expect(planPoseAt()).toEqual(REST)
-    expect(planPoseAt()).toEqual(newSessionPoseAt())
+    expect(planCameraAt(0)).toEqual(newSessionCameraAt(previousDuration))
+    expect(planPoseAt(0)).toEqual(REST)
+    expect(planPoseAt(0)).toEqual(newSessionPoseAt())
     expect(planLightAt(0)).toEqual(newSessionLightAt(previousDuration))
   })
 })
 
 describe("plan / camera", () => {
-  test("holds the full phone for the whole act", () => {
-    expect(planCameraAt()).toBe(PLAN_CAMERA)
-    expect(planCameraAt()).toEqual(PRESETS.full)
+  test("starts full, pushes in for the attachments, and returns full for the handoff", () => {
+    const { duration } = plan()
+    expect(planCameraAt(0)).toEqual(PRESETS.full)
+    expect(PLAN_CLOSE.scale).toBe(VERTICAL_FIT)
+    expect(planCameraAt(PLAN_PUSH_SEC + CAMERA_EASE_SEC)).toEqual(PLAN_CLOSE)
+    expect(planCameraAt(duration)).toEqual(PRESETS.full)
   })
 })
 
@@ -71,15 +81,25 @@ describe("plan / light", () => {
 })
 
 describe("plan / body", () => {
-  test("holds the handset straight while the prompt is typed", () => {
+  test("leans through the attach beat, then holds straight for the mode tap and typing", () => {
     const { timeline, scene, duration } = plan()
-    expect(planPoseAt()).toEqual(REST)
-    expect(planPoseAt().rotateX).toBe(0)
-    expect(planPoseAt().rotateY).toBe(0)
-    expect(planPoseAt().rotateZ).toBe(0)
-    expect(planPoseAt().scale).toBe(1)
+    expect(planPoseAt(0)).toEqual(REST)
+    expect(planPoseAt(0.8)).not.toEqual(REST)
+    expect(planPoseAt(2)).toEqual(REST)
+    expect(planPoseAt(8)).toEqual(REST)
+    expect(planPoseAt(duration)).toEqual(REST)
     expect(timeline.poseAt(scene.from)).toEqual(REST)
+    const fromTimeline = timeline.poseAt(scene.from + 0.8)
+    const fromAct = planPoseAt(0.8)
+    expect(fromTimeline.rotateX).toBeCloseTo(fromAct.rotateX, 9)
+    expect(fromTimeline.rotateY).toBeCloseTo(fromAct.rotateY, 9)
     expect(timeline.poseAt(scene.from + duration / 2)).toEqual(REST)
     expect(timeline.poseAt(scene.to - 1e-3)).toEqual(REST)
+  })
+
+  test("ends straight so the question opens on the same pose", () => {
+    const { duration } = plan()
+    expect(planPoseAt(duration)).toEqual(REST)
+    expect(planPoseAt(duration)).toEqual(newSessionPoseAt())
   })
 })

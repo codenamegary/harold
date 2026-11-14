@@ -7,10 +7,6 @@ Add cat mode to the screensaver.
 - Put the toggle in `src/settings.js`.
 - Put the cat behavior in `src/cat-mode.js`.
 - Add tests.
-- Ask one question only, with exactly these two options:
-  - `Settings toggle`
-  - `Automatic`
-- Do not ask about anything else.
 - Commit every change on `feat/cat-mode` and leave the worktree clean.
 - Do not open a PR until asked.
 

@@ -136,7 +136,7 @@ describe("timeline / capture contract", () => {
     expect(byScene("achievement")).toEqual(["connect", "landing"])
     expect(byScene("newSession")).toEqual(["new_session"])
     expect(byScene("plan")).toEqual(["plan"])
-    expect(byScene("question")).toEqual(["question"])
+    expect(byScene("question")).toEqual(["plan", "question"])
     expect(byScene("build")).toEqual(["build"])
     expect(byScene("usage")).toEqual(["usage"])
     expect(byScene("changes")).toEqual(["changes"])
@@ -529,9 +529,9 @@ describe("timeline / the phone as a character", () => {
     }
   })
 
-  test("every working scene holds a straight, stable pose", () => {
+  test("every working scene without an attach beat holds a straight, stable pose", () => {
     const t = timeline()
-    const hold: SceneSlug[] = ["plan", "question", "build", "worktrees", "pr"]
+    const hold: SceneSlug[] = ["question", "build", "worktrees", "pr"]
     for (const slug of hold) {
       const scene = t.scenes.find((entry) => entry.slug === slug)
       if (scene === undefined) {
@@ -602,8 +602,8 @@ describe("timeline / the copy is the script's", () => {
       "CARD Look what I can do! [stage]",
       "SPOTLIGHT Achievement unlocked / Work from Couch",
       "NOTE NEW SESSION / Start something new",
+      "CALLOUT ATTACHMENTS Attach images and files, right meow. | Mia’s photo and her diary.",
       "CALLOUT PLAN Use your agent’s plan mode",
-      "CALLOUT ATTACHMENTS Give it the spec | A markdown file and a photo of Mia.",
       "CALLOUT AGENT QUESTION Get grilled | Interactive question tooling.",
       "CALLOUT BUILD Execute the plan",
       "CALLOUT USAGE Know what it cost | Tokens and dollars, in the header.",
@@ -613,6 +613,12 @@ describe("timeline / the copy is the script's", () => {
       "CALLOUT DRAFT PR Just like always | The agent pushes and opens it.",
       "SPOTLIGHT The whole loop / From plan to PR",
     ])
+  })
+
+  test("the plan mode callout outlines the chip instead of covering it", () => {
+    const plan = callouts(timeline().copy).find((item) => item.eyebrow === "PLAN")
+    expect(plan?.targetShape).toBe("rounded")
+    expect(plan?.targetSize).toEqual({ width: 0.22, height: 0.065 })
   })
 
   test("the curly apostrophe and the punctuation survive", () => {
@@ -641,11 +647,18 @@ describe("timeline / the copy is the script's", () => {
     expect(note.title).toBe("Start something new")
   })
 
-  test("callouts anchor to the first tap of their shot when there is one", () => {
+  test("callouts anchor to the first tap when the shot has one", () => {
     const t = timeline()
-    // The capture ships taps only up to connect, so every callout in the
-    // film falls back to the script's targetX/targetY override.
+    const attachments = callouts(t.copy).find((item) => item.eyebrow === "ATTACHMENTS")
+    if (attachments === undefined) {
+      throw new Error("the film has no attachments callout")
+    }
+    expect(attachments.anchoredBy).toBe("tap")
+    // Every other callout names its own control.
     for (const callout of callouts(t.copy)) {
+      if (callout === attachments) {
+        continue
+      }
       expect(callout.anchoredBy).toBe("point")
       expect(callout.target.x).toBeGreaterThan(0)
       expect(callout.target.x).toBeLessThan(1)
@@ -746,8 +759,9 @@ describe("timeline / the copy is the script's", () => {
   })
 
   test("the prompt text is the script's, and it is not rendered", () => {
-    expect(KEYBURSTS.plan.startsWith("Read the attached spec and the photo of Mia.")).toBe(true)
-    expect(KEYBURSTS.plan.indexOf("Settings toggle and Automatic")).toBeGreaterThan(0)
+    expect(KEYBURSTS.plan).toBe("Plan a small cat mode for the cat screensaver.")
+    expect(KEYBURSTS.plan.toLowerCase().indexOf("question tool")).toBe(-1)
+    expect(KEYBURSTS.plan.indexOf("Settings toggle and Automatic")).toBe(-1)
     expect(KEYBURSTS.build.indexOf("feat/cat-mode")).toBeGreaterThan(0)
     expect(KEYBURSTS.pr).toBe(
       "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL.",
@@ -829,7 +843,7 @@ describe("timeline / sound", () => {
         recorded.push(key.atSec)
       }
     }
-    expect(recorded.length).toBe(696)
+    expect(recorded.length).toBe(404)
     const keySounds = t.sounds.filter((sound) => sound.name === "key")
     expect(keySounds.length).toBeGreaterThan(100)
     expect(keySounds.length).toBeLessThan(recorded.length)

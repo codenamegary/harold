@@ -228,7 +228,20 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
   layout,
 }) => {
   const { width: stageW, height: stageH } = useVideoConfig()
-  const { at, hold, eyebrow, title, hint, side, compact, placement, connector, target } = item
+  const {
+    at,
+    hold,
+    eyebrow,
+    title,
+    hint,
+    side,
+    compact,
+    placement,
+    connector,
+    target,
+    targetShape,
+    targetSize,
+  } = item
   const since = sec - at
   const total = hold + FADE_SEC
   if (since < 0 || since > total) {
@@ -256,6 +269,11 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
   const anchorX = layout.left + target.x * layout.width
   const anchorY = layout.top + target.y * layout.height
   const right = side === "right"
+  const rectW = targetShape === "rounded" ? (targetSize?.width ?? 0.11) * layout.width : 0
+  const rectH = targetShape === "rounded" ? (targetSize?.height ?? 0.065) * layout.height : 0
+  // The connector ends at the outline edge, leaving the control itself readable.
+  const startX =
+    targetShape === "rounded" ? (right ? anchorX + rectW / 2 : anchorX - rectW / 2) : anchorX
   const box = calloutCardBox({
     compact,
     placement,
@@ -293,7 +311,7 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
   const originX = isT ? (right ? 0 : cardW) : right ? HOLE : cardW - HOLE
   const originY = isT ? CALL_H / 2 : HOLE
   const dir = right ? 1 : -1
-  const string = `M ${anchorX} ${anchorY} C ${anchorX + dir * 70} ${anchorY + 20}, ${holeX - dir * 40} ${holeNow - 30}, ${holeX} ${holeNow}`
+  const string = `M ${startX} ${anchorY} C ${startX + dir * 70} ${anchorY + 20}, ${holeX - dir * 40} ${holeNow - 30}, ${holeX} ${holeNow}`
   const pulsePhase = since > 0.3 ? ((since - 0.3) % 0.9) / 0.9 : 0
 
   return (
@@ -364,24 +382,44 @@ export const CalloutView: React.FC<{ item: CalloutItem; sec: number; layout: Pho
               fill="none"
               opacity={0.9 * presence}
             />
-            <circle
-              cx={anchorX}
-              cy={anchorY}
-              r={7 * dotIn}
-              fill={lime}
-              stroke={ink}
-              strokeWidth={2}
-              opacity={presence}
-            />
-            <circle
-              cx={anchorX}
-              cy={anchorY}
-              r={18 * (1 + 0.9 * pulsePhase)}
-              fill="none"
-              stroke={lime}
-              strokeWidth={2}
-              opacity={0.5 * (1 - pulsePhase) * dotIn * (1 - leave)}
-            />
+            {targetShape === "rounded" ? (
+              <g
+                transform={`translate(${anchorX} ${anchorY}) scale(${1 + 0.04 * pulsePhase}) translate(${-anchorX} ${-anchorY})`}
+                opacity={presence * (0.72 + 0.28 * (1 - pulsePhase))}
+              >
+                <rect
+                  x={anchorX - rectW / 2}
+                  y={anchorY - rectH / 2}
+                  width={rectW}
+                  height={rectH}
+                  rx={Math.min(rectW, rectH) * 0.32}
+                  fill="none"
+                  stroke={lime}
+                  strokeWidth={4}
+                />
+              </g>
+            ) : (
+              <>
+                <circle
+                  cx={anchorX}
+                  cy={anchorY}
+                  r={7 * dotIn}
+                  fill={lime}
+                  stroke={ink}
+                  strokeWidth={2}
+                  opacity={presence}
+                />
+                <circle
+                  cx={anchorX}
+                  cy={anchorY}
+                  r={18 * (1 + 0.9 * pulsePhase)}
+                  fill="none"
+                  stroke={lime}
+                  strokeWidth={2}
+                  opacity={0.5 * (1 - pulsePhase) * dotIn * (1 - leave)}
+                />
+              </>
+            )}
           </>
         )}
       </svg>

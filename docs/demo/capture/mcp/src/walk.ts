@@ -52,6 +52,7 @@ import {
   clampTypeGapMs,
   clearFieldText,
   sendInputCharacter,
+  sendInputChunk,
   sshTypeFields,
   tagByField,
   TYPE_GAP_DEFAULT_MS,
@@ -83,6 +84,8 @@ import {
 } from "./slices"
 import type { SliceKind, SliceName } from "./slices"
 import { makeProbeStub } from "./stub"
+import { makeSystemUi } from "./system.ui"
+import type { SystemUi } from "./system.ui"
 
 const SOURCE_DIR = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_OUT = resolve(join(SOURCE_DIR, "..", "..", "..", "work", "capture"))
@@ -205,6 +208,19 @@ const DWELL_AGENT_MENU_MS = 2800
 const DWELL_SELECTION_MS = 900
 const DWELL_SESSION_STARTED_MS = 2000
 const DWELL_PLAN_SENT_MS = 800
+/**
+ * The plan pickers are the AVD's own 1080x2400 layout. Fixed points keep the
+ * beat moving; the app facts after each tap prove the control actually landed.
+ * The target photo tile is the third in the first row.
+ */
+const PLAN_PHOTO_TAP = { x: 903, y: 818 } as const
+const PLAN_ADD_TAP = { x: 923, y: 2243 } as const
+const PLAN_DIARY_TAP = { x: 540, y: 826 } as const
+/** Selection lands at about 4 s; Add at about 6 s. */
+const PLAN_PHOTO_SETTLE_MS = 3200
+const PLAN_ADD_SETTLE_MS = 2000
+/** The document browser is readable for about two seconds before the file tap. */
+const PLAN_FILE_SETTLE_MS = 2200
 const DWELL_QUESTION_MS = 1800
 const DWELL_ANSWER_MS = 1200
 const DWELL_BUILD_SETTLED_MS = 1200
@@ -253,6 +269,8 @@ export type DemoConfig = Readonly<{
   name: string
   container: string
   typeGapMs: number
+  /** The tighter gap for the short plan prompt, so it reads in about 3 s. */
+  planTypeGapMs: number
   /** The workspace label the new-session form must select. */
   workspace: string
   /** The agent label the new-session form should already show. */
@@ -265,6 +283,8 @@ export type DemoConfig = Readonly<{
   answerOption: string
   /** The suffix of the file the changes beat opens, e.g. `settings.js`. */
   diffFile: string
+  /** The file the plan scene attaches from the system file picker. */
+  diaryFile: string
   /** The branches the worktree sheet must list. */
   worktrees: readonly string[]
 }>
@@ -318,7 +338,7 @@ export type BeatContext = Readonly<{
    * Focus `chat_composer` and type one character at a time.
    * Does not call the probe `type` action.
    */
-  typeComposer: (text: string) => Promise<void>
+  typeComposer: (text: string, gapMs?: number, chunkSize?: number) => Promise<void>
   wait: (args: WaitArgs) => Promise<WaitResult>
   waitForScreenChange: (from: string, timeoutMs?: number) => Promise<string | null>
   /**
@@ -326,6 +346,12 @@ export type BeatContext = Readonly<{
    * their menu is open, so their presence is the honest "menu is open" signal.
    */
   waitForControl: (tag: string, timeoutMs?: number) => Promise<ProbeControl>
+  /** Wait for a control with non-zero bounds, ready for a real tap. */
+  waitForControlOnScreen: (tag: string, timeoutMs?: number) => Promise<ProbeControl>
+  /** The system picker side. Only the photo and file pickers use it. */
+  system: Readonly<{
+    tapPoint: (x: number, y: number) => Promise<{ x: number; y: number }>
+  }>
   dismissKeyboard: () => Promise<void>
   authorizeKey: (publicKey: string) => Promise<void>
   dwell: (ms: number) => Promise<void>
@@ -341,15 +367,26 @@ export type ContextDeps = Readonly<{
   config: DemoConfig
   viewport: () => Promise<{ width: number; height: number }>
   swipe: (request: SwipeRequest) => Promise<void>
+  system: SystemUi
   dismissKeyboard: () => Promise<void>
   authorizeKey: (publicKey: string) => Promise<void>
   sendCharacter: (character: string) => Promise<void>
+  sendChunk: (text: string) => Promise<void>
   clearField: (current: string) => Promise<void>
 }>
 
 export type DeviceControl = Readonly<{
   startRecording: (remote: string) => Promise<void>
   stopRecording: () => Promise<void>
+  /**
+   * Force one or two frames after the recorder starts. `screenrecord` writes a
+   * frame only when the display changes; a still opening screen otherwise gives
+   * the video an origin after the `started` stamp and a negative sync offset.
+   * A tap is enough here and does not move a scroll position.
+   */
+  prime: () => Promise<void>
+  /** A swipe repaint used after the tail blink. */
+  nudge: () => Promise<void>
   /**
    * Run one calibration blink and return the host stamp taken before it. The
    * tail blink sets `nudgeAfterWake`: see `BLINK_NUDGE_PX`.
@@ -399,9 +436,11 @@ export type WalkDeps = Readonly<{
   device: DeviceControl
   viewport: () => Promise<{ width: number; height: number }>
   swipe: (request: SwipeRequest) => Promise<void>
+  system: SystemUi
   dismissKeyboard: () => Promise<void>
   authorizeKey: (publicKey: string) => Promise<void>
   sendCharacter: (character: string) => Promise<void>
+  sendChunk: (text: string) => Promise<void>
   clearField: (current: string) => Promise<void>
   out: Readonly<{ dir: string; slicesDir: string; marksPath: string; manifestPath: string }>
   only: readonly SliceName[]
@@ -524,15 +563,16 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
       await tap(tag)
     },
     sendCharacter: deps.sendCharacter,
+    sendChunk: deps.sendChunk,
     clearField: deps.clearField,
-    stampKey: () => {
+    stampKey: (offsetSec = 0) => {
       if (sink.taps) {
-        sink.push(keyRow(hostNow()))
+        sink.push(keyRow(hostNow() + offsetSec))
       }
     },
-    stampKeysDone: () => {
+    stampKeysDone: (offsetSec = 0) => {
       if (sink.taps) {
-        sink.push(markRow("keys_done", hostNow()))
+        sink.push(markRow("keys_done", hostNow() + offsetSec))
       }
     },
     sleep: deps.sleep,
@@ -565,8 +605,12 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     return result
   }
 
-  const typeComposer = async (text: string): Promise<void> => {
-    await typeIntoField("composerText", text, { ...typing, gapMs: config.typeGapMs, replace: false })
+  const typeComposer = async (
+    text: string,
+    gapMs = config.typeGapMs,
+    chunkSize = 1,
+  ): Promise<void> => {
+    await typeIntoField("composerText", text, { ...typing, gapMs, chunkSize, replace: false })
   }
 
   const wait = async (args: WaitArgs): Promise<WaitResult> =>
@@ -604,6 +648,45 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     return poll()
   }
 
+  /**
+   * A composer that has just gained an attachment chip animates through a frame
+   * where the rail report zero bounds. `harold_tap` refuses a zero-sized
+   * control, so wait for the control to have real bounds before tapping it.
+   */
+  const waitForControlOnScreen = async (
+    tag: string,
+    timeoutMs = FORM_TIMEOUT_MS,
+  ): Promise<ProbeControl> => {
+    const deadline = Date.now() + timeoutMs
+    const poll = async (): Promise<ProbeControl> => {
+      const control = (await screen()).controls.find((candidate) => candidate.tag === tag)
+      if (control !== undefined && control.right - control.left > 0 && control.bottom - control.top > 0) {
+        return control
+      }
+      if (Date.now() > deadline) {
+        throw new Error(
+          `control ${tag} never reached real bounds within ${timeoutMs} ms` +
+            (control === undefined
+              ? ""
+              : ` (last rect [${control.left},${control.top}][${control.right},${control.bottom}])`),
+        )
+      }
+      await deps.sleep(POLL_INTERVAL_MS)
+      return poll()
+    }
+    return poll()
+  }
+
+  const tapSystemPoint = async (x: number, y: number): Promise<{ x: number; y: number }> => {
+    const beforeSec = hostNow()
+    const point = await deps.system.tapPoint(x, y)
+    const afterSec = hostNow()
+    if (sink.taps) {
+      sink.push(tapRow({ atSec: (beforeSec + afterSec) / 2, x: point.x, y: point.y }))
+    }
+    return point
+  }
+
   const sleepUntilSettled = async (timeoutMs: number): Promise<void> => {
     const deadline = Date.now() + timeoutMs
     const poll = async (): Promise<void> => {
@@ -634,6 +717,10 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     wait,
     waitForScreenChange,
     waitForControl,
+    waitForControlOnScreen,
+    system: {
+      tapPoint: tapSystemPoint,
+    },
     dismissKeyboard: deps.dismissKeyboard,
     authorizeKey: deps.authorizeKey,
     dwell: deps.sleep,
@@ -1135,29 +1222,91 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
   },
 
   /**
-   * Stage everything the plan scene assumes. Setting the mode chip and landing
-   * the fixture attachments are state changes with no filmable gesture, and the
-   * pickers are system UI the probe can never reach, so both are pre-roll only.
+   * Leave the chat exactly as the plan scene expects it: idle, build mode, an
+   * empty composer, and no attachments. The mode switch and both attachments
+   * are on camera in the plan slice, so they must not be staged here.
    */
   plan_stage: async (ctx) => {
     await waitForChatIdle(ctx, CHAT_READY_TIMEOUT_MS)
     await ctx.wait({ field: "modeOptions", timeoutMs: MODE_TIMEOUT_MS })
-    ctx.log(`plan mode is ${await stageMode(ctx, ctx.config.planMode)}`)
-    await ctx.intent("attach_fixture")
-    await ctx.wait({ field: "attachmentCount", equals: "2", timeoutMs: ATTACH_TIMEOUT_MS })
-    ctx.log(`staged attachments: ${(await factsOf(ctx)).attachmentNames ?? "(none)"}`)
+    ctx.log(`plan start mode is ${await stageMode(ctx, ctx.config.buildMode)}`)
+    const attachments = splitFact((await factsOf(ctx)).attachmentNames ?? "")
+    for (const name of attachments) {
+      ctx.log(`removing stale attachment ${name}`)
+      await ctx.intent("remove_attachment", { name })
+    }
+    await ctx.wait({ field: "attachmentCount", equals: "0", timeoutMs: ATTACH_TIMEOUT_MS })
     await clearComposer(ctx)
     ctx.mark("plan_staged")
   },
 
+  /**
+   * The whole plan beat is on camera: the real system photo picker, the real
+   * DocumentsUI picker, the mode chip cycle, and the short prompt. The pickers
+   * are outside the probe, so the system-UI helper taps them and stamps the same
+   * tap rows the probe path uses.
+   */
   plan: async (ctx) => {
-    await ctx.wait({ field: "attachmentCount", equals: "2", timeoutMs: ATTACH_TIMEOUT_MS })
+    await waitForChatIdle(ctx, CHAT_READY_TIMEOUT_MS)
+    await ctx.wait({ field: "mode", equals: ctx.config.buildMode, timeoutMs: MODE_TIMEOUT_MS })
+    await ctx.wait({ field: "attachmentCount", equals: "0", timeoutMs: ATTACH_TIMEOUT_MS })
     await ctx.wait({ field: "composerText", equals: "", timeoutMs: MODE_TIMEOUT_MS })
-    ctx.log(`typing the plan prompt, ${[...PLAN_PROMPT].length} characters`)
-    await ctx.typeComposer(PLAN_PROMPT)
+
+    ctx.log("opening the photo picker")
+    await ctx.waitForControlOnScreen("chat_attach_photo_button")
+    await ctx.tap("chat_attach_photo_button")
+    ctx.mark("photo_picker_opening")
+    // Let the picker settle, then select the third tile at about 4 s.
+    await ctx.dwell(PLAN_PHOTO_SETTLE_MS)
+    ctx.mark("photo_picker_ready")
+    ctx.log(`picking the third photo at ${PLAN_PHOTO_TAP.x},${PLAN_PHOTO_TAP.y}`)
+    await ctx.system.tapPoint(PLAN_PHOTO_TAP.x, PLAN_PHOTO_TAP.y)
+    ctx.mark("photo_picked")
+    // Select the tile, hold two seconds, then press Add at about 6 s.
+    await ctx.dwell(PLAN_ADD_SETTLE_MS)
+    ctx.log(`pressing Add at ${PLAN_ADD_TAP.x},${PLAN_ADD_TAP.y}`)
+    await ctx.system.tapPoint(PLAN_ADD_TAP.x, PLAN_ADD_TAP.y)
+    await ctx.wait({ field: "attachmentCount", equals: "1", timeoutMs: ATTACH_TIMEOUT_MS })
+    await ctx.wait({ field: "attachmentsReady", equals: "true", timeoutMs: ATTACH_TIMEOUT_MS })
+    await ctx.dwell(DWELL_SELECTION_MS)
+    ctx.mark("photo_added")
+
+    ctx.log("opening the file picker")
+    await ctx.waitForControlOnScreen("chat_attach_files_button")
+    await ctx.tap("chat_attach_files_button")
+    ctx.mark("file_picker_opening")
+    // The browser opens quickly. Give it about two seconds, then pick the diary.
+    await ctx.dwell(PLAN_FILE_SETTLE_MS)
+    ctx.mark("file_picker_ready")
+    ctx.log(`attaching ${ctx.config.diaryFile} at ${PLAN_DIARY_TAP.x},${PLAN_DIARY_TAP.y}`)
+    await ctx.system.tapPoint(PLAN_DIARY_TAP.x, PLAN_DIARY_TAP.y)
+    await ctx.wait({ field: "attachmentCount", equals: "2", timeoutMs: ATTACH_TIMEOUT_MS })
+    await ctx.wait({ field: "attachmentsReady", equals: "true", timeoutMs: ATTACH_TIMEOUT_MS })
+    const names = splitFact((await factsOf(ctx)).attachmentNames ?? "")
+    if (!names.includes(ctx.config.diaryFile)) {
+      throw new Error(
+        `the composer attached ${JSON.stringify(names)}; ${ctx.config.diaryFile} is missing`,
+      )
+    }
+    ctx.mark("attachments_ready")
+    await ctx.dwell(DWELL_SELECTION_MS)
+
+    ctx.log("switching to plan mode on the chip")
+    await ctx.waitForControlOnScreen("composer_config_mode_chip")
+    await ctx.tap("composer_config_mode_chip")
+    await ctx.wait({ field: "mode", equals: ctx.config.planMode, timeoutMs: MODE_TIMEOUT_MS })
+    ctx.mark("mode_plan")
+    await ctx.dwell(DWELL_SELECTION_MS)
+
+    ctx.log(
+      `typing the plan prompt, ${[...PLAN_PROMPT].length} characters at ` +
+        `${ctx.config.planTypeGapMs} ms`,
+    )
+    await ctx.typeComposer(PLAN_PROMPT, ctx.config.planTypeGapMs, 5)
     await ctx.wait({ field: "composerText", equals: PLAN_PROMPT, timeoutMs: MODE_TIMEOUT_MS })
     await ctx.wait({ field: "sendEnabled", equals: "true", timeoutMs: MODE_TIMEOUT_MS })
-    await ctx.intent("send")
+    await ctx.waitForControlOnScreen("chat_send_button")
+    await ctx.tap("chat_send_button")
     await ctx.wait({ field: "composerText", equals: "", timeoutMs: MODE_TIMEOUT_MS })
     ctx.mark("plan_sent")
     await ctx.dwell(DWELL_PLAN_SENT_MS)
@@ -1200,6 +1349,11 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
   },
 
   question: async (ctx) => {
+    // The plan slice's tail blink backgrounds the app, which resets the composer
+    // config to build. The question belongs to the plan turn, so put the chip
+    // back on PLAN before the scene holds on the card.
+    await ctx.wait({ field: "modeOptions", timeoutMs: MODE_TIMEOUT_MS })
+    ctx.log(`question mode is ${await stageMode(ctx, ctx.config.planMode)}`)
     await ctx.wait({ field: "elicitationPending", equals: "true", timeoutMs: MODE_TIMEOUT_MS })
     const wanted = choiceFor(await factsOf(ctx), ctx.config.answerOption)
     ctx.mark("question_card_visible")
@@ -1627,6 +1781,14 @@ export const makeDeviceControl = (deps?: Readonly<{ log?: (message: string) => v
     await swipe(x, to, x, from, BLINK_NUDGE_MS)
   }
 
+  const prime = async (): Promise<void> => {
+    const { width, height } = await screenSize()
+    await adb(
+      ["shell", "input", "tap", String(Math.round(width / 2)), String(Math.round(height / 2))],
+      { retry: false },
+    )
+  }
+
   return {
     startRecording: async (remote) => {
       const attempt = async (remaining: number): Promise<void> => {
@@ -1752,6 +1914,8 @@ export const makeDeviceControl = (deps?: Readonly<{ log?: (message: string) => v
       return stamp
     },
     pull: (remote, local) => pull(remote, local),
+    prime,
+    nudge,
   }
 }
 
@@ -1777,19 +1941,29 @@ const recordSlice = async (params: Readonly<{
     config: deps.config,
     viewport: deps.viewport,
     swipe: deps.swipe,
+    system: deps.system,
     dismissKeyboard: deps.dismissKeyboard,
     authorizeKey: deps.authorizeKey,
     sendCharacter: deps.sendCharacter,
+    sendChunk: deps.sendChunk,
     clearField: deps.clearField,
   })
 
   deps.log(`slice ${beat.name}: recording ${file}`)
 
+  // A failed earlier run can leave the same remote file on the device. The
+  // recorder must start a new file, or the head calibration measures the old
+  // picture instead of this slice's blink.
+  await adb(["shell", "rm", "-f", remote]).catch(() => "")
   // `started` is the host instant the recorder is live, which is what
   // `build_capture.py` pairs with the video's first frame. Stamping it before
   // the recorder had started put it ~0.85 s early (the recorder-ready wait) and
   // drove `syncOffsetSec` negative.
   await deps.device.startRecording(remote)
+  // Give the encoder one or two frames before the stamp. The tap happens before
+  // the head blink and is trimmed out; without it a static opening screen can
+  // put the video origin after `started`.
+  await deps.device.prime()
   const startedSec = deps.hostNow()
   try {
     rows.push(syncWakeRow(await deps.device.blink()))
@@ -1888,9 +2062,11 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
     config: deps.config,
     viewport: deps.viewport,
     swipe: deps.swipe,
+    system: deps.system,
     dismissKeyboard: deps.dismissKeyboard,
     authorizeKey: deps.authorizeKey,
     sendCharacter: deps.sendCharacter,
+    sendChunk: deps.sendChunk,
     clearField: deps.clearField,
   })
 
@@ -2084,6 +2260,7 @@ const envList = (value: string | undefined, fallback: readonly string[]): readon
 const configFromEnv = (): DemoConfig => {
   const gap = Number(process.env.HAROLD_TYPE_GAP_MS ?? TYPE_GAP_DEFAULT_MS)
   const typeGapMs = clampTypeGapMs(gap)
+  const planGap = Number(process.env.HAROLD_PLAN_TYPE_GAP_MS ?? 40)
   return {
     host: process.env.HAROLD_DEMO_HOST ?? "127.0.0.1",
     port: process.env.HAROLD_DEMO_SSH_PORT ?? "2223",
@@ -2091,12 +2268,14 @@ const configFromEnv = (): DemoConfig => {
     name: process.env.HAROLD_DEMO_NAME ?? "Demo host",
     container: process.env.HAROLD_DEMO_CONTAINER ?? "harold-demo-host",
     typeGapMs,
+    planTypeGapMs: clampTypeGapMs(planGap),
     workspace: process.env.HAROLD_DEMO_WORKSPACE ?? "cat-screensaver",
     agent: process.env.HAROLD_DEMO_AGENT ?? "OpenCode",
     planMode: process.env.HAROLD_DEMO_PLAN_MODE ?? "plan",
     buildMode: process.env.HAROLD_DEMO_BUILD_MODE ?? "build",
     answerOption: process.env.HAROLD_DEMO_ANSWER ?? "Settings toggle",
     diffFile: process.env.HAROLD_DEMO_DIFF_FILE ?? "settings.js",
+    diaryFile: process.env.HAROLD_DEMO_DIARY_FILE ?? "cat-diary.txt",
     worktrees: envList(process.env.HAROLD_DEMO_WORKTREES, ["main", "feat/cat-mode"]),
   }
 }
@@ -2124,6 +2303,7 @@ export const runSelfTest = async (): Promise<number> => {
     config,
     viewport: stub.viewport,
     swipe: async () => {},
+    system: stub.systemUi,
     dismissKeyboard: async () => {},
     authorizeKey: async (publicKey) => {
       if (!publicKey.startsWith("ssh-")) {
@@ -2131,6 +2311,7 @@ export const runSelfTest = async (): Promise<number> => {
       }
     },
     sendCharacter: stub.receiveCharacter,
+    sendChunk: stub.receiveChunk,
     clearField: stub.clearFocused,
   })
 
@@ -2267,7 +2448,9 @@ const main = async (): Promise<number> => {
       device,
       viewport: screenSize,
       swipe: async (request) => swipe(request.x, request.fromY, request.x, request.toY, request.durationMs),
+      system: makeSystemUi(),
       sendCharacter: sendInputCharacter,
+      sendChunk: sendInputChunk,
       clearField: clearFieldText,
       dismissKeyboard: async () => {},
       authorizeKey: async (publicKey) => {

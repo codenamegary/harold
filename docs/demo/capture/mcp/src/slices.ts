@@ -23,10 +23,11 @@
  *
  * The connect act stages the empty home in `boot`. The story after `landing` follows
  * a live agent session, so each group of on-camera scenes is preceded by its own
- * `preRoll` beat: `plan_stage` sets plan mode and stages the fixture attachments,
- * `question_stage` waits for the agent question, `build_stage` sets build mode
- * once the answer has settled, and `pr_stage` returns from Changes to the chat.
- * A `preRoll` beat never appears in the picture and never gets a file number.
+ * `preRoll` beat: `plan_stage` leaves build mode, clears the composer and removes
+ * stale attachments, `question_stage` waits for the agent question, `build_stage`
+ * sets build mode once the answer has settled, and `pr_stage` returns from
+ * Changes to the chat. A `preRoll` beat never appears in the picture and never
+ * gets a file number.
  *
  * `achievement` reuses the `landing` recording and `outro` is a rendered card,
  * so neither scene needs a slice of its own.
@@ -84,9 +85,13 @@ export const slicePlan: readonly SliceSpec[] = [
   {
     name: "plan_stage",
     kind: "preRoll",
-    title: "Stage plan mode and the fixture attachments on the new session",
+    title: "Reset the new session to build mode, an empty composer and no attachments",
   },
-  { name: "plan", kind: "onCamera", title: "Type the plan prompt and send it" },
+  {
+    name: "plan",
+    kind: "onCamera",
+    title: "Attach Mia's photo and diary, switch to plan mode, type the prompt and send",
+  },
   {
     name: "question_stage",
     kind: "preRoll",

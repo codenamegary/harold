@@ -140,12 +140,14 @@ a better capture.
 - **The crops are upscales.** A screen crop magnifies the 1080x2400 capture about
   1.8 to 2.4 times to fill a 1920 wide stage. The app is not re-rendered at that
   size, so its text is soft when the frame is paused.
-- **The taps after `landing` are silent.** Those slices record no `taps[]`, so
-  their taps have no ripples and no tap sounds. Only the typing in `plan`,
-  `build`, and `pr` is sounded.
-- **The system pickers are never filmed.** `Attach photo` and `Attach files` open
-  Android UI, which no probe tag can reach. The cut shows the chips landing in
-  the composer, not the pickers.
+- **Some taps after `landing` are silent.** The plan slice now records its
+  attach, picker, mode and send taps. The `question`, `build`, `changes`,
+  `worktrees` and `pr` beats still reach their screens through probe intents, so
+  those taps have no ripples and no tap sounds.
+- **The plan pickers use fixed AVD points.** `Attach photo` and `Attach files`
+  open Android UI outside the app. The driver taps the capture AVD's stable
+  1080x2400 picker points and verifies the chips through app facts, so the cut
+  shows the pickers themselves without a slow dump in the middle of the beat.
 - **The host-side authorize step is an overlay.** The one command that ran off
   camera is drawn on the key beat from `ssh-data.ts`. The phone footage does not
   contain it.

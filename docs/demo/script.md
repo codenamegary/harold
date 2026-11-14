@@ -103,6 +103,8 @@ A `[LIGHT]` state holds until the next one.
   `compact placement=edge` to sit it beside the phone. Add `connector=T` for
   a T-bracket outside the phone frame. Override the anchor with `targetX=` and
   `targetY=` when the copy should point at a control other than the first tap.
+  Add `targetShape=rounded` to outline a control instead of covering it with
+  the target dot.
 - `[SPOTLIGHT side=left]` Large copy card with a mono kicker, display title,
   and lime rule. Plays a ping. The kicker and title sit on the following
   indented lines.
@@ -220,24 +222,26 @@ Beats:
 
 ### Scene: plan
 
-Enter: The new chat settles. The composer shows the OpenCode model and mode
-chips. The phone leans in towards the light while the prompt is typed.
-[L1 phone] [PZ:full].
+Enter: The new chat settles with an empty composer, BUILD mode, and no
+attachments. The phone leans in towards the light while the attachments are
+added. [L1 phone] [PZ:full], then [PZ scale=1.18] for the attach beat.
 
 Beats:
 
-- [CALLOUT "Use your agent’s plan mode" eyebrow="PLAN"]
-- [TAP "Mode chip until PLAN"]
-- [TAP "Message field"]
-- [KR "Read the attached spec and the photo of Mia. Plan only; do not edit files. Plan a small cat mode for this screensaver. Do not build yet. Use your question tool exactly once, for one question only: should cat mode be a settings toggle or automatic? The options must be exactly Settings toggle and Automatic. Do not ask about anything else."]
+- [CALLOUT "Attach images and files, right meow." eyebrow="ATTACHMENTS" hint="Mia’s photo and her diary." compact placement=edge connector=T]
 - [TAP "Attach photo"]
 - Wait for the photo picker.
 - [TAP "Third cat photo"]
 - [TAP "Add (1)"]
+- The composer shows the photo chip.
 - [TAP "Attach files"]
-- [TAP "cat-mode.md"]
-- [CALLOUT "Give it the spec" eyebrow="ATTACHMENTS" hint="A markdown file and a photo of Mia." compact placement=edge connector=T]
-- The composer shows the cat photo and the markdown file chips.
+- Wait for the file picker.
+- [TAP "cat-diary.txt"]
+- The composer shows the photo and diary chips.
+- [CALLOUT "Use your agent’s plan mode" eyebrow="PLAN" targetShape=rounded]
+- [TAP "Mode chip until PLAN"]
+- [TAP "Message field"]
+- [KR "Plan a small cat mode for the cat screensaver."]
 - [TAP "Send message"]
 
 ### Scene: question
@@ -248,9 +252,9 @@ pool, letting the agent work. [L1 phone] [PZ:full].
 Beats:
 
 - The agent replies with a short plan.
-- The question card appears above the composer.
-- If the turn idles without a question card, the driver sends the nudge:
-  `Before you build, use your question tool to ask whether cat mode should be a settings toggle or automatic.`
+- The question card appears above the composer. The fake agent asks it as part
+  of the scripted turn, with no instruction in the typed prompt.
+- If the turn idles without a question card, the driver re-opens the session.
 - If there is still no question card, the capture fails.
 - [CALLOUT "Get grilled" eyebrow="AGENT QUESTION" hint="Interactive question tooling."]
 - [TAP "Answer"]

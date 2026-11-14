@@ -180,7 +180,11 @@ cover, in nine and a half seconds:
 | fingerprint present | 6.2 s |
 | trust, save, land on chat | 9.5 s |
 
-There is no uidump anywhere in that path.
+There is no uidump in the app path. The system photo and document pickers live
+outside the app, so the plan beat taps fixed points on the capture AVD's
+1080x2400 picker layout and proves the result through `attachmentCount`,
+`attachmentNames` and `attachmentsReady`. `system.ui.ts` keeps a UIAutomator
+parser for a fallback.
 
 ## Limits, on purpose
 

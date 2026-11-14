@@ -40,6 +40,7 @@ class ChatProbeTest {
         assertEquals("true", facts["sendEnabled"])
         assertEquals("2", facts["attachmentCount"])
         assertEquals("mia.jpg|cat-mode.md", facts["attachmentNames"])
+        assertEquals("false", facts["attachmentsReady"])
         assertEquals("84.2k / 200k (42%) · \$0.045", facts["usage"])
         assertEquals("\$0.045", facts["usageCost"])
         assertEquals("3", facts["changesBadgeCount"])
@@ -47,6 +48,18 @@ class ChatProbeTest {
         assertEquals("false", facts["running"])
         assertEquals("false", facts["composerSubmitting"])
         assertEquals("", facts["error"])
+    }
+
+    @Test
+    fun attachmentsReadyIsTrueOnlyWhenEveryChipIsReady() {
+        val state = stateWithSession()
+        val ready = state.copy(
+            pendingAttachments = state.pendingAttachments.map { attachment ->
+                attachment.copy(status = AttachmentUploadStatus.Ready)
+            },
+        )
+
+        assertEquals("true", ChatProbe(FakeChatProbeHost(ready)).facts()["attachmentsReady"])
     }
 
     @Test

@@ -18,8 +18,9 @@ from plan to draft PR. The detailed setup spec is in [setup.md](./setup.md).
 | `fixtures/cat-screensaver/`  | The seed project copied into the fake host repository                                                               |
 | `../fake-host/`              | Docker SSH host, fake agent transcripts, fixed host key, and seeded `~/.harold` state                               |
 
-`assets/cats.zip` holds the demo photos. `assets/cat-mode.md` is the spec
-attachment for the feature. `assets/cat-diary.txt` is kept for other demos.
+`assets/cats.zip` holds the demo photos. `assets/cat-mode.md` is the feature
+spec and remains visible in the file picker. The plan scene attaches
+`assets/cat-diary.txt`, Mia’s diary, as the file attachment.
 
 ## What is kept and what is not
 
@@ -139,6 +140,14 @@ connection opens the form, still inside the `connect` slice.
 driver records exactly them, `verify_slices` in `capture.sh` checks the manifest
 against them, and the Remotion timeline reads the same names out of
 `capture.json`.
+
+The plan act is one recorded slice. It opens the real system photo picker, taps
+the third tile and `Add (1)`, opens DocumentsUI, taps `cat-diary.txt`, taps the
+mode chip from BUILD to PLAN, types the short prompt, and taps send. App controls
+are probe tags. The two system pickers use fixed points on the capture AVD's
+1080x2400 layout. The app facts after each tap prove the chip landed, and the
+taps are stamped like every other tap so the renderer draws the ripples. A
+UIAutomator parser remains in `system.ui.ts` for a fallback.
 
 The driver is [`mcp/src/walk.ts`](./mcp/src/walk.ts). It drives the app through
 the probe's MCP tools. Every tap is a real adb tap resolved from a tag. A tap

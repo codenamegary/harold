@@ -244,9 +244,10 @@ internal class ChatProbe(
     }
 
     /**
-     * The driver never films a system picker. This seam feeds the same intake
-     * the pickers use, so the chips and uploads are the app's real ones, and it
-     * refuses everything unless the debug control plane is running.
+     * The plan scene films the real pickers. This seam feeds the same intake the
+     * pickers use, so the chips and uploads are the app's real ones, and it
+     * refuses everything unless the debug control plane is running. It remains
+     * for tests and for a fallback when a picker cannot be filmed.
      */
     private fun attachFixture(): Boolean {
         if (!Probe.enabled) {
@@ -303,6 +304,9 @@ internal fun chatProbeFacts(state: ChatUiState): Map<String, String> {
         "sendEnabled" to state.submitEnabled.toString(),
         "attachmentCount" to state.pendingAttachments.size.toString(),
         "attachmentNames" to state.pendingAttachments.joinToString("|") { pending -> pending.name },
+        "attachmentsReady" to
+            state.pendingAttachments.all { pending -> pending.status == AttachmentUploadStatus.Ready }
+                .toString(),
         "usage" to usage?.let(::formatContextUsage).orEmpty(),
         "usageCost" to usage?.cost?.let(::formatUsageCost).orEmpty(),
         "changesBadgeCount" to state.changesBadgeCount.toString(),

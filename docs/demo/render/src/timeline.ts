@@ -1,4 +1,5 @@
 import { Easing } from "remotion"
+import { markAt, slice } from "./capture"
 import {
   poseAt,
   resolveBodyCue,
@@ -143,6 +144,10 @@ export type CopySpec =
       placement?: "target" | "edge"
       connector?: "string" | "t"
       anchor?: Anchor
+      /** The mark at the target. `rounded` outlines a control instead of covering it. */
+      targetShape?: "dot" | "rounded"
+      /** Rounded-target size, in phone-screen fractions. */
+      targetSize?: { width: number; height: number }
     } & CopyTimes)
   | ({ kind: "spotlight"; side: CopySide; kicker: string; title: string } & CopyTimes)
   | ({ kind: "note"; title: string; label: string } & CopyTimes)
@@ -172,6 +177,8 @@ export type CalloutItem = {
   placement: "target" | "edge"
   connector: "string" | "t"
   target: Point
+  targetShape: "dot" | "rounded"
+  targetSize: { width: number; height: number } | null
   anchoredBy: "tap" | "point"
 }
 
@@ -365,39 +372,47 @@ const SCENE_SPECS: SceneSpec[] = [
 
   // -- plan ------------------------------------------------------------------
   //
-  // The composer shows the model and mode chips. The phone stands straight
-  // while the prompt is typed. The slice plays at the speed it was recorded.
+  // The chat opens empty, in build mode. The phone leans in while the real
+  // photo and file pickers add Mia's photo and diary, straightens for the mode
+  // chip, then holds while the short prompt is typed. The act module owns the
+  // camera push and the body moves; the slice plays at the speed recorded.
   {
     slug: "plan",
     light: "work",
     layout: "L1",
     drift: 1.8,
     camera: [{ at: 0, preset: "full" }],
-    body: [{ at: 0, pose: {} }],
+    body: [
+      { at: 0, pose: {} },
+      { at: 0.35, pose: { rotateX: -3, rotateY: -4 } },
+      { at: 1.35, pose: {} },
+    ],
     shots: [{ slice: "plan" }],
     copy: [
       {
         kind: "callout",
         at: 0.4,
+        hold: 2.2,
+        eyebrow: "ATTACHMENTS",
+        title: "Attach images and files, right meow.",
+        hint: "Mia’s photo and her diary.",
+        side: "left",
+        compact: true,
+        placement: "edge",
+        connector: "t",
+        // The first on-camera tap is the Attach photo button.
+        anchor: { mode: "firstTap" },
+      },
+      {
+        kind: "callout",
+        at: markAt("plan", "attachments_ready") - 0.7,
         hold: 2.6,
         eyebrow: "PLAN",
         title: "Use your agent’s plan mode",
         side: "right",
-        anchor: { mode: "point", x: 0.79, y: 0.72 },
-      },
-      {
-        kind: "callout",
-        at: 9.2,
-        hold: 2.4,
-        eyebrow: "ATTACHMENTS",
-        title: "Give it the spec",
-        hint: "A markdown file and a photo of Mia.",
-        side: "right",
-        compact: true,
-        placement: "edge",
-        connector: "t",
-        // The attached-files row in the composer, not the blank space above it.
-        anchor: { mode: "point", x: 0.5, y: 0.757 },
+        anchor: { mode: "point", x: 0.79, y: 0.7375 },
+        targetShape: "rounded",
+        targetSize: { width: 0.22, height: 0.065 },
       },
     ],
   },
@@ -412,12 +427,26 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: -1,
     camera: [{ at: 0, preset: "full" }],
     body: [{ at: 0, pose: {} }],
-    shots: [{ slice: "question" }],
+    // The plan scene already holds the response and the card, with the chip on
+    // PLAN. Hold that last frame for the card beat, then cut to the old question
+    // slice for the answer sheet. The sheet covers the composer, so the question
+    // scene never shows the chip reset to BUILD after the plan tail blink.
+    shots: [
+      { slice: "plan", holdAtSec: slice("plan").durationSec - 0.5, holdSec: 2.4 },
+      {
+        slice: "question",
+        from: markAt("question", "answer_sheet_open"),
+        // Stop while the selected option holds, before the submit closes the
+        // sheet and the resumed turn's replayed answer chunk overlaps the live
+        // one in the capture.
+        to: markAt("question", "answer_submitted") - 1.0,
+      },
+    ],
     copy: [
       {
         kind: "callout",
         at: 0.4,
-        hold: 2.8,
+        hold: 2.2,
         eyebrow: "AGENT QUESTION",
         title: "Get grilled",
         hint: "Interactive question tooling.",
@@ -617,7 +646,7 @@ const SCENE_SPECS: SceneSpec[] = [
 // on screen is the capture's own keystrokes.
 
 export const KEYBURSTS = {
-  plan: "Read the attached spec and the photo of Mia. Plan only; do not edit files. Plan a small cat mode for this screensaver. Do not build yet. Use your question tool exactly once, for one question only: should cat mode be a settings toggle or automatic? The options must be exactly Settings toggle and Automatic. Do not ask about anything else.",
+  plan: "Plan a small cat mode for the cat screensaver.",
   build:
     "Settings toggle. Implement only the plan now. Put the toggle in src/settings.js, put the cat behavior in src/cat-mode.js, add tests, and commit every change on feat/cat-mode so the worktree is clean. Do not add unrelated features and do not open a PR.",
   pr: "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL.",
@@ -1104,6 +1133,8 @@ const buildCopy = (shots: Shot[], scenes: Scene[]): CopyItem[] => {
             placement: item.placement ?? "target",
             connector: item.connector ?? "string",
             target,
+            targetShape: item.targetShape ?? "dot",
+            targetSize: item.targetSize ?? null,
             anchoredBy: anchor.mode === "point" ? "point" : tapped === null ? "point" : "tap",
           })
           break

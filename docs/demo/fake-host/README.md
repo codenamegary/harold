@@ -90,8 +90,10 @@ and modes. Call it before a capture, then inject the key shown in the app's
 
 `agent/fake_agent.py` routes a prompt by intent:
 
-- **Plan** sends a short plan and one `elicitation/create` form with
-  `Settings toggle` and `Automatic`.
+- **Plan** reads Mia’s photo and diary in its scripted tool calls, sends a short
+  plan, and raises one `elicitation/create` form with `Settings toggle` and
+  `Automatic`. The question is part of the scripted turn; the typed prompt does
+  not ask for it.
 - **Build** writes `src/cat-mode.js`, updates `src/settings.js`, adds
   `test/cat-mode.test.js`, commits on `feat/cat-mode`, and sends a usage
   update (`64.2k / 1M`, `$0.016`).

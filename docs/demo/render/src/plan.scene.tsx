@@ -31,7 +31,7 @@ export const Plan: React.FC<PlanProps> = ({
   const durationSec = scene === undefined ? 0 : scene.to - scene.from
   const endSec = originSec + durationSec
   const sec = originSec + localSec
-  const camera = planCameraAt()
+  const camera = planCameraAt(localSec)
 
   return (
     <StageScene
@@ -41,7 +41,7 @@ export const Plan: React.FC<PlanProps> = ({
       light={planLightAt(localSec)}
       camera={camera}
       drift={timeline.driftAt(sec, width)}
-      body={planPoseAt()}
+      body={planPoseAt(localSec)}
       idleGain={0}
       phoneDriftFactor={0}
       localFreeze={localFreeze}

@@ -1,6 +1,6 @@
 # Demo render
 
-A 195.1 second cut at 1920x1080, 30 fps, 5854 frames. The phone screen is real
+A 156.5 second cut at 1920x1080, 30 fps, 4696 frames. The phone screen is real
 emulator capture; the capture is raw material. Each act lives in its own
 `<scene>.ts` + `<scene>.scene.tsx` pair: opening, achievement, new session,
 plan, question, build, usage, changes, worktrees, PR, and outro. The act module
@@ -26,7 +26,7 @@ here.
 | `connect`       | Add connection, typing, scroll, test, trust, save            |
 | `landing`       | the chat landing after save                                   |
 | `new_session`   | the session menu, the new session form, the chat opening       |
-| `plan`          | the 338-character plan prompt, four real windows               |
+| `plan`          | the empty chat, both system pickers, the mode switch, the short prompt |
 | `question`      | the plan reply, the question card, the answer sheet            |
 | `build`         | the 251-character build prompt, then the settled reply         |
 | `usage`         | the context and cost line                                     |
@@ -36,7 +36,7 @@ here.
 
 ## The scenes
 
-The cut is 5854 frames. That is 195.1 s at 30 fps. Every scene holds one light
+The cut is 4696 frames. That is 156.5 s at 30 fps. Every scene holds one light
 state. A state change eases over 1.2 s before it holds. Some acts also change
 the shape of that state as the camera moves.
 
@@ -46,15 +46,15 @@ the shape of that state as the camera moves.
 | `ssh`         | 606    | 127-732   | 20.2    | `arrival` | `home_empty` hold, `connect` to the save tap | `[CARD place=stage]` Look what I can do! |
 | `achievement` | 232    | 733-964   | 7.7     | `reward`  | `connect` from the save tap, then `landing`  | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
 | `newSession`  | 468    | 965-1432  | 15.6    | `work`    | `new_session`                                | `[NOTE]` Start something new                             |
-| `plan`        | 1662   | 1433-3094 | 55.4    | `work`    | `plan`                                       | `[CALLOUT]` Plan, Attachments                            |
-| `question`    | 171    | 3095-3265 | 5.7     | `work`    | `question`                                   | `[CALLOUT]` Agent question                               |
-| `build`       | 1330   | 3266-4595 | 44.3    | `work`    | `build`                                      | `[CALLOUT]` Build                                        |
-| `usage`       | 130    | 4596-4725 | 4.3     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
-| `changes`     | 327    | 4726-5052 | 10.9    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
-| `worktrees`   | 107    | 5053-5159 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
-| `pr`          | 545    | 5160-5704 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
-| `outro`       | 150    | 5705-5854 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
-| **Total**     | **5854** | **1-5854** | **195.1** |        |                                              |                                                          |
+| `plan`        | 573    | 1433-2005 | 19.1    | `work`    | `plan`                                       | `[CALLOUT]` Attachments, Plan                            |
+| `question`    | 102    | 2006-2107 | 3.4     | `work`    | `plan` hold, then `question` answer sheet    | `[CALLOUT]` Agent question                               |
+| `build`       | 1330   | 2108-3437 | 44.3    | `work`    | `build`                                      | `[CALLOUT]` Build                                        |
+| `usage`       | 130    | 3438-3567 | 4.3     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
+| `changes`     | 327    | 3568-3894 | 10.9    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
+| `worktrees`   | 107    | 3895-4001 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
+| `pr`          | 545    | 4002-4546 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
+| `outro`       | 150    | 4547-4696 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
+| **Total**     | **4696** | **1-4696** | **156.5** |        |                                              |                                                          |
 
 The achievement sits third, right after the SSH scene, while the cost of setup is
 still fresh. It is the film's only `[POP]` and only `[CF]`.
@@ -149,9 +149,12 @@ its pose on the cut.
   phone is steady between those moves: no idle sway and no camera drift. The
   push and pull follow capture marks in
   [`newSession.ts`](src/newSession.ts).
-- `plan` holds the handset straight while the prompt is typed. The light
-  narrows from the new-session resting pool into work. Camera, light, and pose
-  live in [`plan.ts`](src/plan.ts).
+- `plan` pushes in on the composer while the photo and file pickers add Mia’s
+  photo and diary, leans the handset through the attach beat, then straightens
+  for the mode chip and the short prompt. It pulls back to the full handset as
+  the prompt is sent, so the question still opens on the full, straight pose.
+  The light narrows from the new-session resting pool into work. Camera, light,
+  and pose live in [`plan.ts`](src/plan.ts).
 - `question` holds straight while the question is answered.
 - `build` holds straight while the build runs.
 - `usage` leans in slightly while the camera pushes in, then straightens for the
@@ -165,10 +168,10 @@ Every pose and handoff above lives in the act module beside its scene
 component.
 
 Every act after `newSession` passes `idleGain={0}` and `phoneDriftFactor={0}`.
-The phone is straight and still for every demo hold. The only body rotation is
-the short tilt that rides the `usage` push-in and the `changes` pull-back, and
-it is gone before the hold. No cut leaves a lean or turn behind. The opening and
-achievement keep their own entrance walk and lean.
+The phone is straight and still for every demo hold. The body rotation is the
+short lean that rides the `plan` attach beat, the `usage` push-in, and the
+`changes` pull-back. Each one is gone before its hold. No cut leaves a lean or
+turn behind. The opening and achievement keep their own entrance walk and lean.
 
 ## Layouts and camera
 
@@ -215,7 +218,7 @@ between states.
 | Primitive   | Behaviour                                                                 | Used |
 | ----------- | ------------------------------------------------------------------------- | ---- |
 | `[CARD]`    | white card; `place=stage` sits it beside the phone, otherwise inside the screen and it tracks the camera | 1 |
-| `[CALLOUT]` | lime tag, drawn leader line, pulsing target, `compact placement=edge`, `connector=T` | 9 |
+| `[CALLOUT]` | lime tag, drawn leader line, pulsing target, optional `targetShape=rounded` outline, `compact placement=edge`, `connector=T` | 9 |
 | `[SPOTLIGHT]` | mono kicker, lime rule, display title, sentence case as written          | 2 |
 | `[NOTE]`    | paper note with a lime tape, slides out from behind the phone and back    | 1 |
 | `[BOX]`     | lime box that moves between controls, card text swaps                     | 0 |
@@ -225,12 +228,12 @@ No scene uses `[BOX]` or `[CAP]`; both are implemented because the vocabulary
 names them, and the tests assert the film uses neither.
 
 **The callout anchor rule.** A callout anchors to the first tap of its shot. If
-the callout names `targetX`/`targetY`, that point wins. In this capture the taps
-stop at `connect`, and no scene with a callout plays a slice with taps, so
-every callout in the film uses the override — and every override was measured off
-the captured frames (the mode chip at `0.79, 0.703`, the question card at
-`0.5, 0.69`, the send control at `0.872, 0.78`, and so on). The rule itself is
-tested against a shot that does ship taps.
+the callout names `targetX`/`targetY`, that point wins. The attachments callout
+uses the first tap of the plan slice, the Attach photo button. The PLAN tag
+uses `targetShape=rounded` so its outline sits around the mode chip instead of
+covering it. Every other callout uses an override measured off the captured
+frames (the question card at `0.5, 0.69`, the send control at `0.872, 0.78`,
+and so on).
 
 Copy strings are the script's, verbatim, including `Use your agent’s plan mode`
 with its curly apostrophe and `Pretty diffs!` with its exclamation mark.
@@ -274,23 +277,20 @@ bunx remotion bundle --out-dir=../work/render/bundle-v2
 bunx remotion still ../work/render/bundle-v2 HaroldDemo ../work/render/qa-v2/f-740.png --frame=740
 ```
 
-The review set lives in `../work/render/qa-v5/`: twelve stills at frames 45, 400,
-760, 980, 1200, 1600, 1800, 2240, 2400, 2700, 3000 and 3300, all 1920x1080.
+The plan review set lives in `../work/render/plan-qa2/`: stills at frames 30,
+120, 180, 300, 320, 360 and 560 of `HaroldPlan`, all 1920x1080.
 
 ## What this cut cannot fix
 
-- **Most of the film is the wide shot.** At 1x the app renders at 0.37 life size,
-  so the diff, the plan text and the PR URL are small. The script only asks for
-  matches on `achievement` and `usage`; everywhere else the phone is an object in
-  the light and the copy carries the meaning. Readability would need a second,
-  tighter preset per scene, which the script does not ask for.
-- **The taps that open each screen are off camera.** The capture has no taps
-  after `connect` and the system pickers were never filmed, so `Attach
-  photo`, `Add (1)`, `Attach files`, `Against main`, `settings.js`, `Dismiss` and
-  friends are described by the copy, not shown as taps.
+- **Most of the film is still the wide shot.** `plan` now pushes to 1.18 for the
+  attachments, mode switch and prompt, but the diff and the PR URL remain small
+  at 1x. The script only asks for matches on `achievement` and `usage`; elsewhere
+  the phone is an object in the light and the copy carries the meaning.
+- **Some taps are still off camera.** The plan slice now films both system
+  pickers, but `Against main`, `settings.js`, `Dismiss` and friends are still
+  driven by probe intents, so their taps are described by the copy rather than
+  shown.
 - **The calibration blink reloads a session.** `question` and `build` do not start
   on the exact transcript `plan` left.
-- **`plan`'s mode chip reads BUILD.** The capture's chip is in build mode, so the
-  PLAN tag brackets the chip pointing at the right control with the wrong word.
-- **The clips are upscales above 1x.** `usage` at 2.2x is a mild upscale of a
-  1080-wide capture. Sharp at the numbers, soft at the edges.
+- **The clips are upscales above 1x.** `usage` at 2.2x and `plan` at 1.18 are
+  mild upscales of a 1080-wide capture. Sharp at the controls, soft at the edges.

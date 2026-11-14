@@ -62,9 +62,13 @@ The host has:
   probe token is read from logcat. `capture.sh` does all three.
 - The host setup must fill name, host, user and port, top to bottom, copy the generated public
   key, then test and trust the fingerprint.
+- The plan scene must film the real system photo picker, the third photo,
+  `cat-diary.txt` in DocumentsUI, the mode chip switching to PLAN, and the short
+  `Plan a small cat mode for the cat screensaver.` prompt.
 - The plan turn must ask exactly one question with `Settings toggle` and
-  `Automatic`. The driver answers `Settings toggle`, submits, and fails the
-  capture if there is no question card.
+  `Automatic`. The typed prompt must not ask for it. The scripted agent sends
+  the elicitation as part of its plan turn. The driver answers `Settings
+  toggle`, submits, and fails the capture if there is no question card.
 - The build turn must leave a clean worktree with at least one commit on
   `feat/cat-mode`. The driver verifies the branch, commit count, and clean
   status over `docker exec`.

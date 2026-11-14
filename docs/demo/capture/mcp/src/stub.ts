@@ -19,6 +19,7 @@ import type { CallTool } from "./client"
 import { fieldForTag, isTypeFieldName, tagByField } from "./input.text"
 import type { TypeFieldName } from "./input.text"
 import type { ProbeMark, ScreenSnapshot } from "./probe"
+import type { SystemNode, SystemUi } from "./system.ui"
 
 const CALL_LATENCY_SEC = 0.004
 const POLL_SEC = 0.4
@@ -78,10 +79,12 @@ export type ProbeStub = Readonly<{
   ledger: () => readonly ProbeMark[]
   inputs: () => readonly StubInput[]
   receiveCharacter: (character: string) => Promise<void>
+  receiveChunk: (text: string) => Promise<void>
   clearFocused: (current: string) => Promise<void>
   facts: () => Record<string, string>
   screenName: () => string | null
   controls: () => readonly ProbeControlSnapshot[]
+  systemUi: SystemUi
 }>
 
 type StubRow = Readonly<{ id: string; label: string }>
@@ -127,6 +130,8 @@ type StubState = {
   pendingSec: number
   turn: ChatTurn
   attachments: readonly string[]
+  systemPicker: "closed" | "photo" | "files"
+  pickedPhoto: boolean
   usage: string
   usageCost: string
   changesBadgeCount: number
@@ -186,8 +191,8 @@ const initialState = (): StubState => ({
   sessionName: "",
   sessionMenuOpen: false,
   sessionMenuCount: 2,
-  mode: "agent",
-  modeOptions: ["agent", "plan", "build"],
+  mode: "build",
+  modeOptions: ["build", "plan"],
   model: "OpenCode",
   composerText: "",
   composerSubmitting: false,
@@ -195,6 +200,8 @@ const initialState = (): StubState => ({
   pendingSec: 0,
   turn: "none",
   attachments: [],
+  systemPicker: "closed",
+  pickedPhoto: false,
   usage: "",
   usageCost: "",
   changesBadgeCount: 0,
@@ -245,6 +252,66 @@ const control = (
   y: top + 70,
   enabled,
 })
+
+type SystemNodeSpec = Readonly<{
+  text?: string
+  description?: string
+  clickable?: boolean
+  selected?: boolean
+  bounds: readonly [number, number, number, number]
+}>
+
+const systemNode = (spec: SystemNodeSpec): SystemNode => ({
+  text: spec.text ?? "",
+  description: spec.description ?? "",
+  className: "",
+  packageName: "android",
+  clickable: spec.clickable ?? false,
+  selected: spec.selected ?? false,
+  left: spec.bounds[0],
+  top: spec.bounds[1],
+  right: spec.bounds[2],
+  bottom: spec.bounds[3],
+})
+
+const systemNodesFor = (state: StubState): readonly SystemNode[] => {
+  if (state.systemPicker === "photo") {
+    return [
+      systemNode({
+        description: "Photo taken on Oct 3, 2026, 10:14:31 AM",
+        clickable: true,
+        bounds: [0, 640, 354, 995],
+      }),
+      systemNode({
+        description: "Photo taken on Sep 27, 2026, 7:33:33 AM",
+        clickable: true,
+        bounds: [362, 640, 717, 995],
+      }),
+      systemNode({
+        description: "Photo taken on Aug 29, 2026, 10:18:06 AM",
+        clickable: true,
+        selected: state.pickedPhoto,
+        bounds: [725, 640, 1080, 995],
+      }),
+      ...(state.pickedPhoto
+        ? [
+            systemNode({
+              text: "Add (1)",
+              clickable: true,
+              bounds: [807, 2176, 1038, 2309],
+            }),
+          ]
+        : []),
+    ]
+  }
+  if (state.systemPicker === "files") {
+    return [
+      systemNode({ text: "cat-mode.md", bounds: [0, 538, 1080, 730] }),
+      systemNode({ text: "cat-diary.txt", bounds: [0, 730, 1080, 922] }),
+    ]
+  }
+  return []
+}
 
 // --- shell -------------------------------------------------------------------
 
@@ -335,6 +402,7 @@ const chatFacts = (state: StubState): Record<string, string> => ({
   sendEnabled: String(state.sessionId.length > 0 && state.composerText.trim().length > 0),
   attachmentCount: String(state.attachments.length),
   attachmentNames: state.attachments.join("|"),
+  attachmentsReady: "true",
   usage: state.usage,
   usageCost: state.usageCost,
   changesBadgeCount: String(state.changesBadgeCount),
@@ -633,13 +701,14 @@ export const makeProbeStub = (): ProbeStub => {
   // --- turns ---------------------------------------------------------------
 
   const turnFor = (prompt: string): ChatTurn => {
-    if (prompt.includes("draft PR")) {
+    const lowered = prompt.toLowerCase()
+    if (lowered.includes("draft pr")) {
       return "pr"
     }
-    if (prompt.includes("Implement only the plan")) {
+    if (lowered.includes("implement only the plan")) {
       return "build"
     }
-    if (prompt.includes("Plan only")) {
+    if (lowered.includes("plan only") || lowered.includes("plan a small cat mode")) {
       return "plan"
     }
     return "none"
@@ -992,6 +1061,20 @@ export const makeProbeStub = (): ProbeStub => {
     if (tag === "chat_changes") {
       state.screen = "changes"
     }
+    if (tag === "chat_attach_photo_button") {
+      state.systemPicker = "photo"
+      state.pickedPhoto = false
+    }
+    if (tag === "chat_attach_files_button") {
+      state.systemPicker = "files"
+    }
+    if (tag === "composer_config_mode_chip") {
+      const index = state.modeOptions.indexOf(state.mode)
+      state.mode = state.modeOptions[(index + 1) % state.modeOptions.length] ?? state.mode
+    }
+    if (tag === "chat_send_button") {
+      applyChatAction("send", {})
+    }
     if (tag === "create_session_submit") {
       applyCreateSessionAction("submit", {})
     }
@@ -1074,6 +1157,12 @@ export const makeProbeStub = (): ProbeStub => {
     }
     appendCharacter(field, character)
     state.hostSec += CALL_LATENCY_SEC
+  }
+
+  const receiveChunk = async (text: string): Promise<void> => {
+    for (const character of text) {
+      await receiveCharacter(character)
+    }
   }
 
   /**
@@ -1220,6 +1309,45 @@ export const makeProbeStub = (): ProbeStub => {
     }
   }
 
+  const systemTap = async (node: SystemNode): Promise<{ x: number; y: number }> => {
+    const x = Math.round((node.left + node.right) / 2)
+    const y = Math.round((node.top + node.bottom) / 2)
+    state.hostSec += CALL_LATENCY_SEC
+    if (state.systemPicker === "photo") {
+      if (node.description.startsWith("Photo taken on")) {
+        state.pickedPhoto = true
+      }
+      if (node.text.startsWith("Add (")) {
+        state.systemPicker = "closed"
+        state.pickedPhoto = false
+        state.attachments = [...state.attachments, "10000000033.jpg"]
+      }
+    }
+    if (state.systemPicker === "files" && node.text === "cat-diary.txt") {
+      state.systemPicker = "closed"
+      state.attachments = [...state.attachments, "cat-diary.txt"]
+    }
+    return { x, y }
+  }
+
+  const systemTapPoint = async (x: number, y: number): Promise<{ x: number; y: number }> => {
+    const node = systemNodesFor(state).find(
+      (candidate) =>
+        x >= candidate.left && x <= candidate.right && y >= candidate.top && y <= candidate.bottom,
+    )
+    if (node === undefined) {
+      throw new Error(`no ${state.systemPicker} picker control at ${x},${y}`)
+    }
+    await systemTap(node)
+    return { x, y }
+  }
+
+  const systemUi: SystemUi = {
+    nodes: async () => systemNodesFor(state),
+    tap: systemTap,
+    tapPoint: systemTapPoint,
+  }
+
   return {
     callTool,
     hostNow: () => state.hostSec,
@@ -1228,9 +1356,11 @@ export const makeProbeStub = (): ProbeStub => {
     ledger: () => state.ledger,
     inputs: () => state.inputs,
     receiveCharacter,
+    receiveChunk,
     clearFocused,
     facts: () => factsNow(),
     screenName: () => state.screen,
     controls: () => controlsNow(),
+    systemUi,
   }
 }

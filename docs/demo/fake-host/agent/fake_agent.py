@@ -560,10 +560,12 @@ class FakeAgent:
         self.title(session_id, "Cat mode for the screensaver")
         self.text_chunk(
             session_id,
-            "Let me read the spec and the settings file first.",
+            "Let me read Mia's diary and look at the photo first.",
             thought=True,
         )
-        self.tool(session_id, "tool-plan-read", "Read cat-mode.md", "read")
+        self.tool(session_id, "tool-plan-photo", "View Mia's photo", "read")
+        self.complete_tool(session_id, "tool-plan-photo")
+        self.tool(session_id, "tool-plan-read", "Read cat-diary.txt", "read")
         self.complete_tool(session_id, "tool-plan-read")
         self.text_chunk(session_id, PLAN_TEXT)
         # Persist the plan so a reloaded session replays it. The app rebuilds its

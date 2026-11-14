@@ -25,12 +25,14 @@ const CONFIG: DemoConfig = {
   name: "Demo host",
   container: "harold-demo-host",
   typeGapMs: 80,
+  planTypeGapMs: 40,
   workspace: "cat-screensaver",
   agent: "OpenCode",
   planMode: "plan",
   buildMode: "build",
   answerOption: "Settings toggle",
   diffFile: "settings.js",
+  diaryFile: "cat-diary.txt",
   worktrees: ["main", "feat/cat-mode"],
 }
 
@@ -101,9 +103,11 @@ const harness = (): Harness => {
     config: CONFIG,
     viewport: stub.viewport,
     swipe: async () => {},
+    system: stub.systemUi,
     dismissKeyboard: async () => {},
     authorizeKey: async () => {},
     sendCharacter: stub.receiveCharacter,
+    sendChunk: stub.receiveChunk,
     clearField: stub.clearFocused,
   })
   return { stub, context, rows: () => rows }
@@ -261,6 +265,8 @@ describe("runWalk failure behaviour", () => {
         stopRecording: async () => {
           events.push("stop")
         },
+        prime: async () => {},
+        nudge: async () => {},
         blink: async () => stub.hostNow(),
         pull: async (remote) => {
           events.push(`pull ${remote}`)
@@ -268,10 +274,12 @@ describe("runWalk failure behaviour", () => {
       },
       viewport: stub.viewport,
       swipe: async () => {},
+      system: stub.systemUi,
       dismissKeyboard: async () => {},
       authorizeKey: async () => {},
       sendCharacter: stub.receiveCharacter,
-    clearField: stub.clearFocused,
+      sendChunk: stub.receiveChunk,
+      clearField: stub.clearFocused,
       out: {
         dir,
         slicesDir: dir,
@@ -376,10 +384,12 @@ describe("tap stamping", () => {
       config: CONFIG,
       viewport: stub.viewport,
       swipe: async () => {},
+      system: stub.systemUi,
       dismissKeyboard: async () => {},
       authorizeKey: async () => {},
       sendCharacter: stub.receiveCharacter,
-    clearField: stub.clearFocused,
+      sendChunk: stub.receiveChunk,
+      clearField: stub.clearFocused,
     })
     return { stub, rows, context }
   }
@@ -405,10 +415,12 @@ describe("tap stamping", () => {
       config: CONFIG,
       viewport: stub.viewport,
       swipe: async () => {},
+      system: stub.systemUi,
       dismissKeyboard: async () => {},
       authorizeKey: async () => {},
       sendCharacter: stub.receiveCharacter,
-    clearField: stub.clearFocused,
+      sendChunk: stub.receiveChunk,
+      clearField: stub.clearFocused,
     })
     await context.navigate("ssh_setup")
     await context.tap("ssh_host_field")
@@ -469,20 +481,24 @@ describe("story beats", () => {
     expect((stub.facts().sessionId ?? "").length).toBeGreaterThan(0)
   })
 
-  it("stages plan mode and both fixture attachments before the plan slice", async () => {
+  it("leaves build mode, an empty composer and no attachments before the plan slice", async () => {
     const { stub } = await runThrough("plan_stage")
-    expect(stub.facts().mode).toBe("plan")
-    expect(stub.facts().attachmentCount).toBe("2")
+    expect(stub.facts().mode).toBe("build")
+    expect(stub.facts().attachmentCount).toBe("0")
     expect(stub.facts().composerText).toBe("")
-    expect(actionsOf(stub)).toContain("attach_fixture")
+    expect(actionsOf(stub)).not.toContain("attach_fixture")
   })
 
-  it("types the plan prompt into the composer and sends it", async () => {
+  it("attaches the photo and diary, switches to plan mode, types and sends", async () => {
     const { stub } = await runThrough("plan")
     expect(actionsOf(stub)).not.toContain("type")
     expect(typedText(stub, "composerText")).toBe(PLAN_PROMPT)
+    expect(tappedTags(stub)).toContain("chat_attach_photo_button")
+    expect(tappedTags(stub)).toContain("chat_attach_files_button")
+    expect(tappedTags(stub)).toContain("composer_config_mode_chip")
+    expect(tappedTags(stub)).toContain("chat_send_button")
     expect(tappedTags(stub).filter((tag) => tag === "chat_composer")).toEqual(["chat_composer"])
-    expect(actionsOf(stub)).toContain("send")
+    expect(stub.facts().mode).toBe("plan")
   })
 
   it("answers the agent question with the configured option", async () => {
