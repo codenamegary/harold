@@ -152,6 +152,25 @@ def clear_pending_question(agent: str, session_id: str) -> None:
     save_sessions(agent, sessions)
 
 
+def elicitation_answer_label(question: dict, value: str) -> str:
+    """Turn an elicitation option value back into the title the person saw."""
+    if not value:
+        return "Answered"
+    schema = question.get("requestedSchema")
+    if not isinstance(schema, dict):
+        return value
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return value
+    for field in properties.values():
+        if not isinstance(field, dict):
+            continue
+        for option in field.get("oneOf") or []:
+            if isinstance(option, dict) and str(option.get("const")) == value:
+                return str(option.get("title") or value)
+    return value
+
+
 CONFIG_OPTIONS = [
     {
         "type": "select",
@@ -377,18 +396,36 @@ class FakeAgent:
             return
         self.prompt_turns.pop("question", None)
         session_id = turn["sessionId"]
-        self.open_questions.pop(session_id, None)
+        question = self.open_questions.pop(session_id, None) or {}
         clear_pending_question(self.agent, session_id)
         answer = ""
         if isinstance(result, dict):
             content = result.get("content")
             if isinstance(content, dict):
                 answer = str(content.get("mode") or content.get("choice") or "")
-        log(f"elicitation answer session={session_id} answer={answer}")
-        self.text_chunk(
-            session_id,
-            "Settings toggle it is. I will keep the change small and test it.",
+        answer_label = elicitation_answer_label(question, answer)
+        reply = (
+            "Settings toggle it is. I can't continue in plan mode, "
+            "switch to build and say the word and I'll start building right away."
         )
+        log(f"elicitation answer session={session_id} answer={answer}")
+        # Persist the answer as a user turn and the reply after it. A screen sleep
+        # makes the app reload the session from this history, and without these
+        # rows the build scene opens with the question's answer missing from the
+        # transcript.
+        update_session(
+            self.agent,
+            session_id,
+            append_role="user",
+            append_text=answer_label,
+        )
+        update_session(
+            self.agent,
+            session_id,
+            append_role="assistant",
+            append_text=reply,
+        )
+        self.text_chunk(session_id, reply)
         prompt_id = turn.get("promptId")
         if prompt_id is not None:
             self.respond(prompt_id, {"stopReason": "end_turn"})
@@ -548,7 +585,7 @@ class FakeAgent:
         lowered = text.lower()
         if "plan only" in lowered or "plan a small cat mode" in lowered:
             self.turn_plan(session_id, request_id)
-        elif "implement only the plan" in lowered or "settings toggle. implement" in lowered:
+        elif "implement only the plan" in lowered:
             self.turn_build(session_id, request_id, text)
         elif "draft pr" in lowered:
             self.turn_pr(session_id, request_id, text)
@@ -563,9 +600,9 @@ class FakeAgent:
             "Let me read Mia's diary and look at the photo first.",
             thought=True,
         )
-        self.tool(session_id, "tool-plan-photo", "View Mia's photo", "read")
+        self.tool(session_id, "tool-plan-photo", "Mia's photo", "read")
         self.complete_tool(session_id, "tool-plan-photo")
-        self.tool(session_id, "tool-plan-read", "Read cat-diary.txt", "read")
+        self.tool(session_id, "tool-plan-read", "cat-diary.txt", "read")
         self.complete_tool(session_id, "tool-plan-read")
         self.text_chunk(session_id, PLAN_TEXT)
         # Persist the plan so a reloaded session replays it. The app rebuilds its
@@ -620,11 +657,11 @@ class FakeAgent:
             "I will add the toggle, the cat loop, and the tests, then commit.",
             thought=True,
         )
-        self.tool(session_id, "tool-build-read", "Read src/settings.js", "read")
+        self.tool(session_id, "tool-build-read", "src/settings.js", "read")
         self.complete_tool(session_id, "tool-build-read")
-        self.tool(session_id, "tool-build-settings", "Edit src/settings.js", "edit")
-        self.tool(session_id, "tool-build-cat", "Write src/cat-mode.js", "edit")
-        self.tool(session_id, "tool-build-test", "Write test/cat-mode.test.js", "edit")
+        self.tool(session_id, "tool-build-settings", "src/settings.js", "edit")
+        self.tool(session_id, "tool-build-cat", "src/cat-mode.js", "edit")
+        self.tool(session_id, "tool-build-test", "test/cat-mode.test.js", "edit")
         error = self.apply_build_changes(cwd)
         if error:
             self.text_chunk(session_id, f"I hit a snag: {error}")
@@ -633,9 +670,9 @@ class FakeAgent:
         self.complete_tool(session_id, "tool-build-settings")
         self.complete_tool(session_id, "tool-build-cat")
         self.complete_tool(session_id, "tool-build-test")
-        self.tool(session_id, "tool-build-test-run", "Run node --test", "execute")
+        self.tool(session_id, "tool-build-test-run", "node --test", "execute")
         self.complete_tool(session_id, "tool-build-test-run")
-        self.tool(session_id, "tool-build-commit", "Commit on feat/cat-mode", "execute")
+        self.tool(session_id, "tool-build-commit", "git commit", "execute")
         if self.run(["git", "add", "-A"], cwd) == 0:
             self.run(
                 [
@@ -665,12 +702,12 @@ class FakeAgent:
     def turn_pr(self, session_id: str, prompt_id, text: str) -> None:
         session = find_session(self.agent, session_id) or {}
         cwd = str(session.get("cwd") or HOME)
-        self.tool(session_id, "tool-pr-push", "Push feat/cat-mode", "execute")
+        self.tool(session_id, "tool-pr-push", "git push", "execute")
         pushed = self.run(["git", "push", "-u", "origin", "feat/cat-mode"], cwd)
         if pushed != 0:
             log("git push failed; the local bare remote is missing")
         self.complete_tool(session_id, "tool-pr-push")
-        self.tool(session_id, "tool-pr-open", "Open draft PR", "execute")
+        self.tool(session_id, "tool-pr-open", "gh pr create", "execute")
         url = "https://github.com/codenamegary/cat-screensaver/pull/42"
         try:
             created = subprocess.run(

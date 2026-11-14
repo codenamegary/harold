@@ -53,6 +53,7 @@ import {
   clearFieldText,
   sendInputCharacter,
   sendInputChunk,
+  sendInputChunks,
   sshTypeFields,
   tagByField,
   TYPE_GAP_DEFAULT_MS,
@@ -223,6 +224,9 @@ const PLAN_ADD_SETTLE_MS = 2000
 const PLAN_FILE_SETTLE_MS = 2200
 const DWELL_QUESTION_MS = 1800
 const DWELL_ANSWER_MS = 1200
+/** Let the answer's reply settle and hold so the question scene can linger on it. */
+const DWELL_QUESTION_REPLY_MS = 2400
+const DWELL_BUILD_TYPED_MS = 1200
 const DWELL_BUILD_SETTLED_MS = 1200
 const DWELL_USAGE_MS = 3000
 const DWELL_CHANGES_MS = 2000
@@ -281,6 +285,8 @@ export type DemoConfig = Readonly<{
   buildMode: string
   /** The agent-question option title the question beat selects. */
   answerOption: string
+  /** The tighter typing cadence for the build prompt, so it reads fast. */
+  buildTypeGapMs: number
   /** The suffix of the file the changes beat opens, e.g. `settings.js`. */
   diffFile: string
   /** The file the plan scene attaches from the system file picker. */
@@ -338,7 +344,7 @@ export type BeatContext = Readonly<{
    * Focus `chat_composer` and type one character at a time.
    * Does not call the probe `type` action.
    */
-  typeComposer: (text: string, gapMs?: number, chunkSize?: number) => Promise<void>
+  typeComposer: (text: string, gapMs?: number, chunkSize?: number, batched?: boolean) => Promise<void>
   wait: (args: WaitArgs) => Promise<WaitResult>
   waitForScreenChange: (from: string, timeoutMs?: number) => Promise<string | null>
   /**
@@ -372,6 +378,7 @@ export type ContextDeps = Readonly<{
   authorizeKey: (publicKey: string) => Promise<void>
   sendCharacter: (character: string) => Promise<void>
   sendChunk: (text: string) => Promise<void>
+  sendChunks: (chunks: readonly string[]) => Promise<void>
   clearField: (current: string) => Promise<void>
 }>
 
@@ -441,6 +448,7 @@ export type WalkDeps = Readonly<{
   authorizeKey: (publicKey: string) => Promise<void>
   sendCharacter: (character: string) => Promise<void>
   sendChunk: (text: string) => Promise<void>
+  sendChunks: (chunks: readonly string[]) => Promise<void>
   clearField: (current: string) => Promise<void>
   out: Readonly<{ dir: string; slicesDir: string; marksPath: string; manifestPath: string }>
   only: readonly SliceName[]
@@ -609,8 +617,15 @@ export const makeContext = (deps: ContextDeps): BeatContext => {
     text: string,
     gapMs = config.typeGapMs,
     chunkSize = 1,
+    batched = false,
   ): Promise<void> => {
-    await typeIntoField("composerText", text, { ...typing, gapMs, chunkSize, replace: false })
+    const typingDeps = batched ? { ...typing, sendChunks: deps.sendChunks } : typing
+    await typeIntoField("composerText", text, {
+      ...typingDeps,
+      gapMs,
+      chunkSize,
+      replace: false,
+    })
   }
 
   const wait = async (args: WaitArgs): Promise<WaitResult> =>
@@ -1355,31 +1370,59 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
     await ctx.wait({ field: "modeOptions", timeoutMs: MODE_TIMEOUT_MS })
     ctx.log(`question mode is ${await stageMode(ctx, ctx.config.planMode)}`)
     await ctx.wait({ field: "elicitationPending", equals: "true", timeoutMs: MODE_TIMEOUT_MS })
-    const wanted = choiceFor(await factsOf(ctx), ctx.config.answerOption)
+    const facts = await factsOf(ctx)
+    const wanted = choiceFor(facts, ctx.config.answerOption)
+    const before = facts.lastAssistantText ?? ""
     ctx.mark("question_card_visible")
     await ctx.dwell(DWELL_QUESTION_MS)
 
-    await ctx.intent("open_elicitation")
+    // Every beat here is a real tap, not an intent: the renderer draws a ripple
+    // and plays a tap sound for each one. The sheet is opened from the card,
+    // the option row is selected, and Submit resolves the question.
+    await ctx.waitForControlOnScreen("elicitation_answer_button")
+    await ctx.tap("elicitation_answer_button")
     await ctx.wait({ field: "elicitationSheetOpen", equals: "true", timeoutMs: MODE_TIMEOUT_MS })
     ctx.mark("answer_sheet_open")
+    // Let the modal bottom sheet finish sliding up before reading row bounds.
+    await ctx.dwell(1000)
 
-    await ctx.intent("select_option", {
-      questionKey: wanted.questionKey,
-      optionValue: wanted.optionValue,
-    })
+    const optionTag = `elicitation_option_${wanted.questionKey}_${wanted.optionValue}`
+    await ctx.waitForControlOnScreen(optionTag)
+    await ctx.tap(optionTag)
     await ctx.wait({ field: "elicitationDraftValid", equals: "true", timeoutMs: MODE_TIMEOUT_MS })
+    ctx.mark("answer_selected")
     await ctx.dwell(DWELL_ANSWER_MS)
 
-    await ctx.intent("submit_elicitation")
+    await ctx.waitForControlOnScreen("elicitation_submit")
+    await ctx.tap("elicitation_submit")
     await ctx.wait({ field: "elicitationPending", equals: "false", timeoutMs: MODE_TIMEOUT_MS })
     ctx.mark("answer_submitted")
-    await ctx.dwell(DWELL_ANSWER_MS)
+
+    // The answer resumes the plan turn. When the question was restored by
+    // `session/load`, there is no `session/prompt` RPC in flight to emit
+    // `end_turn`, so `sessionState` can stay `running` even after the reply
+    // finishes streaming. Wait briefly for `idle` (which also advances turns in
+    // the stub), then verify `lastAssistantText` updated.
+    await ctx.wait({ field: "sessionState", equals: "idle", timeoutMs: 1500 }).catch(() => {})
+    let after = (await factsOf(ctx)).lastAssistantText ?? ""
+    for (let attempt = 0; attempt < 50 && (after.length === 0 || after === before); attempt += 1) {
+      await ctx.dwell(POLL_INTERVAL_MS)
+      after = (await factsOf(ctx)).lastAssistantText ?? ""
+    }
+    if (after.length === 0 || after === before) {
+      throw new Error("the question answer settled without a new agent reply")
+    }
+    ctx.mark("question_reply_visible")
+    await ctx.dwell(DWELL_QUESTION_REPLY_MS)
   },
 
   /**
    * The answer resumes the plan turn. Wait for it to finish and for the session
-   * to be idle before build mode is staged, so the build slice opens on a
-   * composer that accepts input.
+   * to be idle before the build slice opens, so the composer accepts input.
+   *
+   * The slice opens on PLAN so the build scene can show the chip being tapped
+   * over to BUILD on camera. If the app re-opened the session after the question
+   * blink, its config resets to BUILD, so stage PLAN here rather than assume it.
    *
    * The `question` slice's tail blink backgrounds the app while that resumed
    * turn may still be streaming, which leaves the chat reporting `running` with
@@ -1388,18 +1431,41 @@ export const beatsBySlice: Record<SliceName, BeatRun> = {
   build_stage: async (ctx) => {
     await ctx.wait({ field: "elicitationPending", equals: "false", timeoutMs: TURN_TIMEOUT_MS })
     await waitOrReopen(ctx, "sessionState", "idle", SETTLE_GRACE_MS, TURN_TIMEOUT_MS)
-    ctx.log(`build mode is ${await stageMode(ctx, ctx.config.buildMode)}`)
+    ctx.log(`build start mode is ${await stageMode(ctx, ctx.config.planMode)}`)
     await clearComposer(ctx)
     ctx.mark("build_staged")
   },
 
   build: async (ctx) => {
     const before = (await factsOf(ctx)).lastAssistantText ?? ""
-    ctx.log(`typing the build prompt, ${[...BUILD_PROMPT].length} characters`)
-    await ctx.typeComposer(BUILD_PROMPT)
+    // The head blink reloads the session with the server's default mode
+    // (`build`). Stage `plan` first so the scene opens on PLAN and taps over
+    // to BUILD on camera.
+    await ctx.wait({ field: "modeOptions", timeoutMs: MODE_TIMEOUT_MS })
+    ctx.log(`build start mode is ${await stageMode(ctx, ctx.config.planMode)}`)
+    ctx.mark("build_ready")
+    await ctx.dwell(DWELL_SELECTION_MS)
+    ctx.log("tapping the mode chip to build")
+    await ctx.waitForControlOnScreen("composer_config_mode_chip")
+    await ctx.tap("composer_config_mode_chip")
+    await ctx.wait({ field: "mode", equals: ctx.config.buildMode, timeoutMs: MODE_TIMEOUT_MS })
+    ctx.mark("mode_build")
+    await ctx.dwell(DWELL_SELECTION_MS)
+
+    // The prompt is long, so it types in a few wide chunks: the cut wants a
+    // quick fill, then a held beat on the finished text and its cursor. One
+    // `input text` for the whole prompt drops the tail on this emulator, so
+    // keep every chunk well under the device limit.
+    ctx.log(
+      `typing the build prompt, ${[...BUILD_PROMPT].length} characters at ` +
+        `${ctx.config.buildTypeGapMs} ms per chunk`,
+    )
+    await ctx.typeComposer(BUILD_PROMPT, ctx.config.buildTypeGapMs, 12, true)
     await ctx.wait({ field: "composerText", equals: BUILD_PROMPT, timeoutMs: MODE_TIMEOUT_MS })
+    await ctx.dwell(DWELL_BUILD_TYPED_MS)
     await ctx.wait({ field: "sendEnabled", equals: "true", timeoutMs: MODE_TIMEOUT_MS })
-    await ctx.intent("send")
+    await ctx.waitForControlOnScreen("chat_send_button")
+    await ctx.tap("chat_send_button")
     await ctx.wait({ field: "composerText", equals: "", timeoutMs: MODE_TIMEOUT_MS })
     ctx.mark("build_sent")
     await ctx.wait({ field: "sessionState", equals: "idle", settled: true, timeoutMs: TURN_TIMEOUT_MS })
@@ -1946,6 +2012,7 @@ const recordSlice = async (params: Readonly<{
     authorizeKey: deps.authorizeKey,
     sendCharacter: deps.sendCharacter,
     sendChunk: deps.sendChunk,
+    sendChunks: deps.sendChunks,
     clearField: deps.clearField,
   })
 
@@ -2067,6 +2134,7 @@ export const runWalk = async (deps: WalkDeps): Promise<WalkReport> => {
     authorizeKey: deps.authorizeKey,
     sendCharacter: deps.sendCharacter,
     sendChunk: deps.sendChunk,
+    sendChunks: deps.sendChunks,
     clearField: deps.clearField,
   })
 
@@ -2261,6 +2329,7 @@ const configFromEnv = (): DemoConfig => {
   const gap = Number(process.env.HAROLD_TYPE_GAP_MS ?? TYPE_GAP_DEFAULT_MS)
   const typeGapMs = clampTypeGapMs(gap)
   const planGap = Number(process.env.HAROLD_PLAN_TYPE_GAP_MS ?? 40)
+  const buildGap = Number(process.env.HAROLD_BUILD_TYPE_GAP_MS ?? 10)
   return {
     host: process.env.HAROLD_DEMO_HOST ?? "127.0.0.1",
     port: process.env.HAROLD_DEMO_SSH_PORT ?? "2223",
@@ -2269,6 +2338,7 @@ const configFromEnv = (): DemoConfig => {
     container: process.env.HAROLD_DEMO_CONTAINER ?? "harold-demo-host",
     typeGapMs,
     planTypeGapMs: clampTypeGapMs(planGap),
+    buildTypeGapMs: clampTypeGapMs(buildGap),
     workspace: process.env.HAROLD_DEMO_WORKSPACE ?? "cat-screensaver",
     agent: process.env.HAROLD_DEMO_AGENT ?? "OpenCode",
     planMode: process.env.HAROLD_DEMO_PLAN_MODE ?? "plan",
@@ -2312,6 +2382,11 @@ export const runSelfTest = async (): Promise<number> => {
     },
     sendCharacter: stub.receiveCharacter,
     sendChunk: stub.receiveChunk,
+    sendChunks: async (chunks) => {
+      for (const chunk of chunks) {
+        await stub.receiveChunk(chunk)
+      }
+    },
     clearField: stub.clearFocused,
   })
 
@@ -2451,6 +2526,7 @@ const main = async (): Promise<number> => {
       system: makeSystemUi(),
       sendCharacter: sendInputCharacter,
       sendChunk: sendInputChunk,
+      sendChunks: sendInputChunks,
       clearField: clearFieldText,
       dismissKeyboard: async () => {},
       authorizeKey: async (publicKey) => {

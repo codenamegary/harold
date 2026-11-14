@@ -1,5 +1,5 @@
 import { Easing } from "remotion"
-import { markAt, slice } from "./capture"
+import { markAt } from "./capture"
 import {
   poseAt,
   resolveBodyCue,
@@ -215,6 +215,8 @@ type ShotSpec = {
   from?: number | "firstTap" | "lastTap"
   /** Source second to stop at, exclusive of a following shot that starts there. */
   to?: number | "firstTap" | "lastTap"
+  /** Playback speed. Defaults to 1. Above 1 compresses the shot in the cut. */
+  rate?: number
   /** Hold this one source frame for `holdSec` instead of playing. */
   holdAtSec?: number
   holdSec?: number
@@ -427,26 +429,17 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: -1,
     camera: [{ at: 0, preset: "full" }],
     body: [{ at: 0, pose: {} }],
-    // The plan scene already holds the response and the card, with the chip on
-    // PLAN. Hold that last frame for the card beat, then cut to the old question
-    // slice for the answer sheet. The sheet covers the composer, so the question
-    // scene never shows the chip reset to BUILD after the plan tail blink.
     shots: [
-      { slice: "plan", holdAtSec: slice("plan").durationSec - 0.5, holdSec: 2.4 },
       {
         slice: "question",
-        from: markAt("question", "answer_sheet_open"),
-        // Stop while the selected option holds, before the submit closes the
-        // sheet and the resumed turn's replayed answer chunk overlaps the live
-        // one in the capture.
-        to: markAt("question", "answer_submitted") - 1.0,
+        from: markAt("question", "question_card_visible"),
       },
     ],
     copy: [
       {
         kind: "callout",
-        at: 0.4,
-        hold: 2.2,
+        at: 0.2,
+        hold: 1.8,
         eyebrow: "AGENT QUESTION",
         title: "Get grilled",
         hint: "Interactive question tooling.",
@@ -455,8 +448,8 @@ const SCENE_SPECS: SceneSpec[] = [
         side: "left",
         // The question panel, not the transcript above it. The dot lands on the
         // left end of the "How should cat mode turn on?" row, clear of the
-        // "Required" label at the right end.
-        anchor: { mode: "point", x: 0.22, y: 0.775 },
+        // "Answer" button at the right end.
+        anchor: { mode: "point", x: 0.22, y: 0.7225 },
       },
     ],
   },
@@ -471,16 +464,40 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: 1.8,
     camera: [{ at: 0, preset: "full" }],
     body: [{ at: 0, pose: {} }],
-    shots: [{ slice: "build" }],
+    shots: [
+      {
+        slice: "build",
+        from: markAt("build", "build_ready"),
+        // The caption lands and the mode chip flips to BUILD at normal speed.
+        to: markAt("build", "mode_build"),
+      },
+      {
+        // Hold the switched chip for two seconds before any typing starts.
+        slice: "build",
+        holdAtSec: markAt("build", "mode_build"),
+        holdSec: 2,
+      },
+      {
+        slice: "build",
+        // Then the prompt flies in at 4x. The cut lands on the finished text,
+        // its blinking cursor, the send tap and the settled reply at 1x.
+        from: markAt("build", "mode_build"),
+        to: markAt("build", "keys_done"),
+        rate: 4,
+      },
+      { slice: "build", from: markAt("build", "keys_done") },
+    ],
     copy: [
       {
         kind: "callout",
-        at: 0.4,
+        at: 0.2,
         hold: 2.6,
         eyebrow: "BUILD",
         title: "Execute the plan",
         side: "right",
-        anchor: { mode: "point", x: 0.79, y: 0.76 },
+        anchor: { mode: "point", x: 0.793, y: 0.806 },
+        targetShape: "rounded",
+        targetSize: { width: 0.22, height: 0.065 },
       },
     ],
   },
@@ -723,7 +740,8 @@ const sceneFrameCount = (spec: SceneSpec, slices: Map<string, CaptureSlice>): nu
     if (data === undefined) {
       return sum
     }
-    return sum + playbackFrames(shotWindow(shot, data).spanSec)
+    const window = shotWindow(shot, data)
+    return sum + playbackFrames(window.spanSec / (shot.rate ?? 1))
   }, 0)
   return Math.max(frames, 1)
 }
@@ -779,7 +797,8 @@ const buildShots = (slices: CaptureSlice[], scenes: Scene[]): Shot[] => {
         continue
       }
       const window = shotWindow(shotSpec, data)
-      const span = playbackFrames(window.spanSec)
+      const rate = shotSpec.rate ?? 1
+      const span = playbackFrames(window.spanSec / rate)
       const at = scene.from + frame / FPS
       frame += span
       const until = index === playable.length - 1 ? scene.to : scene.from + frame / FPS
@@ -790,8 +809,8 @@ const buildShots = (slices: CaptureSlice[], scenes: Scene[]): Shot[] => {
         at,
         until,
         startSec: window.startSec,
-        rate: 1,
-        duration: window.hold ? slot : Math.min(window.spanSec, slot),
+        rate,
+        duration: window.hold ? slot : Math.min(window.spanSec / rate, slot),
         hold: window.hold,
         tapLead: spec.tapLeadSec ?? 0,
         tapLeads: spec.tapLeadsSec,

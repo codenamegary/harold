@@ -573,899 +573,890 @@
       "width": 1080
     },
     {
-      "driftRate": 0.915,
-      "durationSec": 6.85,
+      "driftRate": 0.992,
+      "durationSec": 10.983,
       "file": "slices/006-question.mp4",
       "height": 2400,
       "keys": [],
       "marks": [
         {
-          "atSec": 0.894,
+          "atSec": 1.056,
           "name": "slice_start_question"
         },
         {
-          "atSec": 1.305,
+          "atSec": 2.302,
           "name": "question_card_visible"
         },
         {
-          "atSec": 3.101,
+          "atSec": 4.52,
           "name": "answer_sheet_open"
         },
         {
-          "atSec": 5.083,
+          "atSec": 6.023,
+          "name": "answer_selected"
+        },
+        {
+          "atSec": 8.03,
           "name": "answer_submitted"
         },
         {
-          "atSec": 6.185,
+          "atSec": 8.073,
+          "name": "question_reply_visible"
+        },
+        {
+          "atSec": 10.454,
           "name": "slice_end_question"
         }
       ],
       "name": "question",
       "still": false,
-      "syncOffsetSec": 0.336,
-      "taps": [],
-      "trimSec": 4.517,
+      "syncOffsetSec": 0.141,
+      "taps": [
+        {
+          "atSec": 4.311,
+          "x": 901,
+          "y": 1734
+        },
+        {
+          "atSec": 5.69,
+          "x": 540,
+          "y": 1992
+        },
+        {
+          "atSec": 7.384,
+          "x": 905,
+          "y": 2221
+        }
+      ],
+      "trimSec": 6.65,
       "width": 1080
     },
     {
-      "driftRate": 0.958,
-      "durationSec": 44.317,
+      "driftRate": 0.99,
+      "durationSec": 21.883,
       "file": "slices/007-build.mp4",
       "height": 2400,
       "keys": [
         {
-          "atSec": 1.149
+          "atSec": 3.425
         },
         {
-          "atSec": 1.49
+          "atSec": 3.48
         },
         {
-          "atSec": 1.644
+          "atSec": 3.534
         },
         {
-          "atSec": 1.787
+          "atSec": 3.59
         },
         {
-          "atSec": 1.925
+          "atSec": 3.645
         },
         {
-          "atSec": 2.076
+          "atSec": 3.701
         },
         {
-          "atSec": 2.228
+          "atSec": 3.756
         },
         {
-          "atSec": 2.375
+          "atSec": 3.811
         },
         {
-          "atSec": 2.527
+          "atSec": 3.866
         },
         {
-          "atSec": 2.676
+          "atSec": 3.922
         },
         {
-          "atSec": 2.827
+          "atSec": 3.977
         },
         {
-          "atSec": 2.985
+          "atSec": 4.033
         },
         {
-          "atSec": 3.13
+          "atSec": 4.087
         },
         {
-          "atSec": 3.277
+          "atSec": 4.143
         },
         {
-          "atSec": 3.428
+          "atSec": 4.198
         },
         {
-          "atSec": 3.578
+          "atSec": 4.254
         },
         {
-          "atSec": 3.739
+          "atSec": 4.308
         },
         {
-          "atSec": 3.877
+          "atSec": 4.363
         },
         {
-          "atSec": 4.031
+          "atSec": 4.419
         },
         {
-          "atSec": 4.178
+          "atSec": 4.474
         },
         {
-          "atSec": 4.332
+          "atSec": 4.53
         },
         {
-          "atSec": 4.48
+          "atSec": 4.584
         },
         {
-          "atSec": 4.63
+          "atSec": 4.64
         },
         {
-          "atSec": 4.783
+          "atSec": 4.695
         },
         {
-          "atSec": 4.938
+          "atSec": 4.751
         },
         {
-          "atSec": 5.079
+          "atSec": 4.806
         },
         {
-          "atSec": 5.228
+          "atSec": 4.861
         },
         {
-          "atSec": 5.379
+          "atSec": 4.916
         },
         {
-          "atSec": 5.53
+          "atSec": 4.972
         },
         {
-          "atSec": 5.681
+          "atSec": 5.027
         },
         {
-          "atSec": 5.83
+          "atSec": 5.083
         },
         {
-          "atSec": 5.979
+          "atSec": 5.137
         },
         {
-          "atSec": 6.128
+          "atSec": 5.193
         },
         {
-          "atSec": 6.282
+          "atSec": 5.248
         },
         {
-          "atSec": 6.43
+          "atSec": 5.303
         },
         {
-          "atSec": 6.582
+          "atSec": 5.359
         },
         {
-          "atSec": 6.743
+          "atSec": 5.413
         },
         {
-          "atSec": 6.901
+          "atSec": 5.469
         },
         {
-          "atSec": 7.048
+          "atSec": 5.524
         },
         {
-          "atSec": 7.195
+          "atSec": 5.58
         },
         {
-          "atSec": 7.349
+          "atSec": 5.634
         },
         {
-          "atSec": 7.498
+          "atSec": 5.69
         },
         {
-          "atSec": 7.648
+          "atSec": 5.745
         },
         {
-          "atSec": 7.799
+          "atSec": 5.801
         },
         {
-          "atSec": 7.948
+          "atSec": 5.856
         },
         {
-          "atSec": 8.098
+          "atSec": 5.911
         },
         {
-          "atSec": 8.247
+          "atSec": 5.966
         },
         {
-          "atSec": 8.419
+          "atSec": 6.022
         },
         {
-          "atSec": 8.794
+          "atSec": 6.077
         },
         {
-          "atSec": 8.966
+          "atSec": 6.132
         },
         {
-          "atSec": 9.117
+          "atSec": 6.187
         },
         {
-          "atSec": 9.265
+          "atSec": 6.242
         },
         {
-          "atSec": 9.417
+          "atSec": 6.298
         },
         {
-          "atSec": 9.566
+          "atSec": 6.353
         },
         {
-          "atSec": 9.717
+          "atSec": 6.409
         },
         {
-          "atSec": 9.867
+          "atSec": 6.463
         },
         {
-          "atSec": 10.017
+          "atSec": 6.519
         },
         {
-          "atSec": 10.165
+          "atSec": 6.574
         },
         {
-          "atSec": 10.317
+          "atSec": 6.63
         },
         {
-          "atSec": 10.466
+          "atSec": 6.685
         },
         {
-          "atSec": 10.617
+          "atSec": 6.74
         },
         {
-          "atSec": 10.771
+          "atSec": 6.795
         },
         {
-          "atSec": 10.936
+          "atSec": 6.851
         },
         {
-          "atSec": 11.083
+          "atSec": 6.906
         },
         {
-          "atSec": 11.234
+          "atSec": 6.96
         },
         {
-          "atSec": 11.384
+          "atSec": 7.016
         },
         {
-          "atSec": 11.535
+          "atSec": 7.071
         },
         {
-          "atSec": 11.684
+          "atSec": 7.127
         },
         {
-          "atSec": 11.834
+          "atSec": 7.182
         },
         {
-          "atSec": 11.984
+          "atSec": 7.237
         },
         {
-          "atSec": 12.134
+          "atSec": 7.292
         },
         {
-          "atSec": 12.286
+          "atSec": 7.348
         },
         {
-          "atSec": 12.434
+          "atSec": 7.403
         },
         {
-          "atSec": 12.585
+          "atSec": 7.459
         },
         {
-          "atSec": 12.748
+          "atSec": 7.513
         },
         {
-          "atSec": 12.907
+          "atSec": 7.569
         },
         {
-          "atSec": 13.051
+          "atSec": 7.624
         },
         {
-          "atSec": 13.204
+          "atSec": 7.68
         },
         {
-          "atSec": 13.351
+          "atSec": 7.735
         },
         {
-          "atSec": 13.502
+          "atSec": 7.79
         },
         {
-          "atSec": 13.653
+          "atSec": 7.845
         },
         {
-          "atSec": 13.805
+          "atSec": 7.9
         },
         {
-          "atSec": 13.953
+          "atSec": 7.956
         },
         {
-          "atSec": 14.104
+          "atSec": 8.011
         },
         {
-          "atSec": 14.252
+          "atSec": 8.066
         },
         {
-          "atSec": 14.402
+          "atSec": 8.121
         },
         {
-          "atSec": 14.554
+          "atSec": 8.177
         },
         {
-          "atSec": 14.703
+          "atSec": 8.232
         },
         {
-          "atSec": 14.864
+          "atSec": 8.287
         },
         {
-          "atSec": 15.004
+          "atSec": 8.342
         },
         {
-          "atSec": 15.156
+          "atSec": 8.398
         },
         {
-          "atSec": 15.303
+          "atSec": 8.453
         },
         {
-          "atSec": 15.452
+          "atSec": 8.509
         },
         {
-          "atSec": 15.603
+          "atSec": 8.563
         },
         {
-          "atSec": 15.758
+          "atSec": 8.619
         },
         {
-          "atSec": 15.907
+          "atSec": 8.674
         },
         {
-          "atSec": 16.255
+          "atSec": 8.729
         },
         {
-          "atSec": 16.455
+          "atSec": 8.785
         },
         {
-          "atSec": 16.606
+          "atSec": 8.839
         },
         {
-          "atSec": 16.759
+          "atSec": 8.895
         },
         {
-          "atSec": 16.911
+          "atSec": 8.95
         },
         {
-          "atSec": 17.056
+          "atSec": 9.006
         },
         {
-          "atSec": 17.206
+          "atSec": 9.061
         },
         {
-          "atSec": 17.355
+          "atSec": 9.116
         },
         {
-          "atSec": 17.508
+          "atSec": 9.171
         },
         {
-          "atSec": 17.658
+          "atSec": 9.227
         },
         {
-          "atSec": 17.813
+          "atSec": 9.282
         },
         {
-          "atSec": 17.955
+          "atSec": 9.337
         },
         {
-          "atSec": 18.105
+          "atSec": 9.392
         },
         {
-          "atSec": 18.256
+          "atSec": 9.448
         },
         {
-          "atSec": 18.406
+          "atSec": 9.503
         },
         {
-          "atSec": 18.556
+          "atSec": 9.558
         },
         {
-          "atSec": 18.708
+          "atSec": 9.613
         },
         {
-          "atSec": 18.858
+          "atSec": 9.668
         },
         {
-          "atSec": 19.011
+          "atSec": 9.724
         },
         {
-          "atSec": 19.158
+          "atSec": 9.779
         },
         {
-          "atSec": 19.308
+          "atSec": 9.835
         },
         {
-          "atSec": 19.457
+          "atSec": 9.889
         },
         {
-          "atSec": 19.608
+          "atSec": 9.945
         },
         {
-          "atSec": 19.762
+          "atSec": 10.0
         },
         {
-          "atSec": 19.909
+          "atSec": 10.056
         },
         {
-          "atSec": 20.057
+          "atSec": 10.111
         },
         {
-          "atSec": 20.208
+          "atSec": 10.166
         },
         {
-          "atSec": 20.357
+          "atSec": 10.221
         },
         {
-          "atSec": 20.508
+          "atSec": 10.277
         },
         {
-          "atSec": 20.659
+          "atSec": 10.332
         },
         {
-          "atSec": 20.812
+          "atSec": 10.387
         },
         {
-          "atSec": 20.957
+          "atSec": 10.442
         },
         {
-          "atSec": 21.109
+          "atSec": 10.497
         },
         {
-          "atSec": 21.263
+          "atSec": 10.553
         },
         {
-          "atSec": 21.407
+          "atSec": 10.608
         },
         {
-          "atSec": 21.558
+          "atSec": 10.663
         },
         {
-          "atSec": 21.71
+          "atSec": 10.718
         },
         {
-          "atSec": 21.861
+          "atSec": 10.774
         },
         {
-          "atSec": 22.008
+          "atSec": 10.829
         },
         {
-          "atSec": 22.161
+          "atSec": 10.885
         },
         {
-          "atSec": 22.309
+          "atSec": 10.939
         },
         {
-          "atSec": 22.459
+          "atSec": 10.995
         },
         {
-          "atSec": 22.609
+          "atSec": 11.05
         },
         {
-          "atSec": 22.776
+          "atSec": 11.106
         },
         {
-          "atSec": 22.927
+          "atSec": 11.161
         },
         {
-          "atSec": 23.271
+          "atSec": 11.216
         },
         {
-          "atSec": 23.439
+          "atSec": 11.271
         },
         {
-          "atSec": 23.577
+          "atSec": 11.326
         },
         {
-          "atSec": 23.73
+          "atSec": 11.382
         },
         {
-          "atSec": 23.88
+          "atSec": 11.437
         },
         {
-          "atSec": 24.027
+          "atSec": 11.492
         },
         {
-          "atSec": 24.178
+          "atSec": 11.547
         },
         {
-          "atSec": 24.328
+          "atSec": 11.603
         },
         {
-          "atSec": 24.481
+          "atSec": 11.658
         },
         {
-          "atSec": 24.629
+          "atSec": 11.714
         },
         {
-          "atSec": 24.798
+          "atSec": 11.768
         },
         {
-          "atSec": 24.946
+          "atSec": 11.824
         },
         {
-          "atSec": 25.095
+          "atSec": 11.879
         },
         {
-          "atSec": 25.245
+          "atSec": 11.935
         },
         {
-          "atSec": 25.395
+          "atSec": 11.989
         },
         {
-          "atSec": 25.547
+          "atSec": 12.045
         },
         {
-          "atSec": 25.702
+          "atSec": 12.1
         },
         {
-          "atSec": 25.848
+          "atSec": 12.155
         },
         {
-          "atSec": 25.999
+          "atSec": 12.211
         },
         {
-          "atSec": 26.146
+          "atSec": 12.265
         },
         {
-          "atSec": 26.296
+          "atSec": 12.321
         },
         {
-          "atSec": 26.447
+          "atSec": 12.376
         },
         {
-          "atSec": 26.599
+          "atSec": 12.432
         },
         {
-          "atSec": 26.762
+          "atSec": 12.487
         },
         {
-          "atSec": 26.92
+          "atSec": 12.542
         },
         {
-          "atSec": 27.11
+          "atSec": 12.597
         },
         {
-          "atSec": 27.28
+          "atSec": 12.653
         },
         {
-          "atSec": 27.431
+          "atSec": 12.708
         },
         {
-          "atSec": 27.582
+          "atSec": 12.764
         },
         {
-          "atSec": 27.733
+          "atSec": 12.818
         },
         {
-          "atSec": 27.881
+          "atSec": 12.874
         },
         {
-          "atSec": 28.032
+          "atSec": 12.929
         },
         {
-          "atSec": 28.187
+          "atSec": 12.984
         },
         {
-          "atSec": 28.334
+          "atSec": 13.039
         },
         {
-          "atSec": 28.482
+          "atSec": 13.094
         },
         {
-          "atSec": 28.631
+          "atSec": 13.15
         },
         {
-          "atSec": 28.784
+          "atSec": 13.205
         },
         {
-          "atSec": 28.933
+          "atSec": 13.261
         },
         {
-          "atSec": 29.082
+          "atSec": 13.315
         },
         {
-          "atSec": 29.234
+          "atSec": 13.371
         },
         {
-          "atSec": 29.544
+          "atSec": 13.426
         },
         {
-          "atSec": 29.771
+          "atSec": 13.482
         },
         {
-          "atSec": 29.917
+          "atSec": 13.537
         },
         {
-          "atSec": 30.068
+          "atSec": 13.592
         },
         {
-          "atSec": 30.217
+          "atSec": 13.647
         },
         {
-          "atSec": 30.368
+          "atSec": 13.703
         },
         {
-          "atSec": 30.519
+          "atSec": 13.758
         },
         {
-          "atSec": 30.668
+          "atSec": 13.813
         },
         {
-          "atSec": 30.822
+          "atSec": 13.868
         },
         {
-          "atSec": 30.966
+          "atSec": 13.923
         },
         {
-          "atSec": 31.118
+          "atSec": 13.979
         },
         {
-          "atSec": 31.269
+          "atSec": 14.034
         },
         {
-          "atSec": 31.42
+          "atSec": 14.09
         },
         {
-          "atSec": 31.567
+          "atSec": 14.144
         },
         {
-          "atSec": 31.72
+          "atSec": 14.2
         },
         {
-          "atSec": 31.885
+          "atSec": 14.255
         },
         {
-          "atSec": 32.036
+          "atSec": 14.311
         },
         {
-          "atSec": 32.189
+          "atSec": 14.365
         },
         {
-          "atSec": 32.336
+          "atSec": 14.421
         },
         {
-          "atSec": 32.486
+          "atSec": 14.476
         },
         {
-          "atSec": 32.641
+          "atSec": 14.532
         },
         {
-          "atSec": 32.805
+          "atSec": 14.587
         },
         {
-          "atSec": 32.953
+          "atSec": 14.642
         },
         {
-          "atSec": 33.104
+          "atSec": 14.697
         },
         {
-          "atSec": 33.254
+          "atSec": 14.752
         },
         {
-          "atSec": 33.404
+          "atSec": 14.808
         },
         {
-          "atSec": 33.554
+          "atSec": 14.863
         },
         {
-          "atSec": 33.705
+          "atSec": 14.918
         },
         {
-          "atSec": 33.855
+          "atSec": 14.973
         },
         {
-          "atSec": 34.007
+          "atSec": 15.029
         },
         {
-          "atSec": 34.155
+          "atSec": 15.084
         },
         {
-          "atSec": 34.306
+          "atSec": 15.14
         },
         {
-          "atSec": 34.453
+          "atSec": 15.194
         },
         {
-          "atSec": 34.606
+          "atSec": 15.25
         },
         {
-          "atSec": 34.781
+          "atSec": 15.305
         },
         {
-          "atSec": 34.924
+          "atSec": 15.361
         },
         {
-          "atSec": 35.073
+          "atSec": 15.416
         },
         {
-          "atSec": 35.223
+          "atSec": 15.471
         },
         {
-          "atSec": 35.374
+          "atSec": 15.526
         },
         {
-          "atSec": 35.522
+          "atSec": 15.581
         },
         {
-          "atSec": 35.672
+          "atSec": 15.637
         },
         {
-          "atSec": 35.825
+          "atSec": 15.691
         },
         {
-          "atSec": 35.972
+          "atSec": 15.747
         },
         {
-          "atSec": 36.126
+          "atSec": 15.802
         },
         {
-          "atSec": 36.274
+          "atSec": 15.858
         },
         {
-          "atSec": 36.424
+          "atSec": 15.913
         },
         {
-          "atSec": 36.575
+          "atSec": 15.968
         },
         {
-          "atSec": 36.725
+          "atSec": 16.023
         },
         {
-          "atSec": 36.876
+          "atSec": 16.079
         },
         {
-          "atSec": 37.024
+          "atSec": 16.134
         },
         {
-          "atSec": 37.176
+          "atSec": 16.19
         },
         {
-          "atSec": 37.326
+          "atSec": 16.244
         },
         {
-          "atSec": 37.476
-        },
-        {
-          "atSec": 37.626
-        },
-        {
-          "atSec": 37.782
-        },
-        {
-          "atSec": 37.924
-        },
-        {
-          "atSec": 38.077
-        },
-        {
-          "atSec": 38.229
-        },
-        {
-          "atSec": 38.376
-        },
-        {
-          "atSec": 38.526
-        },
-        {
-          "atSec": 38.678
-        },
-        {
-          "atSec": 38.836
-        },
-        {
-          "atSec": 38.976
-        },
-        {
-          "atSec": 39.128
-        },
-        {
-          "atSec": 39.277
-        },
-        {
-          "atSec": 39.429
-        },
-        {
-          "atSec": 39.579
-        },
-        {
-          "atSec": 39.727
-        },
-        {
-          "atSec": 39.878
-        },
-        {
-          "atSec": 40.03
+          "atSec": 16.3
         }
       ],
       "marks": [
         {
-          "atSec": 0.826,
+          "atSec": 0.87,
           "name": "slice_start_build"
         },
         {
-          "atSec": 40.179,
+          "atSec": 1.0,
+          "name": "build_ready"
+        },
+        {
+          "atSec": 2.042,
+          "name": "mode_build"
+        },
+        {
+          "atSec": 16.355,
           "name": "keys_done"
         },
         {
-          "atSec": 40.27,
+          "atSec": 17.773,
           "name": "build_sent"
         },
         {
-          "atSec": 42.516,
+          "atSec": 20.088,
           "name": "build_settled"
         },
         {
-          "atSec": 43.668,
+          "atSec": 21.28,
           "name": "slice_end_build"
         }
       ],
       "name": "build",
       "still": false,
-      "syncOffsetSec": 0.69,
+      "syncOffsetSec": 0.953,
       "taps": [
         {
-          "atSec": 0.888,
+          "atSec": 1.972,
+          "x": 856,
+          "y": 1934
+        },
+        {
+          "atSec": 3.064,
           "x": 540,
           "y": 2074
+        },
+        {
+          "atSec": 17.696,
+          "x": 943,
+          "y": 2148
         }
       ],
-      "trimSec": 4.167,
+      "trimSec": 6.95,
       "width": 1080
     },
     {
-      "driftRate": 0.953,
-      "durationSec": 4.317,
+      "driftRate": 1.004,
+      "durationSec": 4.533,
       "file": "slices/008-usage.mp4",
       "height": 2400,
       "keys": [],
       "marks": [
         {
-          "atSec": 0.793,
+          "atSec": 0.873,
           "name": "slice_start_usage"
         },
         {
-          "atSec": 0.835,
+          "atSec": 0.929,
           "name": "usage_visible"
         },
         {
-          "atSec": 3.695,
+          "atSec": 3.944,
           "name": "slice_end_usage"
         }
       ],
       "name": "usage",
       "still": false,
-      "syncOffsetSec": 0.729,
+      "syncOffsetSec": 0.807,
       "taps": [],
-      "trimSec": 4.15,
+      "trimSec": 4.167,
       "width": 1080
     },
     {
-      "driftRate": 0.955,
-      "durationSec": 10.9,
+      "driftRate": 0.994,
+      "durationSec": 13.05,
       "file": "slices/009-changes.mp4",
       "height": 2400,
       "keys": [],
       "marks": [
         {
-          "atSec": 0.788,
+          "atSec": 0.92,
           "name": "slice_start_changes"
         },
         {
-          "atSec": 2.63,
+          "atSec": 3.311,
           "name": "uncommitted_empty"
         },
         {
-          "atSec": 4.566,
+          "atSec": 5.329,
           "name": "branch_files_visible"
         },
         {
-          "atSec": 7.482,
+          "atSec": 8.388,
           "name": "diff_visible"
         },
         {
-          "atSec": 10.103,
+          "atSec": 11.125,
           "name": "back_to_files"
         },
         {
-          "atSec": 10.103,
+          "atSec": 11.125,
           "name": "slice_end_changes"
         }
       ],
       "name": "changes",
       "still": false,
-      "syncOffsetSec": 0.71,
+      "syncOffsetSec": 0.744,
       "taps": [],
-      "trimSec": 4.167,
+      "trimSec": 6.75,
       "width": 1080
     },
     {

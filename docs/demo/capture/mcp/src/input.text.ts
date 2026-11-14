@@ -94,6 +94,23 @@ export const sendInputChunk = async (text: string): Promise<void> => {
 }
 
 /**
+ * Send several `input text` calls in one adb shell command. A long prompt
+ * typed through one round trip per chunk spends most of the beat in adb
+ * handshakes; batching keeps the on-camera typing fast while every character is
+ * still a real `input text` on the device. The shell splits the script itself,
+ * so each chunk stays its own command.
+ */
+export const sendInputChunks = async (chunks: readonly string[]): Promise<void> => {
+  const commands = chunks
+    .filter((chunk) => chunk.length > 0)
+    .map((chunk) => `input text ${escapeInputChunk(chunk.replaceAll(" ", "%s"))}`)
+  if (commands.length === 0) {
+    return
+  }
+  await adb(["shell", commands.join("; ")], { retry: false })
+}
+
+/**
  * Delete `current` from the focused field, one backspace at a time.
  * Used when the app has already written a suggestion, so the recorded
  * field can be typed over. Does not send BACK. BACK leaves the form.
@@ -111,6 +128,8 @@ export type TypeIntoFieldDeps = Readonly<{
   sendCharacter: (character: string) => Promise<void>
   /** One adb call for several characters. Required when `chunkSize` is above 1. */
   sendChunk?: (text: string) => Promise<void>
+  /** One adb call for every chunk, in order. Used for the fast build prompt. */
+  sendChunks?: (chunks: readonly string[]) => Promise<void>
   clearField: (current: string) => Promise<void>
   /** `offsetSec` spreads a chunk's key rows inside the chunk. */
   stampKey: (offsetSec?: number) => void
@@ -148,7 +167,17 @@ export const typeIntoField = async (
   const now = deps.now ?? Date.now
   const characters = [...text]
   const chunkSize = Math.max(1, deps.chunkSize ?? 1)
-  if (chunkSize > 1 && deps.sendChunk !== undefined) {
+  if (chunkSize > 1 && deps.sendChunks !== undefined) {
+    const chunks = [...Array(Math.ceil(characters.length / chunkSize))].map((_, index) =>
+      characters.slice(index * chunkSize, (index + 1) * chunkSize).join(""),
+    )
+    const started = now()
+    await deps.sendChunks(chunks)
+    const elapsedSec = Math.max(0.001, (now() - started) / 1000)
+    const spacingSec = elapsedSec / characters.length
+    characters.forEach((_, index) => deps.stampKey(-elapsedSec + index * spacingSec))
+    deps.stampKeysDone()
+  } else if (chunkSize > 1 && deps.sendChunk !== undefined) {
     for (let start = 0; start < characters.length; start += chunkSize) {
       const chunk = characters.slice(start, start + chunkSize)
       const started = now()

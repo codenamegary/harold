@@ -136,8 +136,8 @@ describe("timeline / capture contract", () => {
     expect(byScene("achievement")).toEqual(["connect", "landing"])
     expect(byScene("newSession")).toEqual(["new_session"])
     expect(byScene("plan")).toEqual(["plan"])
-    expect(byScene("question")).toEqual(["plan", "question"])
-    expect(byScene("build")).toEqual(["build"])
+    expect(byScene("question")).toEqual(["question"])
+    expect(byScene("build")).toEqual(["build", "build", "build", "build"])
     expect(byScene("usage")).toEqual(["usage"])
     expect(byScene("changes")).toEqual(["changes"])
     expect(byScene("worktrees")).toEqual(["worktrees"])
@@ -843,7 +843,7 @@ describe("timeline / sound", () => {
         recorded.push(key.atSec)
       }
     }
-    expect(recorded.length).toBe(404)
+    expect(recorded.length).toBe(387)
     const keySounds = t.sounds.filter((sound) => sound.name === "key")
     expect(keySounds.length).toBeGreaterThan(100)
     expect(keySounds.length).toBeLessThan(recorded.length)
@@ -886,9 +886,13 @@ describe("timeline / sound", () => {
 // --- Pacing -----------------------------------------------------------------
 
 describe("timeline / pacing", () => {
-  test("every shot plays the capture at 1x", () => {
-    for (const shot of timeline().shots) {
-      expect(shot.rate).toBe(1)
+  test("every shot plays the capture at 1x except the build typing beat", () => {
+    const shots = timeline().shots
+    const sped = shots.filter((shot) => shot.rate !== 1)
+    expect(sped).toHaveLength(1)
+    expect(sped[0]?.scene).toBe("build")
+    expect(sped[0]?.rate).toBe(4)
+    for (const shot of shots.filter((entry) => entry.rate === 1)) {
       expect(shot.startSec).toBeGreaterThanOrEqual(0)
     }
   })

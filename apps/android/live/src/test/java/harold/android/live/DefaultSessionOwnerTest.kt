@@ -1640,7 +1640,9 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertTrue(owner.snapshot.value.pendingElicitations.isEmpty())
-        assertEquals(SessionState.Running, owner.snapshot.value.transcript.sessionState)
+        // No local prompt is in flight: this is the restored-question path, so
+        // answering it ends the client's turn instead of leaving it Running.
+        assertEquals(SessionState.Idle, owner.snapshot.value.transcript.sessionState)
         val row = owner.snapshot.value.transcript.rows
             .filterIsInstance<TranscriptQuestionRow>()
             .single()

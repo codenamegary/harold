@@ -10,6 +10,7 @@ import {
 } from "./build"
 import { PRESETS } from "./camera"
 import { LIGHTS, lightAt } from "./stage"
+import { markAt } from "./capture"
 import { FPS, activeClip, buildTimeline, type CaptureSlice } from "./timeline"
 
 const capture = JSON.parse(
@@ -79,15 +80,33 @@ describe("build / body", () => {
 })
 
 describe("build / hold", () => {
-  test("lasts as long as the build slice and plays it to the end", () => {
+  test("shows the caption and mode tap, waits two seconds, then compresses the typing", () => {
     const { timeline, scene, duration } = build()
     const slice = capture.slices.find((entry) => entry.name === "build")
     if (slice === undefined) {
       throw new Error("capture.json has no build slice")
     }
-    const frames = Math.max(1, Math.ceil(slice.durationSec * FPS - 1e-4))
-    expect(scene.frames).toBe(frames)
-    expect(duration).toBeCloseTo(frames / FPS, 9)
+    const startSec = markAt("build", "build_ready")
+    const modeSec = markAt("build", "mode_build")
+    const typedSec = markAt("build", "keys_done")
+    const shots = timeline.shots.filter((shot) => shot.scene === "build")
+    expect(shots).toHaveLength(4)
+    expect(shots[0]?.startSec).toBeCloseTo(startSec, 9)
+    expect(shots[0]?.rate).toBe(1)
+    expect(shots[0]?.duration).toBeCloseTo(modeSec - startSec, 6)
+    expect(shots[1]?.hold).toBe(true)
+    expect(shots[1]?.startSec).toBeCloseTo(modeSec, 9)
+    const hold = shots[1]
+    expect(hold === undefined ? 0 : hold.until - hold.at).toBeCloseTo(2, 6)
+    expect(shots[2]?.startSec).toBeCloseTo(modeSec, 9)
+    expect(shots[2]?.rate).toBe(4)
+    expect(shots[3]?.startSec).toBeCloseTo(typedSec, 9)
+    expect(shots[3]?.rate).toBe(1)
+    // Faster than the raw slice because the typing is compressed, but still long
+    // enough to hold on the reply.
+    const rawFrames = Math.max(1, Math.ceil((slice.durationSec - startSec) * FPS - 1e-4))
+    expect(scene.frames).toBeLessThan(rawFrames)
+    expect(duration).toBeCloseTo(scene.frames / FPS, 9)
     const first = activeClip(timeline.clips, scene.from)
     const last = activeClip(timeline.clips, scene.to - 1e-3)
     expect(first?.file).toBe(slice.file)

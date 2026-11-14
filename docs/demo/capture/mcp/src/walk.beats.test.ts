@@ -12,6 +12,7 @@ import {
   STUB_ANSWER_VALUE,
   STUB_BRANCH_FILE,
   STUB_PR_URL,
+  STUB_QUESTION_KEY,
   STUB_WORKSPACE_ID,
 } from "./stub"
 import type { ProbeStub } from "./stub"
@@ -26,6 +27,7 @@ const CONFIG: DemoConfig = {
   container: "harold-demo-host",
   typeGapMs: 80,
   planTypeGapMs: 40,
+  buildTypeGapMs: 10,
   workspace: "cat-screensaver",
   agent: "OpenCode",
   planMode: "plan",
@@ -108,12 +110,21 @@ const harness = (): Harness => {
     authorizeKey: async () => {},
     sendCharacter: stub.receiveCharacter,
     sendChunk: stub.receiveChunk,
+    sendChunks: receiveChunks(stub),
     clearField: stub.clearFocused,
   })
   return { stub, context, rows: () => rows }
 }
 
 const toolNames = (stub: ProbeStub): readonly string[] => stub.calls().map((call) => call.name)
+
+const receiveChunks =
+  (stub: ProbeStub) =>
+  async (chunks: readonly string[]): Promise<void> => {
+    for (const chunk of chunks) {
+      await stub.receiveChunk(chunk)
+    }
+  }
 
 type IntentCall = Readonly<{ action: string; screen: string | null; args: Record<string, unknown> }>
 
@@ -279,6 +290,7 @@ describe("runWalk failure behaviour", () => {
       authorizeKey: async () => {},
       sendCharacter: stub.receiveCharacter,
       sendChunk: stub.receiveChunk,
+      sendChunks: receiveChunks(stub),
       clearField: stub.clearFocused,
       out: {
         dir,
@@ -389,6 +401,7 @@ describe("tap stamping", () => {
       authorizeKey: async () => {},
       sendCharacter: stub.receiveCharacter,
       sendChunk: stub.receiveChunk,
+      sendChunks: receiveChunks(stub),
       clearField: stub.clearFocused,
     })
     return { stub, rows, context }
@@ -420,6 +433,7 @@ describe("tap stamping", () => {
       authorizeKey: async () => {},
       sendCharacter: stub.receiveCharacter,
       sendChunk: stub.receiveChunk,
+      sendChunks: receiveChunks(stub),
       clearField: stub.clearFocused,
     })
     await context.navigate("ssh_setup")
@@ -503,17 +517,17 @@ describe("story beats", () => {
 
   it("answers the agent question with the configured option", async () => {
     const { stub } = await runThrough("question")
-    const selected = intentCalls(stub).filter((call) => call.action === "select_option")
-    expect(selected.map((call) => call.args.optionValue)).toEqual([STUB_ANSWER_VALUE])
-    expect(actionsOf(stub)).toContain("open_elicitation")
-    expect(actionsOf(stub)).toContain("submit_elicitation")
+    expect(tappedTags(stub)).toContain("elicitation_answer_button")
+    expect(tappedTags(stub)).toContain(`elicitation_option_${STUB_QUESTION_KEY}_${STUB_ANSWER_VALUE}`)
+    expect(tappedTags(stub)).toContain("elicitation_submit")
   })
 
   it("stages build mode and lets the turn settle before usage", async () => {
     const { stub } = await runThrough("build")
     expect(actionsOf(stub)).not.toContain("type")
     expect(typedText(stub, "composerText")).toBe(PLAN_PROMPT + BUILD_PROMPT)
-    expect(actionsOf(stub)).toContain("set_mode")
+    expect(tappedTags(stub)).toContain("composer_config_mode_chip")
+    expect(tappedTags(stub)).toContain("chat_send_button")
     expect(stub.facts().sessionState).toBe("idle")
     expect((stub.facts().lastAssistantText ?? "").length).toBeGreaterThan(0)
   })

@@ -1,6 +1,6 @@
 # Demo render
 
-A 156.5 second cut at 1920x1080, 30 fps, 4696 frames. The phone screen is real
+A 132.1 second cut at 1920x1080, 30 fps, 3962 frames. The phone screen is real
 emulator capture; the capture is raw material. Each act lives in its own
 `<scene>.ts` + `<scene>.scene.tsx` pair: opening, achievement, new session,
 plan, question, build, usage, changes, worktrees, PR, and outro. The act module
@@ -28,7 +28,7 @@ here.
 | `new_session`   | the session menu, the new session form, the chat opening       |
 | `plan`          | the empty chat, both system pickers, the mode switch, the short prompt |
 | `question`      | the plan reply, the question card, the answer sheet            |
-| `build`         | the 251-character build prompt, then the settled reply         |
+| `build`         | the 234-character build prompt, then the settled reply         |
 | `usage`         | the context and cost line                                     |
 | `changes`       | the empty scope, the branch list, the diff                     |
 | `worktrees`     | the worktree sheet                                            |
@@ -36,7 +36,7 @@ here.
 
 ## The scenes
 
-The cut is 4696 frames. That is 156.5 s at 30 fps. Every scene holds one light
+The cut is 3962 frames. That is 132.1 s at 30 fps. Every scene holds one light
 state. A state change eases over 1.2 s before it holds. Some acts also change
 the shape of that state as the camera moves.
 
@@ -47,14 +47,14 @@ the shape of that state as the camera moves.
 | `achievement` | 232    | 733-964   | 7.7     | `reward`  | `connect` from the save tap, then `landing`  | `[SPOTLIGHT]` Achievement unlocked / Work from Couch     |
 | `newSession`  | 468    | 965-1432  | 15.6    | `work`    | `new_session`                                | `[NOTE]` Start something new                             |
 | `plan`        | 573    | 1433-2005 | 19.1    | `work`    | `plan`                                       | `[CALLOUT]` Attachments, Plan                            |
-| `question`    | 102    | 2006-2107 | 3.4     | `work`    | `plan` hold, then `question` answer sheet    | `[CALLOUT]` Agent question                               |
-| `build`       | 1330   | 2108-3437 | 44.3    | `work`    | `build`                                      | `[CALLOUT]` Build                                        |
-| `usage`       | 130    | 3438-3567 | 4.3     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
-| `changes`     | 327    | 3568-3894 | 10.9    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
-| `worktrees`   | 107    | 3895-4001 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
-| `pr`          | 545    | 4002-4546 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
-| `outro`       | 150    | 4547-4696 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
-| **Total**     | **4696** | **1-4696** | **156.5** |        |                                              |                                                          |
+| `question`    | 261    | 2006-2266 | 8.7     | `work`    | `question`: card, answer and reply           | `[CALLOUT]` Agent question                               |
+| `build`       | 366    | 2267-2632 | 12.2    | `work`    | `build`: caption hold, fast prompt, reply     | `[CALLOUT]` Build                                        |
+| `usage`       | 136    | 2633-2768 | 4.5     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
+| `changes`     | 392    | 2769-3160 | 13.1    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
+| `worktrees`   | 107    | 3161-3267 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
+| `pr`          | 545    | 3268-3812 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
+| `outro`       | 150    | 3813-3962 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
+| **Total**     | **3962** | **1-3962** | **132.1** |        |                                              |                                                          |
 
 The achievement sits third, right after the SSH scene, while the cost of setup is
 still fresh. It is the film's only `[POP]` and only `[CF]`.
@@ -253,9 +253,10 @@ fires on the frame where the phone draws that character.
 
 ## Pacing
 
-Each slice plays once, from the start, at the speed it was recorded. The scene
-is as long as those slices. Intro and outro are the only fixed lengths. Typing
-is not sped up and not cut short to hit a runtime.
+Each slice plays once, from the start, at the speed it was recorded, except the
+build prompt: that shot runs at 4x so the typing flies by, then the cut lands on
+the finished text, its blinking cursor, the send tap and the settled reply at
+normal speed. Intro and outro are the only fixed lengths.
 
 ## Working on it
 

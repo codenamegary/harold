@@ -1736,6 +1736,35 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun changesBadgeCountsCommittedBranchChanges() = runTest(dispatcher) {
+        val gitApi = RecordingGitApi(
+            summaryResult = Result.success(
+                GitSummary(
+                    repository = GitRepository(
+                        root = "/tmp/harold",
+                        currentWorktreePath = "/tmp/harold",
+                        currentBranch = "feat/cat-mode",
+                        defaultBranch = "main",
+                        headSha = "abc123",
+                    ),
+                    uncommittedFileCount = 0,
+                    changedFileCount = 3,
+                ),
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            gitApi = gitApi,
+        )
+
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.changesAvailable)
+        assertEquals(3, viewModel.uiState.value.changesBadgeCount)
+    }
+
+    @Test
     fun changesBadgeUsesTheSelectedWorktreePath() = runTest(dispatcher) {
         val gitApi = RecordingGitApi()
         val repository = ChatFakeUserRepository(

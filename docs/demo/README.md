@@ -87,10 +87,10 @@ To rebuild `capture.json` from slices already pulled, without a device:
 python3 docs/demo/capture/build_capture.py
 ```
 
-## The 182.8 second cut
+## The 132.1 second cut
 
-[`render/`](./render) builds a 1920x1080, 30 fps, **5485 frame** video from the
-11 recorded slices. That is 182.8 s. The master is H.264 at CRF 18. The
+[`render/`](./render) builds a 1920x1080, 30 fps, **3962 frame** video from the
+11 recorded slices. That is 132.1 s. The master is H.264 at CRF 18. The
 compressed cut is CRF 26 with 96 kbps AAC and faststart. `capture.json` supplies
 the pixels and the timings. `timeline.ts` is the edit, and a retime there never
 re-records anything. The `question` beat plays its capture at 1.0x. The cut

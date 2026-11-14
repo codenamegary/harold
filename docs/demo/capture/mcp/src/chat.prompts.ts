@@ -16,9 +16,8 @@
  */
 export const PLAN_PROMPT = "Plan a small cat mode for the cat screensaver."
 
-/** The `build` scene prompt. Answers the question and scopes the change. */
+/** The `build` scene prompt. Scopes the change after the question was answered. */
 export const BUILD_PROMPT = [
-  "Settings toggle.",
   "Implement only the plan now.",
   "Put the toggle in src/settings.js, put the cat behavior in src/cat-mode.js,",
   "add tests, and commit every change on feat/cat-mode so the worktree is clean.",

@@ -67,6 +67,12 @@ data class GitRepository(
 data class GitSummary(
     val repository: GitRepository,
     val uncommittedFileCount: Int,
+    /**
+     * Distinct files changed on this branch against its default branch, whether
+     * committed or still in the working tree. The changes badge counts these:
+     * an agent that commits its turn still leaves reviewable changes.
+     */
+    val changedFileCount: Int = uncommittedFileCount,
 )
 
 @Serializable

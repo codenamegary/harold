@@ -45,6 +45,18 @@ class ToolCallLabelTest {
         )
     }
 
+    @Test
+    fun doesNotMisreadCatInFilePathAsCatCommand() {
+        assertEquals(
+            "Edit src/cat-mode.js",
+            friendlyToolLabel(tool(name = "src/cat-mode.js", kind = ToolKind.Edit, detail = null)),
+        )
+        assertEquals(
+            "Edit test/cat-mode.test.js",
+            friendlyToolLabel(tool(name = "test/cat-mode.test.js", kind = ToolKind.Edit, detail = null)),
+        )
+    }
+
     private fun tool(
         name: String,
         kind: ToolKind,

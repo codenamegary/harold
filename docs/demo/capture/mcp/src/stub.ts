@@ -1075,6 +1075,16 @@ export const makeProbeStub = (): ProbeStub => {
     if (tag === "chat_send_button") {
       applyChatAction("send", {})
     }
+    if (tag === "elicitation_answer_button") {
+      applyChatAction("open_elicitation", {})
+    }
+    if (tag.startsWith(`elicitation_option_${STUB_QUESTION_KEY}_`)) {
+      const optionValue = tag.slice(`elicitation_option_${STUB_QUESTION_KEY}_`.length)
+      applyChatAction("select_option", { questionKey: STUB_QUESTION_KEY, optionValue })
+    }
+    if (tag === "elicitation_submit") {
+      applyChatAction("submit_elicitation", {})
+    }
     if (tag === "create_session_submit") {
       applyCreateSessionAction("submit", {})
     }
