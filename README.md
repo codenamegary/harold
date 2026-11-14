@@ -8,7 +8,7 @@ Harold is an Android app that connects to your machines over SSH and runs ACP co
 
 ## Demo
 
-https://harold.codenamegary.com/demo/harold.mp4
+https://github.com/user-attachments/assets/bcf88530-228a-4b85-a0ad-cfcc5c9ec186
 
 ## Install
 
