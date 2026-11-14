@@ -1,6 +1,6 @@
 # Demo render
 
-A 132.1 second cut at 1920x1080, 30 fps, 3962 frames. The phone screen is real
+A 122.5 second cut at 1920x1080, 30 fps, 3674 frames. The phone screen is real
 emulator capture; the capture is raw material. Each act lives in its own
 `<scene>.ts` + `<scene>.scene.tsx` pair: opening, achievement, new session,
 plan, question, build, usage, changes, worktrees, PR, and outro. The act module
@@ -36,7 +36,7 @@ here.
 
 ## The scenes
 
-The cut is 3962 frames. That is 132.1 s at 30 fps. Every scene holds one light
+The cut is 3674 frames. That is 122.5 s at 30 fps. Every scene holds one light
 state. A state change eases over 1.2 s before it holds. Some acts also change
 the shape of that state as the camera moves.
 
@@ -52,9 +52,9 @@ the shape of that state as the camera moves.
 | `usage`       | 136    | 2633-2768 | 4.5     | `work`    | `usage`                                      | `[CALLOUT]` Usage                                        |
 | `changes`     | 392    | 2769-3160 | 13.1    | `work`    | `changes`                                    | `[CALLOUT]` Changes, Changes                             |
 | `worktrees`   | 107    | 3161-3267 | 3.6     | `work`    | `worktrees`                                  | `[CALLOUT]` Worktrees                                    |
-| `pr`          | 545    | 3268-3812 | 18.2    | `full`    | `pr`                                         | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
-| `outro`       | 150    | 3813-3962 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
-| **Total**     | **3962** | **1-3962** | **132.1** |        |                                              |                                                          |
+| `pr`          | 257    | 3268-3524 | 8.6     | `full`    | `pr`: field tap, fast prompt, URL and close  | `[CALLOUT]` Draft PR, `[SPOTLIGHT]` the close            |
+| `outro`       | 150    | 3525-3674 | 5.0     | `alone`   | none                                         | slide: logo, subtitle, CTA, site                         |
+| **Total**     | **3674** | **1-3674** | **122.5** |        |                                              |                                                          |
 
 The achievement sits third, right after the SSH scene, while the cost of setup is
 still fresh. It is the film's only `[POP]` and only `[CF]`.
@@ -254,9 +254,9 @@ fires on the frame where the phone draws that character.
 ## Pacing
 
 Each slice plays once, from the start, at the speed it was recorded, except the
-build prompt: that shot runs at 4x so the typing flies by, then the cut lands on
-the finished text, its blinking cursor, the send tap and the settled reply at
-normal speed. Intro and outro are the only fixed lengths.
+build and PR prompts: those shots run at 4x so the typing flies by, then the cut
+lands on the finished text, its blinking cursor, the send tap and the settled
+reply at normal speed. Intro and outro are the only fixed lengths.
 
 ## Working on it
 

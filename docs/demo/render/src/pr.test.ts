@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { REST } from "./body"
 import { CAMERA_EASE_SEC, PRESETS } from "./camera"
+import { markAt, tapAt } from "./capture"
 import {
   PR_FRAMING,
   PR_HANDOFF_LIGHT,
@@ -98,5 +99,31 @@ describe("pr / timing", () => {
     const { scene } = prScene()
     expect(scene.frames).toBeGreaterThan(0)
     expect(scene.to - scene.from).toBeCloseTo(scene.frames / FPS, 9)
+  })
+})
+
+describe("pr / typing", () => {
+  test("shows the field tap, compresses the prompt at 4x, then holds the reply", () => {
+    const { timeline, scene, duration } = prScene()
+    const slice = capture.slices.find((entry) => entry.name === "pr")
+    if (slice === undefined) {
+      throw new Error("capture.json has no pr slice")
+    }
+    const tapSec = tapAt("pr", "first")
+    const typedSec = markAt("pr", "keys_done")
+    const shots = timeline.shots.filter((shot) => shot.scene === "pr")
+    expect(shots).toHaveLength(3)
+    expect(shots[0]?.startSec).toBe(0)
+    expect(shots[0]?.rate).toBe(1)
+    expect(shots[0]?.duration).toBeCloseTo(tapSec, 6)
+    expect(shots[1]?.startSec).toBeCloseTo(tapSec, 9)
+    expect(shots[1]?.rate).toBe(4)
+    expect(shots[2]?.startSec).toBeCloseTo(typedSec, 9)
+    expect(shots[2]?.rate).toBe(1)
+    // The prompt no longer plays at its slow recorded cadence, so the act is
+    // shorter than the raw slice but still holds on the sent URL.
+    const rawFrames = Math.max(1, Math.ceil(slice.durationSec * FPS - 1e-4))
+    expect(scene.frames).toBeLessThan(rawFrames)
+    expect(duration).toBeCloseTo(scene.frames / FPS, 9)
   })
 })

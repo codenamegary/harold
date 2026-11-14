@@ -141,7 +141,7 @@ describe("timeline / capture contract", () => {
     expect(byScene("usage")).toEqual(["usage"])
     expect(byScene("changes")).toEqual(["changes"])
     expect(byScene("worktrees")).toEqual(["worktrees"])
-    expect(byScene("pr")).toEqual(["pr"])
+    expect(byScene("pr")).toEqual(["pr", "pr", "pr"])
     expect(byScene("outro")).toEqual([])
   })
 
@@ -610,7 +610,7 @@ describe("timeline / the copy is the script's", () => {
       "CALLOUT CHANGES Review the code",
       "CALLOUT CHANGES Pretty diffs!",
       "CALLOUT WORKTREES Auto-detect, or choose | Pick the worktree to inspect.",
-      "CALLOUT DRAFT PR Just like always | The agent pushes and opens it.",
+      "CALLOUT DRAFT PR Just like always",
       "SPOTLIGHT The whole loop / From plan to PR",
     ])
   })
@@ -845,7 +845,7 @@ describe("timeline / sound", () => {
     }
     expect(recorded.length).toBe(387)
     const keySounds = t.sounds.filter((sound) => sound.name === "key")
-    expect(keySounds.length).toBeGreaterThan(100)
+    expect(keySounds.length).toBeGreaterThan(50)
     expect(keySounds.length).toBeLessThan(recorded.length)
     for (const sound of keySounds) {
       const drawn = drawnAt(t, sound.at)
@@ -886,12 +886,13 @@ describe("timeline / sound", () => {
 // --- Pacing -----------------------------------------------------------------
 
 describe("timeline / pacing", () => {
-  test("every shot plays the capture at 1x except the build typing beat", () => {
+  test("every shot plays the capture at 1x except the build and PR typing beats", () => {
     const shots = timeline().shots
     const sped = shots.filter((shot) => shot.rate !== 1)
-    expect(sped).toHaveLength(1)
-    expect(sped[0]?.scene).toBe("build")
-    expect(sped[0]?.rate).toBe(4)
+    expect(sped.map((shot) => shot.scene)).toEqual(["build", "pr"])
+    for (const shot of sped) {
+      expect(shot.rate).toBe(4)
+    }
     for (const shot of shots.filter((entry) => entry.rate === 1)) {
       expect(shot.startSec).toBeGreaterThanOrEqual(0)
     }

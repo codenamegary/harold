@@ -331,7 +331,7 @@ Beats:
 
 - [TAP "Message field"]
 - [KR "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL."]
-- [CALLOUT "Just like always" eyebrow="DRAFT PR" hint="The agent pushes and opens it." compact placement=edge connector=T]
+- [CALLOUT "Just like always" eyebrow="DRAFT PR" compact placement=edge connector=T]
 - [TAP "Send message"]
 - The agent runs git and `gh`, then replies with the real draft PR URL.
 - The driver holds on the URL and verifies the draft PR with `gh pr list`.

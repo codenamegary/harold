@@ -618,7 +618,19 @@ const SCENE_SPECS: SceneSpec[] = [
     drift: 1.7,
     camera: [{ at: 0, preset: "full" }],
     body: [{ at: 0, pose: {} }],
-    shots: [{ slice: "pr" }],
+    shots: [
+      // The field tap and focus read at 1x.
+      { slice: "pr", to: "firstTap" },
+      {
+        slice: "pr",
+        // The prompt flies in at 4x, matching the build typing beat. The cut
+        // lands on the finished text, the send tap, the URL and the reply at 1x.
+        from: "firstTap",
+        to: markAt("pr", "keys_done"),
+        rate: 4,
+      },
+      { slice: "pr", from: markAt("pr", "keys_done") },
+    ],
     copy: [
       {
         kind: "callout",
@@ -626,17 +638,16 @@ const SCENE_SPECS: SceneSpec[] = [
         hold: 2.6,
         eyebrow: "DRAFT PR",
         title: "Just like always",
-        hint: "The agent pushes and opens it.",
         side: "right",
         compact: true,
         placement: "edge",
         connector: "t",
-        anchor: { mode: "point", x: 0.872, y: 0.78 },
+        anchor: { mode: "point", x: 0.872, y: 0.88 },
       },
       {
         kind: "spotlight",
-        at: 10.5,
-        hold: 5,
+        at: 5.1,
+        hold: 2.9,
         side: "left",
         kicker: "The whole loop",
         title: "From plan to PR",
