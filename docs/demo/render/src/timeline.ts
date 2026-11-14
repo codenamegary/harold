@@ -446,10 +446,10 @@ const SCENE_SPECS: SceneSpec[] = [
         // The tag sits on the side the dot lands on, so its leader crosses one
         // bezel. The dot is at the left end of the question row.
         side: "left",
-        // The question panel, not the transcript above it. The dot lands on the
-        // left end of the "How should cat mode turn on?" row, clear of the
+        // The question panel, not the transcript above it. The dot sits on the
+        // left edge of the "How should cat mode turn on?" row, clear of the
         // "Answer" button at the right end.
-        anchor: { mode: "point", x: 0.22, y: 0.7225 },
+        anchor: { mode: "point", x: 0.04, y: 0.7225 },
       },
     ],
   },
@@ -1249,10 +1249,6 @@ export const LIGHT_SHAPES = LIGHTS
 //
 // A ping for every copy primitive, the real taps, the real keystrokes, and one
 // angel cue on the SSH lift. [POP] and [CF] are silent by design.
-//
-// The bed is normalised against these, not the other way round. music.mp3
-// measures -10.43 LUFS integrated with a +0.80 dBTP peak, so MUSIC_VOLUME lands
-// it at -26.3 LUFS, a measured 11 dB below a tap.
 
 export type SoundName = "key" | "tap" | "ping" | "angel"
 
@@ -1266,7 +1262,7 @@ export const SOUND_FILES: Record<SoundName, string> = {
   angel: "sfx/angel.mp3",
 }
 
-export const MUSIC_VOLUME = 0.16
+export const MUSIC_VOLUME = 0.75
 
 /** Two keys closer together than this are one keystroke too many. */
 const KEY_CROWD_SEC = 0.16

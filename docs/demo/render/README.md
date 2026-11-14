@@ -247,8 +247,7 @@ with its curly apostrophe and `Pretty diffs!` with its exclamation mark.
   0.16 s. Keystrokes are never interpolated.
 - One `angel.mp3` cue on the frame the SSH phone starts to lift.
 - `[POP]` and `[CF]` are silent.
-- The music bed is measured, not dialled: `MUSIC_VOLUME = 0.16` puts `music.mp3`
-  at -26.3 LUFS, a measured 11 dB under a tap.
+- The music bed fades in at the start and out at the end.
 
 Taps and keys are mapped through the inverse of `clipFrame`, so a keystroke sound
 fires on the frame where the phone draws that character.

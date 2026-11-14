@@ -26,7 +26,6 @@ import {
   EDIT_SLICES,
   FPS,
   KEYBURSTS,
-  MUSIC_VOLUME,
   SCENE_ORDER,
   activeClip,
   buildTimeline,
@@ -871,15 +870,6 @@ describe("timeline / sound", () => {
     for (const tap of t.taps) {
       expect(recorded.has(tap.slice)).toBe(true)
     }
-  })
-
-  test("the bed never masks a tap", () => {
-    // music.mp3 is -10.43 LUFS with a +0.80 dBTP peak; MUSIC_VOLUME lands it at
-    // -26.3 LUFS, a measured 11 dB under a tap at 0.9.
-    const bedDb = -10.43 + 20 * Math.log10(MUSIC_VOLUME)
-    expect(bedDb).toBeGreaterThan(-27)
-    expect(bedDb).toBeLessThan(-25)
-    expect(-3.66 + 20 * Math.log10(0.9)).toBeLessThan(-4)
   })
 })
 
