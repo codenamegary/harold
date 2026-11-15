@@ -284,7 +284,12 @@ describe("ssh.server", () => {
           }
         })
         stream.write(
-          JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n",
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: { clientCapabilities: { elicitation: { form: {} } } },
+          }) + "\n",
         )
       })
     })
