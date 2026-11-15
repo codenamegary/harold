@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.2.0](https://github.com/codenamegary/harold/compare/harold-android-v4.1.0...harold-android-v4.2.0) (2026-11-15)
+
+
+### Features
+
+* **demo-server:** add fake SSH demo server in Bun ([#512](https://github.com/codenamegary/harold/issues/512)) ([f3df7a1](https://github.com/codenamegary/harold/commit/f3df7a16759d7689d5492f16f1b1edab493a3835))
+
+
+### Bug Fixes
+
+* **chat:** keep session dropdown populated during catalog refreshes ([#516](https://github.com/codenamegary/harold/issues/516)) ([f67626b](https://github.com/codenamegary/harold/commit/f67626b413648c1fcd8231fa9533aa8c7966a8f5))
+
 ## [4.1.0](https://github.com/codenamegary/harold/compare/harold-android-v4.0.1...harold-android-v4.1.0) (2026-11-15)
 
 
