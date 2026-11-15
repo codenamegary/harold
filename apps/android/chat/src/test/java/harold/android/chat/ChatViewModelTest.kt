@@ -32,6 +32,7 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
+import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionRepository
 import harold.android.live.ContextUsage
 import harold.android.live.SessionOwner
@@ -418,6 +419,48 @@ class ChatViewModelTest {
         assertEquals(listOf("Gamma", "Beta", "Alpha"), sessions.map { row -> row.name })
         assertEquals(false, sessions.single { row -> row.name == "Alpha" }.connectionReachable)
         assertEquals(true, sessions.single { row -> row.name == "Gamma" }.connectionReachable)
+    }
+
+    @Test
+    fun dropdownAndSessionsScreenShowTheSameRowsAfterARefresh() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        repository.sessionsByOrigin = mapOf(
+            "http://laptop.local:3847" to listOf(
+                session("sess_laptop", "Alpha", updatedAt = "2026-08-02T00:00:00.000Z"),
+            ),
+            "http://desktop.local:3847" to listOf(
+                session("sess_desktop", "Beta", updatedAt = "2026-08-03T00:00:00.000Z"),
+            ),
+        )
+        val store = FakeConnectionStore()
+        store.save(storedConnection("http://laptop.local:3847", "laptop", "tide", "bolt", "device_laptop"))
+        store.save(storedConnection("http://desktop.local:3847", "desktop", "ink", "mark", "device_desktop"))
+        val connectionRepository = ConnectionRepository(store)
+        val sessionRepository = TestSessionRepository(repository)
+        val gateway = FakeConnectionGateway(
+            ActiveConnectionState.Active("http://laptop.local:3847", "Pixel"),
+        )
+        val chat = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            connectionGateway = gateway,
+            sessionRepository = sessionRepository,
+            connectionRepository = connectionRepository,
+        )
+        val sessions = SessionsViewModel(
+            connectionGateway = gateway,
+            sessionRepository = sessionRepository,
+            sessionCommands = sessionCommands,
+            navigator = Navigator(),
+            sessionOwner = ChatFakeSessionOwner(),
+            connectionRepository = connectionRepository,
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            sessions.uiState.value.sessions.map { row -> row.id }.sorted(),
+            chat.uiState.value.recentSessions.map { row -> row.id }.sorted(),
+        )
     }
 
     @Test
@@ -1615,6 +1658,182 @@ class ChatViewModelTest {
 
         assertEquals(5, viewModel.uiState.value.recentSessions.size)
         assertEquals("S8", viewModel.uiState.value.recentSessions.first().name)
+    }
+
+    @Test
+    fun transientEmptyLiveListKeepsTheRowsTheMenuAlreadyHad() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val sessionRepository = TestSessionRepository(repository)
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionRepository = sessionRepository,
+        )
+        advanceUntilIdle()
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+
+        sessionRepository.seed(emptyList())
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+    }
+
+    @Test
+    fun menuShowsLiveRowsWhenConnectionMetadataIsMissing() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val sessionRepository = TestSessionRepository(repository)
+        sessionRepository.seed(
+            listOf(
+                SessionListItem(
+                    connectionId = ORIGIN,
+                    session = session("sess_02", "Alpha"),
+                    workspaceId = "ws_01",
+                    workspaceName = "harold",
+                    agentLabel = "Cursor",
+                ),
+                SessionListItem(
+                    connectionId = ORIGIN,
+                    session = session("sess_01", "Beta"),
+                    workspaceId = "ws_01",
+                    workspaceName = "harold",
+                    agentLabel = "Cursor",
+                ),
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.NoConnection),
+            sessionRepository = sessionRepository,
+        )
+        advanceUntilIdle()
+
+        viewModel.showPicker()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Alpha", "Beta"), viewModel.uiState.value.recentSessions.map { it.name })
+    }
+
+    @Test
+    fun fullySuccessfulEmptyRefreshClearsTheMenu() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
+        advanceUntilIdle()
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+
+        repository.sessionsOverride = emptyList()
+        viewModel.showPicker()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.recentSessions.isEmpty())
+    }
+
+    @Test
+    fun failedRefreshKeepsTheRowsAndShowsTheError() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
+        advanceUntilIdle()
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+
+        repository.failOrigins = setOf(ORIGIN)
+        viewModel.showPicker()
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+        assertEquals("offline", viewModel.uiState.value.recentSessionsError)
+    }
+
+    @Test
+    fun nonAuthoritativeEmptyRefreshKeepsTheRowsAndShowsTheError() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val sessionRepository = TestSessionRepository(repository)
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionRepository = sessionRepository,
+        )
+        advanceUntilIdle()
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+
+        repository.sessionsOverride = emptyList()
+        sessionRepository.authoritative = false
+        sessionRepository.refreshError = "Cursor did not answer."
+        viewModel.showPicker()
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+        assertEquals("Cursor did not answer.", viewModel.uiState.value.recentSessionsError)
+    }
+
+    @Test
+    fun retryRepopulatesTheMenuAfterAFailure() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
+        advanceUntilIdle()
+
+        repository.failOrigins = setOf(ORIGIN)
+        viewModel.showPicker()
+        advanceUntilIdle()
+        assertNotNull(viewModel.uiState.value.recentSessionsError)
+
+        repository.failOrigins = emptySet()
+        repository.sessionsOverride = listOf(
+            session("sess_03", "Gamma", updatedAt = "2026-08-05T03:00:00.000Z"),
+            session("sess_02", "Alpha", updatedAt = "2026-08-05T02:00:00.000Z"),
+            session("sess_01", "Beta", updatedAt = "2026-08-05T01:00:00.000Z"),
+        )
+        viewModel.retryRecentSessions()
+        advanceUntilIdle()
+
+        assertEquals(3, viewModel.uiState.value.recentSessions.size)
+        assertNull(viewModel.uiState.value.recentSessionsError)
+    }
+
+    @Test
+    fun openingTheMenuShowsCachedRowsBeforeTheRefreshStarts() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
+        advanceUntilIdle()
+        val callsAfterLoad = repository.listSessionsCalls
+        repository.sessionsGate = gate
+
+        viewModel.showPicker()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.pickerVisible)
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+        assertEquals(callsAfterLoad, repository.listSessionsCalls)
+
+        advanceTimeBy(ChatViewModel.PICKER_REFRESH_DELAY_MS + 1)
+        runCurrent()
+        assertEquals(callsAfterLoad + 1, repository.listSessionsCalls)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(2, viewModel.uiState.value.recentSessions.size)
+    }
+
+    @Test
+    fun repeatedMenuOpensShareOneRefresh() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
+        advanceUntilIdle()
+        val callsAfterLoad = repository.listSessionsCalls
+        repository.sessionsGate = gate
+
+        viewModel.showPicker()
+        advanceTimeBy(ChatViewModel.PICKER_REFRESH_DELAY_MS + 1)
+        runCurrent()
+        assertEquals(callsAfterLoad + 1, repository.listSessionsCalls)
+
+        viewModel.showPicker()
+        runCurrent()
+        assertEquals(callsAfterLoad + 1, repository.listSessionsCalls)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
     }
 
     @Test

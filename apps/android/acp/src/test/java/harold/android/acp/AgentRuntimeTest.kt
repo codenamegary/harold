@@ -633,7 +633,7 @@ class AgentRuntimeTest {
     }
 
     @Test
-    fun processDeathDropsOnlyThatAgentsCatalogRows() = runBlocking {
+    fun processDeathMarksOnlyThatAgentsRowsStale() = runBlocking {
         val launcher = FakeLauncher(listOf("agent-a", "agent-b"))
         val catalog = AcpSessionCatalog()
         val runtime = AgentRuntime(
@@ -649,14 +649,78 @@ class AgentRuntimeTest {
             launcher.channels.first().kill()
 
             withTimeout(10_000) {
-                while (catalog.snapshots().any { snapshot -> snapshot.agentId == "agent-a" }) {
+                while (catalog.snapshot(FIRST_ROW, "agent-a")?.stale != true) {
                     delay(10)
                 }
             }
             assertEquals(
-                listOf("agent-b"),
+                listOf("agent-a", "agent-b"),
                 catalog.snapshots().map { snapshot -> snapshot.agentId },
             )
+            assertEquals(true, catalog.snapshot(FIRST_ROW, "agent-a")?.stale)
+            assertEquals(false, catalog.snapshot(FIRST_ROW, "agent-b")?.stale)
+            assertEquals(1, catalog.snapshot(FIRST_ROW, "agent-a")?.sessions?.size)
+        } finally {
+            runtime.closeConnection(FIRST_ROW)
+            launcher.close()
+        }
+    }
+
+    @Test
+    fun listFailsWhenNoAgentIsLaunchable() = runBlocking {
+        val launcher = FakeLauncher(emptyList())
+        val catalog = AcpSessionCatalog()
+        val runtime = AgentRuntime(
+            launcher = launcher,
+            files = NoopFiles,
+            catalog = catalog,
+        )
+        catalog.replaceAgent(
+            connectionId = FIRST_ROW,
+            agentId = "agent-a",
+            sessions = listOf(
+                AcpSessionInfo(
+                    agentId = "agent-a",
+                    sessionId = "sess_kept",
+                    cwd = "/tmp/kept",
+                    title = "Kept",
+                    updatedAt = "2026-11-01T00:00:00Z",
+                ),
+            ),
+        )
+        try {
+            val result = runtime.listSessions(FIRST_ROW)
+
+            assertTrue(result.isFailure)
+            assertEquals(
+                "No enabled agents on this host.",
+                result.exceptionOrNull()?.message,
+            )
+            assertEquals("sess_kept", catalog.find(FIRST_ROW, "agent-a", "sess_kept")?.sessionId)
+        } finally {
+            runtime.closeConnection(FIRST_ROW)
+            launcher.close()
+        }
+    }
+
+    @Test
+    fun listKeepsKnownRowsWhenTheAgentCannotList() = runBlocking {
+        val launcher = FakeLauncher()
+        launcher.supportsSessionList = false
+        val catalog = AcpSessionCatalog()
+        val runtime = AgentRuntime(
+            launcher = launcher,
+            files = NoopFiles,
+            catalog = catalog,
+        )
+        try {
+            runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/no-list").getOrThrow()
+            runtime.listSessions(FIRST_ROW).getOrThrow()
+
+            val snapshot = catalog.snapshot(FIRST_ROW, AGENT_ID)
+            assertNotNull(snapshot)
+            assertEquals("This agent does not support listing sessions.", snapshot?.error)
+            assertEquals(1, snapshot?.sessions?.size)
         } finally {
             runtime.closeConnection(FIRST_ROW)
             launcher.close()
@@ -757,6 +821,9 @@ private class FakeLauncher(
         private set
 
     @Volatile
+    var supportsSessionList: Boolean = true
+
+    @Volatile
     var failNewChannelWrites: Boolean = false
 
     @Volatile
@@ -776,6 +843,7 @@ private class FakeLauncher(
         channels += channel
         agents += FakeAgent(channel, scope).also { agent ->
             agent.failLoadUnknownId = failLoadUnknownId
+            agent.supportsSessionList = supportsSessionList
             agent.start()
         }
         return Result.success(channel)
@@ -888,6 +956,9 @@ private class FakeAgent(
     @Volatile
     var answerPrompts: Boolean = true
 
+    @Volatile
+    var supportsSessionList: Boolean = true
+
     /** When set, `session/load` for this id answers with ACP's not-found code. */
     @Volatile
     var failLoadUnknownId: String? = null
@@ -936,7 +1007,9 @@ private class FakeAgent(
                     putJsonObject("agentCapabilities") {
                         put("loadSession", true)
                         putJsonObject("sessionCapabilities") {
-                            putJsonObject("list") { }
+                            if (supportsSessionList) {
+                                putJsonObject("list") { }
+                            }
                             putJsonObject("delete") { }
                         }
                     }

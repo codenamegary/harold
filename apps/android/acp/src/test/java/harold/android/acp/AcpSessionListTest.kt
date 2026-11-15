@@ -296,7 +296,7 @@ class AcpSessionListTest {
     }
 
     @Test
-    fun processExitKeepsGoneSessionTombstones() {
+    fun processExitKeepsRowsAsStaleInsteadOfDroppingThem() {
         val catalog = AcpSessionCatalog()
         catalog.replaceAgent(
             connectionId = "conn",
@@ -310,8 +310,64 @@ class AcpSessionListTest {
 
         catalog.removeAgent("conn", "opencode")
 
-        assertNull(catalog.find("conn", "opencode", "sess_1"))
+        assertEquals(true, catalog.snapshot("conn", "opencode")?.stale)
+        assertEquals("sess_1", catalog.find("conn", "opencode", "sess_1")?.sessionId)
         assertEquals(true, catalog.find("conn", "opencode", "sess_2")?.unavailable)
+    }
+
+    @Test
+    fun aSuccessfulListClearsStaleRowsTheAgentNoLongerReports() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(
+                session("opencode", "sess_1", "2026-11-01T00:00:00Z"),
+                session("opencode", "sess_2", "2026-11-02T00:00:00Z"),
+            ),
+        )
+        catalog.removeAgent("conn", "opencode")
+        assertEquals(true, catalog.snapshot("conn", "opencode")?.stale)
+
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+
+        assertEquals(false, catalog.snapshot("conn", "opencode")?.stale)
+        assertEquals("sess_1", catalog.find("conn", "opencode", "sess_1")?.sessionId)
+        assertNull(catalog.find("conn", "opencode", "sess_2"))
+    }
+
+    @Test
+    fun aPartialPageKeepsRowsThatLaterPagesHaveNotReportedYet() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(
+                session("opencode", "sess_1", "2026-11-01T00:00:00Z"),
+                session("opencode", "sess_2", "2026-11-02T00:00:00Z"),
+            ),
+        )
+
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+            loading = true,
+        )
+
+        assertEquals("sess_2", catalog.find("conn", "opencode", "sess_2")?.sessionId)
+
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+
+        assertNull(catalog.find("conn", "opencode", "sess_2"))
     }
 
     @Test

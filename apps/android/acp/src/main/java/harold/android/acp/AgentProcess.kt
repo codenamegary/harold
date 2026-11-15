@@ -78,6 +78,10 @@ class AgentProcess internal constructor(
     private var canList: Boolean = false
     private var canDelete: Boolean = false
 
+    /** False when the agent did not advertise ACP `session/list`. */
+    val supportsSessionList: Boolean
+        get() = canList
+
     private val intentional = AtomicBoolean(false)
     private val closing = AtomicBoolean(false)
     private val started = AtomicBoolean(false)

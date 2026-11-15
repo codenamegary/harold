@@ -60,6 +60,11 @@
     <string name="chat_session_gone_start_new">Start new session</string>
     <string name="chat_select_session">Select session</string>
     <string name="chat_new_session">New session</string>
+    <string name="chat_sessions_loading">Loading…</string>
+    <string name="chat_sessions_empty">No recent sessions</string>
+    <string name="chat_sessions_retry">Retry</string>
+    <string name="chat_sessions_refresh_failed">Could not refresh sessions. Tap to retry.</string>
+    <string name="chat_session_stale">Offline</string>
     <string name="create_session_new_workspace">New workspace</string>
     <string name="create_session_start">Start Session</string>
     <string name="create_session_starting">Starting…</string>

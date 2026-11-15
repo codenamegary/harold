@@ -212,6 +212,59 @@ class ChatUiStateTest {
         assertFalse(reset.pickerVisible)
     }
 
+    @Test
+    fun menuShowsRowsBeforeLoadingOrError() {
+        val row = sessionRow(SessionState.Idle)
+        val state = ChatUiState(
+            hasLoaded = true,
+            isRefreshing = true,
+            recentSessions = listOf(row),
+            recentSessionsError = "offline",
+        )
+
+        assertEquals(
+            SessionMenuContent.Rows(listOf(row), "offline"),
+            state.sessionMenuContent,
+        )
+    }
+
+    @Test
+    fun menuShowsLoadingBeforeTheFirstRefreshFinishes() {
+        val state = ChatUiState(hasLoaded = false)
+
+        assertEquals(SessionMenuContent.Loading, state.sessionMenuContent)
+    }
+
+    @Test
+    fun menuShowsLoadingWhileThePickerRefreshRuns() {
+        val state = ChatUiState(
+            hasLoaded = true,
+            recentSessionsLoading = true,
+        )
+
+        assertEquals(SessionMenuContent.Loading, state.sessionMenuContent)
+    }
+
+    @Test
+    fun menuShowsTheErrorBeforeAnEmptyState() {
+        val state = ChatUiState(
+            hasLoaded = true,
+            recentSessionsError = "Could not reach Harold",
+        )
+
+        assertEquals(
+            SessionMenuContent.Failed("Could not reach Harold"),
+            state.sessionMenuContent,
+        )
+    }
+
+    @Test
+    fun menuShowsAnExplicitEmptyStateAfterAnAuthoritativeRefresh() {
+        val state = ChatUiState(hasLoaded = true)
+
+        assertEquals(SessionMenuContent.Empty, state.sessionMenuContent)
+    }
+
     private fun permissionRequest() = PermissionRequest(
         id = "perm_01",
         sessionId = "sess_01",

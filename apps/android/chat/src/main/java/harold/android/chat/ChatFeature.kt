@@ -87,6 +87,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                     viewModel.hidePicker()
                     navigator.openSessions()
                 },
+                onRetryRecentSessions = viewModel::retryRecentSessions,
                 onCreateClick = {
                     viewModel.hidePicker()
                     navigator.openCreateSession()

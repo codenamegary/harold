@@ -25,6 +25,10 @@ class TestSessionRepository(
     private val loading = MutableStateFlow<Set<Pair<String, AgentId>>>(emptySet())
     private val errors = MutableStateFlow<Map<Pair<String, AgentId>, String>>(emptyMap())
 
+    /** The authority flags the next refresh reports. */
+    var authoritative: Boolean = true
+    var refreshError: String? = null
+
     override fun observeSessions(): Flow<List<SessionListItem>> = sessions
 
     override fun observeSessions(connectionId: String): Flow<List<SessionListItem>> =
@@ -69,6 +73,8 @@ class TestSessionRepository(
             SessionCatalog(
                 agents = agentItems,
                 workspaces = workspaces,
+                authoritative = authoritative,
+                error = refreshError,
             ),
         )
     }

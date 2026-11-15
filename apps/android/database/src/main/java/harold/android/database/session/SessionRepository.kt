@@ -25,16 +25,24 @@ data class SessionListItem(
     val workspaceName: String,
     val agentLabel: String,
     val unavailable: Boolean = false,
+    /** True when the agent process is gone and this is the last known row. */
+    val stale: Boolean = false,
 )
 
 /**
  * The live lists that a refresh read from the network. Chat uses them for
  * transient UI state that is not part of the Room cache, such as agent auth
  * summaries and attachment capabilities.
+ *
+ * [authoritative] is false when at least one enabled agent did not answer
+ * `session/list`, or when no agent answered at all. An empty list from a
+ * non-authoritative refresh must not replace rows the UI already shows.
  */
 data class SessionCatalog(
     val agents: List<AgentSettings> = emptyList(),
     val workspaces: List<Workspace> = emptyList(),
+    val authoritative: Boolean = true,
+    val error: String? = null,
 )
 
 /**
@@ -150,6 +158,11 @@ class DefaultSessionRepository @Inject constructor(
             return Result.failure(checkNotNull(sessionsResult.exceptionOrNull()))
         }
 
+        val snapshots = catalog.observeSnapshots(connectionId).first()
+        val agentError = snapshots.firstNotNullOfOrNull { snapshot -> snapshot.error }
+        val authoritative = snapshots.isNotEmpty() &&
+            snapshots.none { snapshot -> snapshot.loading || snapshot.error != null }
+
         val agents = agentRepository.refreshAgents(connectionId).getOrNull().orEmpty()
         workspaceRepository.refresh(connectionId)
         val workspaces = workspaceRepository.observe(connectionId).first()
@@ -158,6 +171,8 @@ class DefaultSessionRepository @Inject constructor(
             SessionCatalog(
                 agents = agents,
                 workspaces = workspaces,
+                authoritative = authoritative,
+                error = agentError,
             ),
         )
     }
@@ -218,6 +233,7 @@ class DefaultSessionRepository @Inject constructor(
                     workspaceName = workspace?.name ?: session.cwd,
                     agentLabel = agent?.displayName ?: session.agentId,
                     unavailable = session.unavailable,
+                    stale = snapshot.stale,
                 )
             }
         }.sortedByDescending { cached -> cached.session.updatedAt }

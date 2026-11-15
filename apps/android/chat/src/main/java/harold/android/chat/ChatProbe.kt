@@ -68,6 +68,8 @@ internal interface ChatProbeHost {
 
     fun hideSessionMenu()
 
+    fun retrySessionMenu()
+
     fun selectSession(row: SessionRow)
 
     fun newSession()
@@ -132,6 +134,10 @@ internal class ChatProbe(
         }
         "close_session_menu" -> {
             host.hideSessionMenu()
+            true
+        }
+        "retry_session_menu" -> {
+            host.retrySessionMenu()
             true
         }
         "pick_session" -> pickSession(args["id"])
@@ -278,6 +284,14 @@ internal class ChatProbe(
 /** The tag on one session row inside the header dropdown. */
 internal fun sessionMenuRowTag(sessionId: String): String = "session_menu_row_$sessionId"
 
+private fun sessionMenuStateFact(state: ChatUiState): String =
+    when (state.sessionMenuContent) {
+        SessionMenuContent.Loading -> "loading"
+        is SessionMenuContent.Failed -> "failed"
+        SessionMenuContent.Empty -> "empty"
+        is SessionMenuContent.Rows -> "rows"
+    }
+
 /** The tag on one option row inside the agent-question sheet. */
 internal fun elicitationOptionTag(questionKey: String, optionValue: String): String =
     "elicitation_option_${questionKey}_$optionValue"
@@ -286,8 +300,7 @@ internal fun elicitationOptionTag(questionKey: String, optionValue: String): Str
  * Flat strings only, derived from the one state the screen renders. Nothing
  * here reads a compose tree, so it is safe to call from the control-plane thread.
  */
-internal fun chatProbeFacts(state: ChatUiState): Map<String, String> {
-    val active = state.activeElicitation
+internal fun chatProbeFacts(state: ChatUiState): Map<String, String> {    val active = state.activeElicitation
     val usage = state.contextUsage
     val mode = state.composerConfig.mode as? SelectOption
     return mapOf(
@@ -296,7 +309,12 @@ internal fun chatProbeFacts(state: ChatUiState): Map<String, String> {
         "sessionState" to chatSessionStateFact(state),
         "sessionGone" to state.sessionGone.toString(),
         "sessionMenuOpen" to state.pickerVisible.toString(),
+        "sessionMenuState" to sessionMenuStateFact(state),
         "sessionMenuCount" to state.recentSessions.size.toString(),
+        "sessionMenuRowIds" to state.recentSessions.joinToString(",") { row -> row.id },
+        "sessionMenuError" to state.recentSessionsError.orEmpty(),
+        "sessionMenuLoading" to (state.sessionMenuContent is SessionMenuContent.Loading).toString(),
+        "selectedSessionOrigin" to state.selectedSession?.connectionId.orEmpty(),
         "mode" to mode?.currentValue.orEmpty(),
         "modeOptions" to mode?.options.orEmpty().joinToString(",") { option -> option.value },
         "model" to composerModelLabel(state.composerConfig),
@@ -335,6 +353,7 @@ internal fun chatProbeFacts(state: ChatUiState): Map<String, String> {
 internal fun chatProbeActions(hasFixture: Boolean): List<String> = buildList {
     add("open_session_menu")
     add("close_session_menu")
+    add("retry_session_menu")
     add("pick_session")
     add("open_new_session")
     add("see_all_sessions")
@@ -423,6 +442,8 @@ internal class ChatViewModelProbeHost(
     override fun showSessionMenu() = viewModel.showPicker()
 
     override fun hideSessionMenu() = viewModel.hidePicker()
+
+    override fun retrySessionMenu() = viewModel.retryRecentSessions()
 
     override fun selectSession(row: SessionRow) = viewModel.selectSession(row)
 

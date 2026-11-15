@@ -117,6 +117,78 @@ class SessionSelectorUiTest {
     }
 
     @Test
+    fun sessionMenuShowsLoadingBeforeTheFirstRefresh() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(pickerVisible = true, hasLoaded = false),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_menu_loading").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionMenuEmptyStateRetries() {
+        var retry = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(pickerVisible = true, hasLoaded = true),
+                    onRetryRecentSessions = { retry = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_menu_empty").assertIsDisplayed().performClick()
+        assertTrue(retry)
+    }
+
+    @Test
+    fun sessionMenuFailureShowsRetry() {
+        var retry = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        pickerVisible = true,
+                        hasLoaded = true,
+                        recentSessionsError = "offline",
+                    ),
+                    onRetryRecentSessions = { retry = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_menu_error").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_menu_retry").assertIsDisplayed().performClick()
+        assertTrue(retry)
+    }
+
+    @Test
+    fun sessionMenuKeepsRowsVisibleWhenRefreshFails() {
+        var retry = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        pickerVisible = true,
+                        hasLoaded = true,
+                        recentSessions = listOf(sampleSession),
+                        recentSessionsError = "offline",
+                    ),
+                    onRetryRecentSessions = { retry = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_menu_row_cursor:sess_01").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_menu_refresh_error").assertIsDisplayed().performClick()
+        assertTrue(retry)
+    }
+
+    @Test
     fun sessionsListShowsSearchFabAndRows() {
         var searchValue = ""
         var createClicked = false
@@ -208,6 +280,61 @@ class SessionSelectorUiTest {
         composeTestRule.onNodeWithTag("session_connection_${laptop.id}", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Unreachable").assertIsDisplayed()
         composeTestRule.onNodeWithTag("session_filter_all").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionMenuMarksStaleRowsOffline() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        pickerVisible = true,
+                        recentSessions = listOf(sampleSession.copy(stale = true)),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_menu_stale_cursor:sess_01", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionMenuHidesOfflineForTheSelectedRow() {
+        val stale = sampleSession.copy(stale = true)
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        pickerVisible = true,
+                        selectedSession = stale,
+                        recentSessions = listOf(stale),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_menu_stale_cursor:sess_01", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun sessionsListMarksStaleRowsOffline() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                SessionsScreen(
+                    uiState = SessionsUiState(
+                        sessions = listOf(sampleSession.copy(stale = true)),
+                        loading = false,
+                    ),
+                    onBack = {},
+                    onSearchChanged = {},
+                    onSessionClick = {},
+                    onDeleteSession = {},
+                    onCreateClick = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_stale_cursor:sess_01", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test

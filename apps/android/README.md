@@ -56,9 +56,10 @@ Android app -> SSH connection pool -> `agent acp` (one process per host identity
 - Creating, listing, deleting, restarting, and reading capabilities all use the
   same warm process. A session list refresh or an agent scan does not spawn an
   extra process.
-- If a process exits, every session it hosted goes offline. The watched session
-  reconnects through the one existing retry loop and starts one new process.
-  Other sessions stay offline until opened again.
+- If a process exits, every session it hosted goes offline. The session list
+  keeps those rows and marks them offline until a successful `session/list`
+  confirms them. The watched session reconnects through the one existing retry
+  loop and starts one new process. Other sessions start a process when opened.
 - A failed session attach discards the in-memory session. Two consecutive
   failures also restart that agent's warm process. After five failed attaches
   before the stream opens, the reconnect loop stops and shows the agent's
