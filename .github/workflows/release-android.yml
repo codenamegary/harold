@@ -67,11 +67,10 @@ jobs:
         with:
           packages: "platform-tools platforms;android-37.0 build-tools;36.0.0"
 
+      # Enhanced caching is the default: restore keys, deduped dependencies,
+      # and cleanup.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
-        with:
-          # Open-source actions/cache wrapper. The default provider is proprietary.
-          cache-provider: basic
 
       - name: Restore the signing keystore
         env:
@@ -97,7 +96,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon --stacktrace assembleRelease bundleRelease
+        run: ./gradlew --stacktrace assembleRelease bundleRelease
 
       - name: Verify and name the APK
         run: |

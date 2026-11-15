@@ -4,7 +4,9 @@ plugins {
     alias(libs.plugins.harold.android.hilt)
 }
 
-val appVersionName = "4.3.0" // x-release-please-version
+// release-please updates version.txt. Keeping the version out of a Gradle file
+// keeps the CI Gradle cache key stable across releases.
+val appVersionName = rootProject.file("version.txt").readText().trim()
 val appVersionCode = run {
     val match = checkNotNull(Regex("""^(\d+)\.(\d+)\.(\d+)$""").matchEntire(appVersionName)) {
         "versionName must be MAJOR.MINOR.PATCH, got $appVersionName"

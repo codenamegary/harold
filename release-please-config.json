@@ -8,8 +8,7 @@
     "apps/android": {
       "release-type": "simple",
       "component": "harold-android",
-      "include-component-in-tag": true,
-      "extra-files": [{ "type": "generic", "path": "app/build.gradle.kts" }]
+      "include-component-in-tag": true
     }
   },
   "changelog-sections": [
