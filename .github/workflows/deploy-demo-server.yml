@@ -1,0 +1,107 @@
+name: deploy-demo-server
+
+# Deploys the fake SSH demo server from apps/demo-server to the VPS. The VPS
+# keeps a clone of this repo at /home/ubuntu/repos/harold, bind-mounted
+# read-only into the harold-demo container in the codenamegary.com compose
+# stack. A deploy pulls the tested commit, installs runtime dependencies on
+# the host, then recreates the container.
+#
+# The public listener is TCP 3937. The container publishes that port from the
+# codenamegary.com compose stack. Caddy does not proxy this service.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/demo-server/**"
+      - ".github/workflows/deploy-demo-server.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-demo-server
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/demo-server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun test
+
+      - name: Typecheck
+        run: bun run typecheck
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull, install, and recreate harold-demo
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -euo pipefail
+
+          install -m 600 /dev/null id_ed25519
+          printf '%s\n' "$VPS_SSH_KEY" > id_ed25519
+          OPTS=(-i id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+          trap 'rm -f id_ed25519' EXIT
+
+          # Pass the tested commit, not origin/main, so a later push cannot
+          # change what this run deploys. The remote script rejects commits
+          # that are not on main.
+          ssh "${OPTS[@]}" "$VPS_HOST" bash -s -- "$GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+
+          target="$1"
+
+          exec 9>/tmp/harold-demo-deploy.lock
+          flock -w 120 9
+
+          cd /home/ubuntu/repos/harold
+          git fetch --prune origin main
+          git cat-file -e "${target}^{commit}"
+          git merge-base --is-ancestor "$target" origin/main
+          git reset --hard "$target"
+
+          cd apps/demo-server
+          "$HOME/.bun/bin/bun" install --frozen-lockfile --production
+
+          cd /home/ubuntu/repos/codenamegary.com
+          git pull --ff-only origin main
+          docker compose up -d --no-deps --force-recreate harold-demo
+
+          status=
+          for _ in $(seq 1 30); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' harold-demo 2>/dev/null || true)"
+            if [ "$status" = healthy ]; then
+              echo "harold-demo is healthy at $(git -C /home/ubuntu/repos/harold rev-parse --short HEAD)"
+              exit 0
+            fi
+            if [ "$status" = unhealthy ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          echo "harold-demo did not become healthy (status: ${status:-unknown})"
+          docker compose logs --tail=50 harold-demo
+          exit 1
+          REMOTE
