@@ -9,6 +9,7 @@ import harold.android.live.SessionOwner
 import harold.android.session.Connections
 import harold.android.session.ActiveConnectionState
 import harold.android.session.ConnectionGateway
+import harold.android.stream.SessionStatus
 import harold.android.transport.ssh.SshConnectionPool
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -79,7 +80,16 @@ class HaroldConnectionHost(
     fun onAppBackground() {
         connections.onBackground()
         val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
-        val staysConnected = active != null && connections.shouldStayConnected(active.connectionId)
+        val activeHeld = active != null && connections.shouldStayConnected(active.connectionId)
+        val anyConnectionHeld = connections.connections.value.any { link ->
+            connections.shouldStayConnected(link.connectionId)
+        }
+        // The watched session is the one the user is looking at. Its live
+        // status is the strongest signal, even if the connection roster has
+        // not caught up with the latest frame.
+        val staysConnected = activeHeld ||
+            anyConnectionHeld ||
+            sessionOwner.sessionStatus.value.hasLiveWork()
         if (staysConnected) {
             sessionOwner.onBackground()
         } else {
@@ -92,4 +102,18 @@ class HaroldConnectionHost(
             connectionPool.closeAll()
         }
     }
+}
+
+private fun SessionStatus.hasLiveWork(): Boolean = when (this) {
+    SessionStatus.Starting,
+    SessionStatus.Reloading,
+    SessionStatus.Running,
+    SessionStatus.AwaitingPermission,
+    SessionStatus.AwaitingAnswer,
+    -> true
+    SessionStatus.Ready,
+    SessionStatus.Offline,
+    SessionStatus.AuthFailed,
+    SessionStatus.Error,
+    -> false
 }

@@ -74,6 +74,29 @@ class SessionForegroundCoordinatorTest {
     }
 
     @Test
+    fun repeatedChangesWithTheSamePresentationDoNotRepostTheNotification() = runTest {
+        val tracker = DefaultActiveSessionTracker()
+        val launcher = FakeLauncher()
+        val coordinator = SessionForegroundCoordinator(
+            tracker = tracker,
+            permissionChecker = { true },
+            launcher = launcher,
+        )
+
+        coordinator.setConnectionId("https://example.test")
+        tracker.replaceAll(listOf(ActiveSessionSnapshot("s1", "One", SessionState.Running)))
+        coordinator.onSessionsChanged()
+        advanceUntilIdle()
+        val updatesAfterFirstFrame = launcher.updates
+
+        repeat(20) { coordinator.onSessionsChanged() }
+        advanceUntilIdle()
+
+        assertEquals(updatesAfterFirstFrame, launcher.updates)
+        assertTrue(launcher.isRunning)
+    }
+
+    @Test
     fun severalActiveSessionsOpenTheSessionList() = runTest {
         val tracker = DefaultActiveSessionTracker()
         val launcher = FakeLauncher()
@@ -108,6 +131,8 @@ class SessionForegroundCoordinatorTest {
             private set
         var lastCopy: NotificationCopy? = null
             private set
+        var updates: Int = 0
+            private set
 
         override fun start() {
             isRunning = true
@@ -117,8 +142,9 @@ class SessionForegroundCoordinatorTest {
             isRunning = false
         }
 
-        override fun updateNotification(copy: NotificationCopy) {
-            lastCopy = copy
+        override fun updateNotification(presentation: RunningNotification) {
+            lastCopy = presentation.copy
+            updates += 1
         }
     }
 }

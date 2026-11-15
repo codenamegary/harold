@@ -75,8 +75,8 @@ class AcpSession internal constructor(
 ) : Closeable {
     internal val terminals = AcpTerminals(connectionId, process.launcher, scope)
 
-    private val pendingPermissions = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
-    private val pendingElicitations = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
+    private val pendingPermissions = ConcurrentHashMap<String, PendingInput>()
+    private val pendingElicitations = ConcurrentHashMap<String, PendingInput>()
     private val urlElicitationRequests = ConcurrentHashMap<String, String>()
     private val prompting = AtomicBoolean(false)
     private val turnMutex = Mutex()
@@ -220,6 +220,10 @@ class AcpSession internal constructor(
                 }
                 _status.value = SessionStatus.Ready
                 emitFrame(Subscribed(agentId = agentId, sessionId = sessionId))
+                // A backgrounded or switched-away stream can drop while the
+                // agent is waiting for the user. Replay those requests to the
+                // new subscriber instead of leaving the turn stuck.
+                emitPendingInputs()
             }
         } catch (error: Throwable) {
             if (!process.isDead) {
@@ -376,11 +380,11 @@ class AcpSession internal constructor(
         urlElicitationRequests.containsKey(elicitationId)
 
     suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> {
-        val deferred = pendingPermissions.remove(requestId)
+        val pending = pendingPermissions.remove(requestId)
             ?: return Result.failure(
                 IllegalStateException("Permission request is no longer active."),
             )
-        deferred.complete(
+        pending.result.complete(
             buildJsonObject {
                 putJsonObject("outcome") {
                     put("outcome", "selected")
@@ -393,9 +397,9 @@ class AcpSession internal constructor(
     }
 
     suspend fun replyElicitation(requestId: String, result: JsonElement): Result<Unit> {
-        val deferred = pendingElicitations.remove(requestId)
+        val pending = pendingElicitations.remove(requestId)
             ?: return Result.failure(IllegalStateException("Elicitation is no longer active."))
-        deferred.complete(result)
+        pending.result.complete(result)
         emitFrame(
             ElicitationResolved(
                 requestId = requestId,
@@ -480,8 +484,8 @@ class AcpSession internal constructor(
     }
 
     internal suspend fun awaitPermission(id: String, params: JsonElement): JsonElement {
-        val deferred = CompletableDeferred<JsonElement>()
-        pendingPermissions[id] = deferred
+        val pending = PendingInput(params = params)
+        pendingPermissions[id] = pending
         _status.value = SessionStatus.AwaitingPermission
         emitFrame(
             PermissionRequest(
@@ -492,7 +496,7 @@ class AcpSession internal constructor(
             ),
         )
         return try {
-            withTimeout(PERMISSION_TIMEOUT_MILLIS) { deferred.await() }
+            withTimeout(PERMISSION_TIMEOUT_MILLIS) { pending.result.await() }
         } finally {
             pendingPermissions.remove(id)
             settleStatusAfterReply()
@@ -500,8 +504,8 @@ class AcpSession internal constructor(
     }
 
     internal suspend fun awaitElicitation(id: String, params: JsonElement): JsonElement {
-        val deferred = CompletableDeferred<JsonElement>()
-        pendingElicitations[id] = deferred
+        val pending = PendingInput(params = params)
+        pendingElicitations[id] = pending
         val elicitationId = params.string("elicitationId")
         if (elicitationId != null) {
             urlElicitationRequests[elicitationId] = id
@@ -517,10 +521,34 @@ class AcpSession internal constructor(
             ),
         )
         return try {
-            withTimeout(ELICITATION_TIMEOUT_MILLIS) { deferred.await() }
+            withTimeout(ELICITATION_TIMEOUT_MILLIS) { pending.result.await() }
         } finally {
             pendingElicitations.remove(id)
             settleStatusAfterReply()
+        }
+    }
+
+    private fun emitPendingInputs() {
+        pendingPermissions.forEach { (requestId, pending) ->
+            emitFrame(
+                PermissionRequest(
+                    requestId = requestId,
+                    agentId = agentId,
+                    sessionId = sessionId,
+                    params = pending.params,
+                ),
+            )
+        }
+        pendingElicitations.forEach { (requestId, pending) ->
+            emitFrame(
+                ElicitationRequest(
+                    requestId = requestId,
+                    agentId = agentId,
+                    sessionId = sessionId,
+                    params = pending.params,
+                    expiresAt = Instant.now().plusSeconds(300).toString(),
+                ),
+            )
         }
     }
 
@@ -563,12 +591,9 @@ class AcpSession internal constructor(
         }
         subscriber.channel.close()
         subscriber.closed.complete(null)
-        if (subscribers.isEmpty() && prompting.get()) {
-            scope.launch {
-                runCatching { process.cancelSession(sessionId) }
-            }
-            cancelPendingRequests()
-        }
+        // A stream detach is not a user cancel. Backgrounding, switching
+        // sessions, or reopening a session must not stop a running turn or
+        // discard a pending permission/question. cancel() remains explicit.
     }
 
     private fun closeSubscribers(reason: String?) {
@@ -584,10 +609,10 @@ class AcpSession internal constructor(
         val cancelled = buildJsonObject {
             putJsonObject("outcome") { put("outcome", "cancelled") }
         }
-        pendingPermissions.values.forEach { deferred -> deferred.complete(cancelled) }
+        pendingPermissions.values.forEach { pending -> pending.result.complete(cancelled) }
         pendingPermissions.clear()
-        pendingElicitations.values.forEach { deferred ->
-            deferred.complete(buildJsonObject { put("action", "cancel") })
+        pendingElicitations.values.forEach { pending ->
+            pending.result.complete(buildJsonObject { put("action", "cancel") })
         }
         pendingElicitations.clear()
         urlElicitationRequests.clear()
@@ -647,6 +672,11 @@ class AcpSession internal constructor(
             put("name", reference.name)
             put("mimeType", reference.mimeType)
         }
+
+    private class PendingInput(
+        val params: JsonElement,
+        val result: CompletableDeferred<JsonElement> = CompletableDeferred(),
+    )
 
     private class Subscriber(
         val channel: Channel<SessionStreamServerMessage>,

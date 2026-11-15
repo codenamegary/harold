@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
@@ -176,33 +177,41 @@ class AndroidNotificationPermissionChecker @Inject constructor(
 class AndroidSessionForegroundLauncher @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : SessionForegroundLauncher {
-    @Volatile
-    override var isRunning: Boolean = false
-        private set
+    override val isRunning: Boolean
+        get() = ActiveSessionsService.running
 
     override fun start() {
         val intent = Intent(context, ActiveSessionsService::class.java).apply {
             action = ActiveSessionsService.ACTION_START
         }
-        ContextCompat.startForegroundService(context, intent)
-        isRunning = true
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (error: IllegalStateException) {
+            // A background start can be refused by the OS. It must never take
+            // the app down; the next foreground reconcile can try again.
+            Log.w(TAG, "could not start the active sessions service", error)
+        }
     }
 
     override fun stop() {
-        val intent = Intent(context, ActiveSessionsService::class.java).apply {
-            action = ActiveSessionsService.ACTION_STOP
-        }
-        context.startService(intent)
-        isRunning = false
+        // stopService is allowed from the background, unlike startService.
+        context.stopService(Intent(context, ActiveSessionsService::class.java))
     }
 
-    override fun updateNotification(copy: NotificationCopy) {
-        val intent = Intent(context, ActiveSessionsService::class.java).apply {
-            action = ActiveSessionsService.ACTION_UPDATE
-            putExtra(ActiveSessionsService.EXTRA_TITLE, copy.title)
-            putExtra(ActiveSessionsService.EXTRA_TEXT, copy.text)
-        }
-        context.startService(intent)
+    override fun updateNotification(presentation: RunningNotification) {
+        val notification = buildActiveSessionsNotification(
+            context = context,
+            copy = presentation.copy,
+            openSessionId = presentation.openSessionId,
+            openSessionList = presentation.openSessionList,
+            largeIconRes = haroldNotificationIconRes(presentation.largeIconId),
+        )
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.notify(ACTIVE_SESSIONS_NOTIFICATION_ID, notification)
+    }
+
+    private companion object {
+        const val TAG = "HaroldForeground"
     }
 }
 

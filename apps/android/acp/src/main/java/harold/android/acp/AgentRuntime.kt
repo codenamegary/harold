@@ -314,6 +314,12 @@ class AgentRuntime @Inject constructor(
 
     /** Closes processes with no attached stream and no running prompt. */
     fun onBackground() {
+        if (processes.values.any { process -> !process.isDead && process.hasWork() }) {
+            // Closing one channel on a shared SSH session while another agent
+            // is mid-turn can corrupt the transport. Keep every process on the
+            // host warm until no session has work.
+            return
+        }
         idleProcesses { _ -> true }.forEach { process -> process.close(intentional = true) }
     }
 

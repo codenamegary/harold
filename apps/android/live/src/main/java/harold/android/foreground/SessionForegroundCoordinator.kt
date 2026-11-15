@@ -15,7 +15,7 @@ interface SessionForegroundLauncher {
 
     fun stop()
 
-    fun updateNotification(copy: NotificationCopy)
+    fun updateNotification(presentation: RunningNotification)
 
     val isRunning: Boolean
 }
@@ -106,7 +106,7 @@ class SessionForegroundCoordinator @Inject constructor(
             return
         }
 
-        _state.value = ForegroundCoordinatorState(
+        val next = ForegroundCoordinatorState(
             serviceDesired = true,
             permissionDenied = false,
             notification = presentation.copy,
@@ -114,10 +114,15 @@ class SessionForegroundCoordinator @Inject constructor(
             openSessionList = presentation.openSessionList,
             largeIconId = presentation.largeIconId,
         )
+        val changed = next != _state.value
+        val wasRunning = launcher.isRunning
+        _state.value = next
 
-        if (!launcher.isRunning) {
+        if (!wasRunning) {
             launcher.start()
         }
-        launcher.updateNotification(presentation.copy)
+        if (changed || !wasRunning) {
+            launcher.updateNotification(presentation)
+        }
     }
 }
