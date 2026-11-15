@@ -47,24 +47,50 @@ type SessionRecord = {
 
 export type AgentSessionStore = {
   getSessions: (agentId: string) => Array<SessionRecord>
+  nextSessionId: (agentId: string) => string
+}
+
+type AgentSessionBucket = {
+  sessions: Array<SessionRecord>
+  nextNumber: number
+}
+
+const sessionNumber = (sessionId: string): number => {
+  const match = /_(\d+)$/.exec(sessionId)
+  return match?.[1] ? Number(match[1]) : 0
 }
 
 export const createAgentSessionStore = (): AgentSessionStore => {
-  const byAgent = new Map<string, Array<SessionRecord>>()
+  const byAgent = new Map<string, AgentSessionBucket>()
+
+  const bucketFor = (agentId: string): AgentSessionBucket => {
+    const existing = byAgent.get(agentId)
+    if (existing) {
+      return existing
+    }
+    const sessions: Array<SessionRecord> = createSeededSessions(agentId).map(
+      (s: SeededSession) => ({
+        ...s,
+        history: [...s.history],
+      }),
+    )
+    const nextNumber = sessions.reduce(
+      (highest, session) => Math.max(highest, sessionNumber(session.sessionId)),
+      0,
+    ) + 1
+    const bucket = { sessions, nextNumber }
+    byAgent.set(agentId, bucket)
+    return bucket
+  }
+
   return {
-    getSessions: (agentId: string) => {
-      const existing = byAgent.get(agentId)
-      if (existing) {
-        return existing
-      }
-      const seeded: Array<SessionRecord> = createSeededSessions(agentId).map(
-        (s: SeededSession) => ({
-          ...s,
-          history: [...s.history],
-        }),
-      )
-      byAgent.set(agentId, seeded)
-      return seeded
+    getSessions: (agentId: string) => bucketFor(agentId).sessions,
+    nextSessionId: (agentId: string) => {
+      const bucket = bucketFor(agentId)
+      const prefix = `ses_demo_${agentId.replace(/[^a-z0-9]/gi, "_")}_`
+      const sessionId = `${prefix}${String(bucket.nextNumber).padStart(4, "0")}`
+      bucket.nextNumber += 1
+      return sessionId
     },
   }
 }
@@ -240,6 +266,12 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
       status: "completed",
     })
   }
+
+  const sessionPrefix = `ses_demo_${deps.agentId.replace(/[^a-z0-9]/gi, "_")}_`
+
+  const isDemoSessionId = (sessionId: string): boolean =>
+    sessionId.startsWith(sessionPrefix) &&
+    /^\d{4}$/.test(sessionId.slice(sessionPrefix.length))
 
   const findSession = (sessionId: string): SessionRecord | undefined =>
     deps.sessionStore.getSessions(deps.agentId).find((s) => s.sessionId === sessionId)
@@ -420,9 +452,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     if (msg.method === "session/new") {
       const cwd = typeof params.cwd === "string" && params.cwd ? params.cwd : deps.vfs.home
       const sessions = deps.sessionStore.getSessions(deps.agentId)
-      const sessionId = `ses_demo_${deps.agentId.replace(/[^a-z0-9]/gi, "_")}_${String(
-        sessions.length + 1,
-      ).padStart(4, "0")}`
+      const sessionId = deps.sessionStore.nextSessionId(deps.agentId)
       sessions.push({
         sessionId,
         cwd,
@@ -453,10 +483,25 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
 
     if (msg.method === "session/load") {
       const sessionId = String(params.sessionId ?? "")
-      const session = findSession(sessionId)
+      let session = findSession(sessionId)
       if (!session) {
-        respondError(id, -32002, `Unknown session: ${sessionId}`)
-        return
+        if (!isDemoSessionId(sessionId)) {
+          respondError(id, -32002, `Unknown session: ${sessionId}`)
+          return
+        }
+        // The app can create a session on one SSH connection and attach from
+        // another, or resume a cached id after a server restart. Adopt the id
+        // so the demo chat can attach instead of failing with Unknown session.
+        const cwd = typeof params.cwd === "string" && params.cwd ? params.cwd : deps.vfs.home
+        session = {
+          sessionId,
+          cwd,
+          title: "New session",
+          updatedAt: nowIso(),
+          turnIndex: 0,
+          history: [],
+        }
+        deps.sessionStore.getSessions(deps.agentId).push(session)
       }
       for (const entry of session.history) {
         if (entry.role === "user") {

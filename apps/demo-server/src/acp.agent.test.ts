@@ -35,6 +35,79 @@ const createHarness = () => {
 }
 
 describe("acp.agent", () => {
+  test("generates unique session ids after the seeded numbers", () => {
+    const store = createAgentSessionStore()
+
+    expect(store.nextSessionId("opencode")).toBe("ses_demo_opencode_0003")
+    expect(store.nextSessionId("opencode")).toBe("ses_demo_opencode_0004")
+    expect(store.nextSessionId("cursor")).toBe("ses_demo_cursor_0002")
+  })
+
+  test("runners sharing one store see each other's sessions", async () => {
+    const vfs = createVfsStore({ home: "/home/demo" })
+    const repos = seedVfsAndRepos(vfs)
+    const git = createVirtualGit(vfs, repos)
+    const store = createAgentSessionStore()
+    const outboundA: Array<JsonRpcMessage> = []
+    const outboundB: Array<JsonRpcMessage> = []
+    const agentA = createAcpAgentRunner({
+      agentId: "opencode",
+      vfs,
+      git,
+      sessionStore: store,
+      timing: { charDelayMs: 0, toolDelayMs: 0 },
+      emit: (msg) => outboundA.push(msg as JsonRpcMessage),
+    })
+    const agentB = createAcpAgentRunner({
+      agentId: "opencode",
+      vfs,
+      git,
+      sessionStore: store,
+      timing: { charDelayMs: 0, toolDelayMs: 0 },
+      emit: (msg) => outboundB.push(msg as JsonRpcMessage),
+    })
+
+    await agentA.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "session/new",
+        params: { cwd: CAT_WORKTREE_ROOT },
+      }),
+    )
+    const sessionId = outboundA.find((m) => m.id === 1)?.result?.sessionId as string
+    expect(sessionId).toBe("ses_demo_opencode_0003")
+
+    await agentB.handleLine(
+      JSON.stringify({ jsonrpc: "2.0", id: 2, method: "session/list", params: {} }),
+    )
+    const sessions = outboundB.find((m) => m.id === 2)?.result?.sessions as
+      | Array<{ sessionId: string }>
+      | undefined
+    expect(sessions?.some((session) => session.sessionId === sessionId)).toBe(true)
+
+    await agentB.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "session/load",
+        params: { sessionId, cwd: CAT_WORKTREE_ROOT },
+      }),
+    )
+    expect(outboundB.find((m) => m.id === 3)?.error).toBeUndefined()
+
+    await agentB.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "session/new",
+        params: { cwd: CAT_WORKTREE_ROOT },
+      }),
+    )
+    const secondId = outboundB.find((m) => m.id === 4)?.result?.sessionId as string
+    expect(secondId).toBe("ses_demo_opencode_0004")
+  })
+
   test("initializes, lists seeded sessions, and replays session/load", async () => {
     const { agent, outbound } = createHarness()
 
@@ -66,6 +139,40 @@ describe("acp.agent", () => {
           (m.params?.update as Record<string, unknown>)?.sessionUpdate === "user_message_chunk",
       ),
     ).toBe(true)
+  })
+
+  test("adopts an unknown demo session on load", async () => {
+    const { agent, outbound } = createHarness()
+
+    await agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 20,
+        method: "session/load",
+        params: { sessionId: "ses_demo_opencode_0099", cwd: CAT_WORKTREE_ROOT },
+      }),
+    )
+    const loadResp = outbound.find((m) => m.id === 20)
+    expect(loadResp?.error).toBeUndefined()
+    expect(loadResp?.result?.configOptions).toBeDefined()
+
+    await agent.handleLine(
+      JSON.stringify({ jsonrpc: "2.0", id: 21, method: "session/list", params: {} }),
+    )
+    const listResp = outbound.find((m) => m.id === 21)
+    const sessions = listResp?.result?.sessions as Array<{ sessionId: string }>
+    expect(sessions.some((session) => session.sessionId === "ses_demo_opencode_0099")).toBe(true)
+
+    await agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 22,
+        method: "session/load",
+        params: { sessionId: "ses_unknown_0001" },
+      }),
+    )
+    const rejected = outbound.find((m) => m.id === 22)
+    expect(rejected?.error?.message).toContain("Unknown session")
   })
 
   test("advances through the 3-turn linear script regardless of prompt text", async () => {

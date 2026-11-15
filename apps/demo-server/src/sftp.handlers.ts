@@ -4,8 +4,14 @@ import { VfsEntry, VfsStat, VfsStore } from "./vfs.store"
 const { STATUS_CODE, OPEN_MODE } = ssh2.utils.sftp
 
 type OpenHandle =
-  | { kind: "file"; path: string; flags: number; chunks: Array<Buffer> }
+  | { kind: "file"; path: string; flags: number }
   | { kind: "dir"; path: string; entries: ReadonlyArray<VfsEntry>; readDone: boolean }
+
+export type SftpHandlerOptions = {
+  maxHandles?: number
+}
+
+export const DEFAULT_MAX_SFTP_HANDLES = 64
 
 const toAttrs = (stat: VfsStat): Attributes => {
   const mtimeSec = Math.floor(stat.mtimeMs / 1000)
@@ -26,9 +32,14 @@ const formatLongname = (entry: VfsEntry): string => {
   return `${prefix}${perms} 1 demo demo ${size} Nov  9 22:30 ${entry.name}`
 }
 
-export const attachSftpHandlers = (sftp: SFTPWrapper, vfs: VfsStore): void => {
+export const attachSftpHandlers = (
+  sftp: SFTPWrapper,
+  vfs: VfsStore,
+  options?: SftpHandlerOptions,
+): void => {
   const handles = new Map<string, OpenHandle>()
   const state = { nextHandleId: 1 }
+  const maxHandles = options?.maxHandles ?? DEFAULT_MAX_SFTP_HANDLES
 
   const allocHandle = (entry: OpenHandle): Buffer => {
     const id = state.nextHandleId
@@ -36,6 +47,14 @@ export const attachSftpHandlers = (sftp: SFTPWrapper, vfs: VfsStore): void => {
     const key = String(id)
     handles.set(key, entry)
     return Buffer.from(key)
+  }
+
+  const tryHandle = (reqid: number, entry: OpenHandle): void => {
+    if (handles.size >= maxHandles) {
+      sftp.status(reqid, STATUS_CODE.FAILURE)
+      return
+    }
+    sftp.handle(reqid, allocHandle(entry))
   }
 
   sftp.on("REALPATH", (reqid, rawPath) => {
@@ -98,10 +117,7 @@ export const attachSftpHandlers = (sftp: SFTPWrapper, vfs: VfsStore): void => {
       return
     }
     const entries = vfs.readdir(resolved)
-    sftp.handle(
-      reqid,
-      allocHandle({ kind: "dir", path: resolved, entries, readDone: false }),
-    )
+    tryHandle(reqid, { kind: "dir", path: resolved, entries, readDone: false })
   })
 
   sftp.on("READDIR", (reqid, handleBuf) => {
@@ -129,7 +145,6 @@ export const attachSftpHandlers = (sftp: SFTPWrapper, vfs: VfsStore): void => {
     const resolved = vfs.resolvePath(filename)
     const isWrite = (flags & OPEN_MODE.WRITE) !== 0
     const isCreate = (flags & OPEN_MODE.CREAT) !== 0
-    const isTrunc = (flags & OPEN_MODE.TRUNC) !== 0
     const existing = vfs.readFile(resolved)
 
     if (!existing && !isCreate && !isWrite) {
@@ -137,21 +152,9 @@ export const attachSftpHandlers = (sftp: SFTPWrapper, vfs: VfsStore): void => {
       return
     }
 
-    if (isWrite && (isCreate || isTrunc || !existing)) {
-      if (!existing || isTrunc) {
-        vfs.writeFile(resolved, Buffer.alloc(0))
-      }
-    }
-
-    sftp.handle(
-      reqid,
-      allocHandle({
-        kind: "file",
-        path: resolved,
-        flags,
-        chunks: [],
-      }),
-    )
+    // Client writes are accepted for demo compatibility but never touch the
+    // seeded VFS. The file is not created, truncated, or modified.
+    tryHandle(reqid, { kind: "file", path: resolved, flags })
   })
 
   sftp.on("READ", (reqid, handleBuf, offset, length) => {
@@ -173,18 +176,17 @@ export const attachSftpHandlers = (sftp: SFTPWrapper, vfs: VfsStore): void => {
     sftp.data(reqid, slice)
   })
 
-  sftp.on("WRITE", (reqid, handleBuf, offset, data) => {
+  sftp.on("WRITE", (reqid, handleBuf, offset, _data) => {
     const handle = handles.get(handleBuf.toString())
     if (!handle || handle.kind !== "file") {
       sftp.status(reqid, STATUS_CODE.FAILURE)
       return
     }
-    const existing = vfs.readFile(handle.path) ?? Buffer.alloc(0)
-    const requiredLen = Math.max(existing.byteLength, offset + data.byteLength)
-    const next = Buffer.alloc(requiredLen)
-    existing.copy(next, 0)
-    data.copy(next, offset)
-    vfs.writeFile(handle.path, next)
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      sftp.status(reqid, STATUS_CODE.FAILURE)
+      return
+    }
+    // Acknowledge the write without copying or storing the payload.
     sftp.status(reqid, STATUS_CODE.OK)
   })
 
@@ -193,23 +195,21 @@ export const attachSftpHandlers = (sftp: SFTPWrapper, vfs: VfsStore): void => {
     sftp.status(reqid, STATUS_CODE.OK)
   })
 
-  sftp.on("MKDIR", (reqid, rawPath) => {
-    const ok = vfs.mkdir(rawPath, { recursive: true })
-    sftp.status(reqid, ok ? STATUS_CODE.OK : STATUS_CODE.FAILURE)
+  // Mutations are acknowledged so the client completes normally, but the
+  // seeded tree is immutable for SFTP clients.
+  sftp.on("MKDIR", (reqid) => {
+    sftp.status(reqid, STATUS_CODE.OK)
   })
 
-  sftp.on("RMDIR", (reqid, rawPath) => {
-    const ok = vfs.remove(rawPath)
-    sftp.status(reqid, ok ? STATUS_CODE.OK : STATUS_CODE.NO_SUCH_FILE)
+  sftp.on("RMDIR", (reqid) => {
+    sftp.status(reqid, STATUS_CODE.OK)
   })
 
-  sftp.on("REMOVE", (reqid, rawPath) => {
-    const ok = vfs.remove(rawPath)
-    sftp.status(reqid, ok ? STATUS_CODE.OK : STATUS_CODE.NO_SUCH_FILE)
+  sftp.on("REMOVE", (reqid) => {
+    sftp.status(reqid, STATUS_CODE.OK)
   })
 
-  sftp.on("RENAME", (reqid, oldPath, newPath) => {
-    const ok = vfs.rename(oldPath, newPath)
-    sftp.status(reqid, ok ? STATUS_CODE.OK : STATUS_CODE.NO_SUCH_FILE)
+  sftp.on("RENAME", (reqid) => {
+    sftp.status(reqid, STATUS_CODE.OK)
   })
 }

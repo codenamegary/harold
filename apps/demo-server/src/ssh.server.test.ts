@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { generateKeyPairSync } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { Client } from "ssh2"
+import { Client, SFTPWrapper } from "ssh2"
 import { createDemoSshServer } from "./ssh.server"
 
 const HOST_KEY = fs.readFileSync(
@@ -48,6 +48,85 @@ const execCommand = (client: Client, cmd: string): Promise<{ code: number; stdou
     })
   })
 
+const openSftp = (client: Client): Promise<SFTPWrapper> =>
+  new Promise((resolve, reject) => {
+    client.sftp((err, wrapper) => (err ? reject(err) : resolve(wrapper)))
+  })
+
+const sftpReadFile = (sftp: SFTPWrapper, remotePath: string): Promise<Buffer> =>
+  new Promise((resolve, reject) => {
+    sftp.readFile(remotePath, (err, data) => (err ? reject(err) : resolve(data)))
+  })
+
+const sftpWriteFile = (
+  sftp: SFTPWrapper,
+  remotePath: string,
+  content: Buffer,
+): Promise<void> =>
+  new Promise((resolve, reject) => {
+    sftp.writeFile(remotePath, content, (err) => (err ? reject(err) : resolve()))
+  })
+
+const sftpRename = (
+  sftp: SFTPWrapper,
+  oldPath: string,
+  newPath: string,
+): Promise<void> =>
+  new Promise((resolve, reject) => {
+    sftp.rename(oldPath, newPath, (err) => (err ? reject(err) : resolve()))
+  })
+
+const sftpRemove = (sftp: SFTPWrapper, remotePath: string): Promise<void> =>
+  new Promise((resolve, reject) => {
+    sftp.unlink(remotePath, (err) => (err ? reject(err) : resolve()))
+  })
+
+const sftpStat = (sftp: SFTPWrapper, remotePath: string): Promise<unknown> =>
+  new Promise((resolve) => {
+    sftp.stat(remotePath, (err, stats) => resolve(err ? null : stats))
+  })
+
+const sftpOpenDir = (sftp: SFTPWrapper, remotePath: string): Promise<Buffer> =>
+  new Promise((resolve, reject) => {
+    sftp.opendir(remotePath, (err, handle) => (err ? reject(err) : resolve(handle)))
+  })
+
+const acpCall = (
+  client: Client,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> =>
+  new Promise((resolve, reject) => {
+    client.exec("exec /usr/local/bin/opencode acp", (err, stream) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      const state = { buffer: "", initialized: false }
+      stream.on("data", (chunk: Buffer) => {
+        state.buffer += chunk.toString("utf8")
+        const lines = state.buffer.split("\n")
+        state.buffer = lines.pop() ?? ""
+        for (const line of lines) {
+          if (!line.trim()) continue
+          const message = JSON.parse(line) as Record<string, unknown>
+          if (!state.initialized && message.id === 1) {
+            state.initialized = true
+            stream.write(
+              `${JSON.stringify({ jsonrpc: "2.0", id: 2, method, params })}\n`,
+            )
+          } else if (message.id === 2) {
+            resolve(message)
+            stream.end()
+          }
+        }
+      })
+      stream.write(
+        `${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })}\n`,
+      )
+    })
+  })
+
 describe("ssh.server", () => {
   const serverHandle = createDemoSshServer({
     host: "127.0.0.1",
@@ -90,45 +169,47 @@ describe("ssh.server", () => {
     keyClient.end()
   })
 
-  test("serves SFTP realpath, readdir, read, write, and atomic rename", async () => {
+  test("serves SFTP reads and acknowledges writes without changing the seed", async () => {
     const client = await connectClient({
       port: portState.port,
       username: "sftp-tester",
       password: "pw",
     })
 
-    const sftp = await new Promise<import("ssh2").SFTPWrapper>((resolve, reject) => {
-      client.sftp((err, wrapper) => (err ? reject(err) : resolve(wrapper)))
-    })
+    const sftp = await openSftp(client)
 
     const realHome = await new Promise<string>((resolve, reject) => {
       sftp.realpath(".", (err, abs) => (err ? reject(err) : resolve(abs)))
     })
     expect(realHome).toBe("/home/demo")
 
-    const workspacesRaw = await new Promise<Buffer>((resolve, reject) => {
-      sftp.readFile("/home/demo/.harold/workspaces.json", (err, data) =>
-        err ? reject(err) : resolve(data),
-      )
-    })
+    const workspacesRaw = await sftpReadFile(sftp, "/home/demo/.harold/workspaces.json")
     expect(workspacesRaw.toString("utf8")).toContain("cat-screensaver")
 
-    await new Promise<void>((resolve, reject) => {
-      sftp.writeFile("/home/demo/.harold/test.tmp", Buffer.from("ok"), (err) =>
-        err ? reject(err) : resolve(),
-      )
-    })
-    await new Promise<void>((resolve, reject) => {
-      sftp.rename("/home/demo/.harold/test.tmp", "/home/demo/.harold/test.json", (err) =>
-        err ? reject(err) : resolve(),
-      )
-    })
-    const readBack = await new Promise<Buffer>((resolve, reject) => {
-      sftp.readFile("/home/demo/.harold/test.json", (err, data) =>
-        err ? reject(err) : resolve(data),
-      )
-    })
-    expect(readBack.toString("utf8")).toBe("ok")
+    const agentsBefore = await sftpReadFile(sftp, "/home/demo/.harold/agents.json")
+    expect(agentsBefore.toString("utf8")).toContain("opencode")
+
+    await sftpWriteFile(sftp, "/home/demo/.harold/agents.json", Buffer.from("[]"))
+    const afterDirectWrite = await sftpReadFile(sftp, "/home/demo/.harold/agents.json")
+    expect(afterDirectWrite.toString("utf8")).toBe(agentsBefore.toString("utf8"))
+
+    await sftpWriteFile(sftp, "/home/demo/.harold/agents.json.1.tmp", Buffer.from("[]"))
+    expect(await sftpStat(sftp, "/home/demo/.harold/agents.json.1.tmp")).toBeNull()
+
+    await sftpRename(
+      sftp,
+      "/home/demo/.harold/agents.json.1.tmp",
+      "/home/demo/.harold/agents.json",
+    )
+    const afterRename = await sftpReadFile(sftp, "/home/demo/.harold/agents.json")
+    expect(afterRename.toString("utf8")).toBe(agentsBefore.toString("utf8"))
+
+    await sftpRemove(sftp, "/home/demo/.harold/agents.json")
+    const afterRemove = await sftpReadFile(sftp, "/home/demo/.harold/agents.json")
+    expect(afterRemove.toString("utf8")).toBe(agentsBefore.toString("utf8"))
+
+    await sftpWriteFile(sftp, "/home/demo/.harold/upload.bin", Buffer.from("payload"))
+    expect(await sftpStat(sftp, "/home/demo/.harold/upload.bin")).toBeNull()
 
     client.end()
   })
@@ -222,5 +303,157 @@ describe("ssh.server", () => {
 
     clientA.end()
     clientB.end()
+  })
+
+  test("shares ACP sessions across SSH connections and keeps ids unique", async () => {
+    const clientA = await connectClient({
+      port: portState.port,
+      username: "session-a",
+      password: "pw",
+    })
+    const clientB = await connectClient({
+      port: portState.port,
+      username: "session-b",
+      password: "pw",
+    })
+
+    const createdA = await acpCall(clientA, "session/new", {
+      cwd: "/home/demo/sites/meow",
+    })
+    const sessionA = ((createdA.result as Record<string, unknown>)?.sessionId as string) ?? ""
+    expect(sessionA).toMatch(/^ses_demo_opencode_\d{4}$/)
+
+    const listB = await acpCall(clientB, "session/list", {})
+    const sessionsB = ((listB.result as Record<string, unknown>)?.sessions ??
+      []) as Array<{ sessionId: string }>
+    expect(sessionsB.some((session) => session.sessionId === sessionA)).toBe(true)
+
+    const loadB = await acpCall(clientB, "session/load", {
+      sessionId: sessionA,
+      cwd: "/home/demo/sites/meow",
+    })
+    expect(loadB.error).toBeUndefined()
+
+    const createdB = await acpCall(clientB, "session/new", {
+      cwd: "/home/demo/sites/meow",
+    })
+    const sessionB = ((createdB.result as Record<string, unknown>)?.sessionId as string) ?? ""
+    expect(sessionB).not.toBe(sessionA)
+
+    clientA.end()
+    clientB.end()
+  })
+})
+
+describe("ssh.server limits", () => {
+  const serverHandle = createDemoSshServer({
+    host: "127.0.0.1",
+    port: 0,
+    hostKey: HOST_KEY,
+    timing: { charDelayMs: 0, toolDelayMs: 0 },
+    limits: {
+      maxConnections: 4,
+      maxSessionsPerConnection: 4,
+      maxSftpHandles: 2,
+      maxExecLineBytes: 32,
+      maxExecPendingLines: 2,
+      maxCommandBytes: 64,
+    },
+  })
+  const portState = { port: 0 }
+
+  beforeAll(async () => {
+    portState.port = await serverHandle.listen()
+  })
+
+  afterAll(async () => {
+    await serverHandle.close()
+  })
+
+  test("reuses session slots after SFTP channels close", async () => {
+    const client = await connectClient({
+      port: portState.port,
+      username: "session-tester",
+      password: "pw",
+    })
+
+    for (let index = 0; index < 6; index += 1) {
+      const sftp = await openSftp(client)
+      sftp.end()
+      await Bun.sleep(20)
+    }
+
+    client.end()
+  })
+
+  test("rejects SFTP handles over the limit", async () => {
+    const client = await connectClient({
+      port: portState.port,
+      username: "handle-tester",
+      password: "pw",
+    })
+    const sftp = await openSftp(client)
+
+    await sftpOpenDir(sftp, "/home/demo")
+    await sftpOpenDir(sftp, "/home/demo/sites")
+
+    const state = { rejected: false }
+    try {
+      await sftpOpenDir(sftp, "/home/demo/.harold")
+    } catch {
+      state.rejected = true
+    }
+    expect(state.rejected).toBe(true)
+
+    client.end()
+  })
+
+  test("rejects oversized exec commands", async () => {
+    const client = await connectClient({
+      port: portState.port,
+      username: "command-tester",
+      password: "pw",
+    })
+
+    const result = await execCommand(client, `echo ${"x".repeat(80)}`)
+    expect(result.code).toBe(1)
+
+    client.end()
+  })
+
+  test("closes an exec stream when an input line is too large", async () => {
+    const client = await connectClient({
+      port: portState.port,
+      username: "line-tester",
+      password: "pw",
+    })
+
+    const result = await new Promise<{ code: number; stderr: string }>((resolve, reject) => {
+      client.exec("exec /usr/local/bin/opencode acp", (err, stream) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        const stderr: Array<Buffer> = []
+        const state = { code: 0 }
+        stream.resume()
+        stream.stderr.on("data", (chunk: Buffer) => stderr.push(chunk))
+        stream.on("exit", (code: number | null) => {
+          state.code = code ?? 0
+        })
+        stream.on("close", () => {
+          resolve({
+            code: state.code,
+            stderr: Buffer.concat(stderr).toString("utf8"),
+          })
+        })
+        stream.write("x".repeat(64))
+      })
+    })
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain("line exceeds")
+
+    client.end()
   })
 })
