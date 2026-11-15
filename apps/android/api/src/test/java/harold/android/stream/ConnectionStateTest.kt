@@ -53,6 +53,16 @@ class ConnectionStateTest {
     }
 
     @Test
+    fun goneSessionStopsRetrying() {
+        val state = reduce(
+            live(),
+            ConnectionSignal.Disconnected(DisconnectCause.Gone("Unknown session")),
+        )
+
+        assertEquals(StreamStatus.SessionGone("Unknown session"), state.status)
+    }
+
+    @Test
     fun parksIdleWhenAsked() {
         val state = reduce(live(), ConnectionSignal.Idle)
 

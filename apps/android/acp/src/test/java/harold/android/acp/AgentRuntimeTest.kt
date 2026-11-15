@@ -10,6 +10,7 @@ import harold.android.process.AgentProcessLauncher
 import harold.android.process.LaunchableAgent
 import harold.android.process.SessionFileService
 import harold.android.process.TerminalLaunchSpec
+import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStatus
 import java.io.IOException
 import java.io.InputStream
@@ -87,6 +88,46 @@ class AgentRuntimeTest {
             runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
 
             assertEquals(firstLaunchCount + 1, launcher.launchCount)
+        }
+    }
+
+    @Test
+    fun unknownSessionOnLoadIsGoneAndDoesNotRestartTheProcess() = runBlocking {
+        withRuntimeAndCatalog { runtime, launcher, catalog ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/one").getOrThrow()
+            launcher.failLoadUnknownId = created.sessionId
+            // Force a replacement process so the attach must session/load
+            // instead of taking the in-memory session/new fast path.
+            runtime.sessionAttachFailed(FIRST_ROW, AGENT_ID, created.sessionId)
+            runtime.sessionAttachFailed(FIRST_ROW, AGENT_ID, created.sessionId)
+            val before = launcher.launchCount
+            val disconnected = CompletableDeferred<DisconnectCause>()
+            val messages = mutableListOf<SessionStreamServerMessage>()
+
+            val stream = AcpSessionStreamFactory(runtime).open(
+                connectionId = FIRST_ROW,
+                agentId = AGENT_ID,
+                sessionId = created.sessionId,
+                lastEventId = null,
+                handlers = harold.android.stream.SessionStreamHandlers(
+                    onMessage = { message, _ -> messages += message },
+                    onDisconnect = { cause -> disconnected.complete(cause) },
+                ),
+            )
+
+            val cause = withTimeout(10_000) { disconnected.await() }
+            stream.close()
+
+            assertTrue(cause is DisconnectCause.Gone)
+            assertEquals(SessionStatus.Gone, stream.status.value)
+            assertTrue(
+                messages.filterIsInstance<SessionStreamServerMessage.Error>()
+                    .any { message -> message.sessionGone },
+            )
+            assertEquals(true, catalog.find(FIRST_ROW, AGENT_ID, created.sessionId)?.unavailable)
+            // One launch for the replacement process that owned the attach.
+            // A gone session must not trigger another restart.
+            assertEquals(before + 1, launcher.launchCount)
         }
     }
 
@@ -718,6 +759,9 @@ private class FakeLauncher(
     @Volatile
     var failNewChannelWrites: Boolean = false
 
+    @Volatile
+    var failLoadUnknownId: String? = null
+
     override suspend fun launchableAgents(connectionId: String): Result<List<LaunchableAgent>> =
         Result.success(agentIds.map { id -> LaunchableAgent(id = id, displayName = id) })
 
@@ -730,7 +774,10 @@ private class FakeLauncher(
         launchCount += 1
         val channel = FakeChannel().also { created -> created.failWrites = failNewChannelWrites }
         channels += channel
-        agents += FakeAgent(channel, scope).also { agent -> agent.start() }
+        agents += FakeAgent(channel, scope).also { agent ->
+            agent.failLoadUnknownId = failLoadUnknownId
+            agent.start()
+        }
         return Result.success(channel)
     }
 
@@ -841,6 +888,10 @@ private class FakeAgent(
     @Volatile
     var answerPrompts: Boolean = true
 
+    /** When set, `session/load` for this id answers with ACP's not-found code. */
+    @Volatile
+    var failLoadUnknownId: String? = null
+
     /** When set, `session/list` serves these pages instead of [sessions]. */
     var listPages: List<FakeListPage> = emptyList()
 
@@ -908,6 +959,10 @@ private class FakeAgent(
             "session/load" -> {
                 val sessionId = params.string("sessionId").orEmpty()
                 sessionLoads.incrementAndGet()
+                if (sessionId == failLoadUnknownId) {
+                    respondError(id, -32002, "Unknown session: $sessionId")
+                    return
+                }
                 notifyUpdate(sessionId, "replayed history")
                 respond(id, buildJsonObject { put("configOptions", buildJsonArray { }) })
             }

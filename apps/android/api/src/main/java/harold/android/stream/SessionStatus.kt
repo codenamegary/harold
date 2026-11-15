@@ -15,6 +15,8 @@ enum class SessionStatus {
     Offline,
     AuthFailed,
     Error,
+    /** The agent no longer has this session. Terminal until a new session starts. */
+    Gone,
 }
 
 /** True while the session can take a new prompt without waiting for a turn. */

@@ -14,6 +14,8 @@ data class CatalogSession(
     val title: String = "",
     val updatedAt: String = "",
     val additionalDirectories: List<String> = emptyList(),
+    /** The agent used to list this session but no longer has it. */
+    val unavailable: Boolean = false,
 )
 
 /**

@@ -245,6 +245,9 @@ fun appendTranscriptQuestion(
 fun applyStreamError(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(sessionState = SessionState.Error)
 
+fun applySessionGone(state: AcpTranscriptState): AcpTranscriptState =
+    state.copy(sessionState = SessionState.Unavailable, live = false)
+
 fun applyReconnect(): AcpTranscriptState = AcpTranscriptState(
     rows = emptyList(),
     sessionState = SessionState.Offline,

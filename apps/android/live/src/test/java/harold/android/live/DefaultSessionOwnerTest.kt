@@ -238,6 +238,52 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
+    fun goneSessionIsTerminalAndMarksTheTranscriptUnavailable() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(liveThen(DisconnectCause.Gone("Unknown session: sess_01"))),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        assertEquals(
+            StreamStatus.SessionGone("Unknown session: sess_01"),
+            owner.connectionState.value.status,
+        )
+        assertEquals(SessionStatus.Gone, owner.sessionStatus.value)
+        assertEquals(SessionState.Unavailable, owner.snapshot.value.transcript.sessionState)
+        assertEquals(1, factory.openCount)
+    }
+
+    @Test
+    fun goneErrorFrameMarksTheTranscriptUnavailable() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Error(
+                message = "Unknown session: sess_01",
+                agentId = "cursor",
+                sessionId = "sess_01",
+                sessionGone = true,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(SessionState.Unavailable, owner.snapshot.value.transcript.sessionState)
+        assertFalse(owner.snapshot.value.authRequired)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
     fun closeForBackgroundMarksTheSessionOffline() = runTest {
         val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
         val owner = owner(factory)

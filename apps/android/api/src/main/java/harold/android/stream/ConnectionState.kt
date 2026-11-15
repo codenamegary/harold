@@ -20,6 +20,11 @@ sealed interface StreamStatus {
     data class TransportError(
         val message: String,
     ) : StreamStatus
+
+    /** Terminal. The agent no longer has this session. */
+    data class SessionGone(
+        val message: String,
+    ) : StreamStatus
 }
 
 data class ConnectionState(
@@ -38,6 +43,11 @@ sealed interface DisconnectCause {
     ) : DisconnectCause
 
     data class Protocol(
+        val message: String,
+    ) : DisconnectCause
+
+    /** Terminal. The agent no longer has this session. */
+    data class Gone(
         val message: String,
     ) : DisconnectCause
 }
@@ -69,6 +79,9 @@ fun reduce(state: ConnectionState, signal: ConnectionSignal): ConnectionState =
 
             is DisconnectCause.Protocol ->
                 state.copy(status = StreamStatus.TransportError(message = cause.message))
+
+            is DisconnectCause.Gone ->
+                state.copy(status = StreamStatus.SessionGone(message = cause.message))
 
             is DisconnectCause.Retryable -> state.copy(
                 status = StreamStatus.Reconnecting(attempt = state.attempt + 1),

@@ -47,6 +47,7 @@ fun composerBlockedMessage(sessionState: SessionState?): String? =
             "Session reconnecting."
         SessionState.Error ->
             "Session ended with an error. Start a new session to continue."
+        SessionState.Unavailable -> null
         else -> null
     }
 

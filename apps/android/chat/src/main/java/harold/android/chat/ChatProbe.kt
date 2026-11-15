@@ -294,6 +294,7 @@ internal fun chatProbeFacts(state: ChatUiState): Map<String, String> {
         "sessionId" to state.selectedSession?.sessionId.orEmpty(),
         "sessionName" to state.selectedSession?.name.orEmpty(),
         "sessionState" to chatSessionStateFact(state),
+        "sessionGone" to state.sessionGone.toString(),
         "sessionMenuOpen" to state.pickerVisible.toString(),
         "sessionMenuCount" to state.recentSessions.size.toString(),
         "mode" to mode?.currentValue.orEmpty(),
@@ -364,6 +365,7 @@ internal fun chatProbeSettled(state: ChatUiState): Boolean =
 
 /** The three values the storyboard uses: idle, running, waiting. */
 internal fun chatSessionStateFact(state: ChatUiState): String = when {
+    state.sessionGone -> "unavailable"
     state.activeElicitation != null || state.activePermissionRequest != null -> "waiting"
     state.showProgress || state.effectiveSessionState == SessionState.Running -> "running"
     else -> "idle"

@@ -7,6 +7,13 @@ class AgentLaunchException(message: String, cause: Throwable? = null) : Exceptio
 class AgentAuthRequiredException(val agentId: String, detail: String?) :
     Exception(detail ?: "This agent needs you to sign in on the host.")
 
+/** The agent definitively no longer has this session. Retrying cannot recover it. */
+class AgentSessionGoneException(
+    val agentId: String,
+    val sessionId: String,
+    detail: String?,
+) : Exception(detail ?: "The agent no longer has this session.")
+
 /** Launches ACP agent processes and ACP terminal commands on a saved host. */
 interface AgentProcessLauncher {
     /** Enabled, present agents for a connection, using the same agents.json scan rules as today. */

@@ -508,11 +508,22 @@ class DefaultSessionOwner @Inject constructor(
 
                 val cause = requireNotNull(disconnectCause)
                 applyConnection(ConnectionSignal.Disconnected(cause))
+                if (cause is DisconnectCause.Gone) {
+                    _snapshot.update { current ->
+                        current.copy(
+                            transcript = applySessionGone(current.transcript),
+                            reconnecting = false,
+                            pendingPermission = null,
+                            pendingElicitations = emptyList(),
+                        )
+                    }
+                }
                 val exhaustedAttachRetries = cause is DisconnectCause.Retryable &&
                     !opened.get() &&
                     attachFailures.incrementAndGet() >= MAX_PRE_LIVE_ATTEMPTS
                 _sessionStatus.value = when {
                     exhaustedAttachRetries -> SessionStatus.Error
+                    cause is DisconnectCause.Gone -> SessionStatus.Gone
                     cause is DisconnectCause.Unauthorized -> SessionStatus.AuthFailed
                     cause is DisconnectCause.Protocol -> SessionStatus.Error
                     else -> SessionStatus.Offline
@@ -804,8 +815,13 @@ class DefaultSessionOwner @Inject constructor(
                 }
                 _snapshot.update { current ->
                     current.copy(
-                        transcript = applyStreamError(current.transcript),
-                        authRequired = isAuthRequiredError(message.message),
+                        transcript = if (message.sessionGone) {
+                            applySessionGone(current.transcript)
+                        } else {
+                            applyStreamError(current.transcript)
+                        },
+                        authRequired = !message.sessionGone &&
+                            isAuthRequiredError(message.message),
                         reconnecting = false,
                     )
                 }

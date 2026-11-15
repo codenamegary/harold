@@ -10,3 +10,4 @@ docs/demo/render/out/
 *.keystore
 keystore.properties
 __pycache__/
+node_modules/

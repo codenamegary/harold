@@ -226,6 +226,7 @@ class ChatViewModel @Inject constructor(
                     is StreamStatus.Reconnecting -> "Reconnecting (attempt ${status.attempt})"
                     is StreamStatus.AuthFailed -> "Auth failed"
                     is StreamStatus.TransportError -> status.message
+                    is StreamStatus.SessionGone -> null
                 }
                 val connectionInProgress =
                     status is StreamStatus.Connecting || status is StreamStatus.Reconnecting
@@ -295,9 +296,11 @@ class ChatViewModel @Inject constructor(
                     if (_uiState.value.missingSessionFolderPath == null &&
                         !_uiState.value.sessionFolderCheckPending
                     ) {
-                        _uiState.value.selectedSession?.let { selected ->
-                            sessionOwner.watch(selected.agentId, selected.sessionId)
-                        }
+                        _uiState.value.selectedSession
+                            ?.takeIf { selected -> selected.state != SessionState.Unavailable }
+                            ?.let { selected ->
+                                sessionOwner.watch(selected.agentId, selected.sessionId)
+                            }
                     }
                     refreshCatalog()
                 } else {
@@ -372,6 +375,7 @@ class ChatViewModel @Inject constructor(
         val path = selected?.worktreePath ?: selected?.cwd.orEmpty()
         if (
             selected == null ||
+            selected.state == SessionState.Unavailable ||
             _uiState.value.missingSessionFolderPath != null ||
             _uiState.value.sessionFolderCheckPending ||
             origin == null ||
@@ -1361,7 +1365,10 @@ class ChatViewModel @Inject constructor(
                 if (item.id == row.id) item.copy(needsAttention = false) else item
             }
         }
+        val unavailable = row.state == SessionState.Unavailable
         val remembered = when {
+            unavailable -> emptyAcpTranscript.copy(sessionState = SessionState.Unavailable)
+
             // The owner still holds this session's live stream and its
             // transcript; wiping here would blank the chat with no replay to
             // refill it, because watch() keeps the stream for the same
@@ -1375,7 +1382,8 @@ class ChatViewModel @Inject constructor(
             else -> emptyAcpTranscript
         }
         val origin = row.connectionId.ifEmpty { activeOrigin.orEmpty() }
-        val checkFolder = row.sessionId.isNotEmpty() &&
+        val checkFolder = !unavailable &&
+            row.sessionId.isNotEmpty() &&
             row.connectionReachable &&
             origin.isNotEmpty() &&
             row.cwd.isNotEmpty()
@@ -1673,7 +1681,11 @@ class ChatViewModel @Inject constructor(
      */
     private fun syncWatch() {
         val selected = _uiState.value.selectedSession
-        if (selected == null || _uiState.value.missingSessionFolderPath != null) {
+        if (
+            selected == null ||
+            selected.state == SessionState.Unavailable ||
+            _uiState.value.missingSessionFolderPath != null
+        ) {
             sessionOwner.watch(null, null)
             return
         }

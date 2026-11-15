@@ -91,6 +91,14 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                     viewModel.hidePicker()
                     navigator.openCreateSession()
                 },
+                onStartNewSessionForGone = { session ->
+                    viewModel.hidePicker()
+                    navigator.openCreateSessionForWorkspace(
+                        connectionId = session.connectionId,
+                        path = session.cwd,
+                        agentId = session.agentId,
+                    )
+                },
                 onComposerTextChanged = viewModel::onComposerTextChanged,
                 onComposerEdit = viewModel::onComposerEdit,
                 onComposerSubmit = viewModel::submitComposerPrompt,

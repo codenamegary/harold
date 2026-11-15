@@ -115,5 +115,6 @@ private fun SessionStatus.hasLiveWork(): Boolean = when (this) {
     SessionStatus.Offline,
     SessionStatus.AuthFailed,
     SessionStatus.Error,
+    SessionStatus.Gone,
     -> false
 }

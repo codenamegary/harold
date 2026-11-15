@@ -24,6 +24,7 @@ data class SessionListItem(
     val workspaceId: String,
     val workspaceName: String,
     val agentLabel: String,
+    val unavailable: Boolean = false,
 )
 
 /**
@@ -216,6 +217,7 @@ class DefaultSessionRepository @Inject constructor(
                     workspaceId = workspace?.id.orEmpty(),
                     workspaceName = workspace?.name ?: session.cwd,
                     agentLabel = agent?.displayName ?: session.agentId,
+                    unavailable = session.unavailable,
                 )
             }
         }.sortedByDescending { cached -> cached.session.updatedAt }
