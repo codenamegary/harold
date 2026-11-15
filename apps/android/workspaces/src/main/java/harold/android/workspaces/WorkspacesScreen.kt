@@ -1,6 +1,7 @@
 package harold.android.workspaces
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,8 +15,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -23,8 +28,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -51,10 +61,19 @@ fun WorkspacesScreen(
     onAddClick: () -> Unit,
     onNewSession: (Workspace) -> Unit,
     onDeleteWorkspace: (Workspace) -> Unit,
+    onShowCleanupConfirm: () -> Unit,
+    onHideCleanupConfirm: () -> Unit,
+    onCleanupMissing: () -> Unit,
 ) {
     val backContentDescription = stringResource(R.string.workspaces_back_content_description)
     val addContentDescription = stringResource(R.string.workspaces_add_content_description)
     val deleteLabel = stringResource(R.string.workspaces_delete)
+    val overflowContentDescription = stringResource(R.string.workspaces_overflow_content_description)
+    val cleanupLabel = stringResource(R.string.workspaces_cleanup_missing)
+    var overflowExpanded by remember { mutableStateOf(false) }
+    val hasMissing = (uiState.loadState as? WorkspacesLoadState.Loaded)
+        ?.workspaces
+        ?.any { workspace -> workspace.state == WorkspaceState.Missing } == true
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -75,6 +94,41 @@ fun WorkspacesScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = null,
                         )
+                    }
+                },
+                actions = {
+                    if (hasMissing) {
+                        Box {
+                            IconButton(
+                                onClick = { overflowExpanded = true },
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                    .testTag("workspaces_overflow")
+                                    .semantics {
+                                        contentDescription = overflowContentDescription
+                                    },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.MoreVert,
+                                    contentDescription = null,
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = overflowExpanded,
+                                onDismissRequest = { overflowExpanded = false },
+                                modifier = Modifier
+                                    .testTag("workspaces_overflow_menu"),
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(text = cleanupLabel) },
+                                    onClick = {
+                                        overflowExpanded = false
+                                        onShowCleanupConfirm()
+                                    },
+                                    modifier = Modifier.testTag("workspaces_cleanup_menu_item"),
+                                )
+                            }
+                        }
                     }
                 },
             )
@@ -181,6 +235,31 @@ fun WorkspacesScreen(
                 }
             }
         }
+    }
+
+    if (uiState.cleanupConfirmVisible) {
+        AlertDialog(
+            onDismissRequest = onHideCleanupConfirm,
+            title = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_title)) },
+            text = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = onCleanupMissing,
+                    modifier = Modifier.testTag("workspaces_cleanup_confirm"),
+                ) {
+                    Text(text = stringResource(R.string.workspaces_cleanup_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onHideCleanupConfirm,
+                    modifier = Modifier.testTag("workspaces_cleanup_cancel"),
+                ) {
+                    Text(text = stringResource(R.string.workspaces_cancel))
+                }
+            },
+            modifier = Modifier.testTag("workspaces_cleanup_dialog"),
+        )
     }
 }
 

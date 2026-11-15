@@ -164,6 +164,89 @@ class WorkspacesViewModelTest {
     }
 
     @Test
+    fun cleanupConfirmDialogTogglesFromTheViewModel() = runTest(dispatcher) {
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = FakeWorkspaceRepository(),
+        )
+
+        viewModel.showCleanupConfirm()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.cleanupConfirmVisible)
+
+        viewModel.hideCleanupConfirm()
+        advanceUntilIdle()
+        assertTrue(!viewModel.uiState.value.cleanupConfirmVisible)
+    }
+
+    @Test
+    fun cleanupMissingDeletesOnlyMissingWorkspacesThroughTheRepository() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository(
+            workspaces = listOf(
+                workspace(id = "ws_keep", path = "/tmp/keep", state = WorkspaceState.Available),
+                workspace(id = "ws_gone", path = "/tmp/gone", state = WorkspaceState.Missing),
+                workspace(id = "ws_down", path = "/tmp/down", state = WorkspaceState.Unavailable),
+            ),
+        )
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = repository,
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+        viewModel.showCleanupConfirm()
+
+        viewModel.cleanupMissing()
+        advanceUntilIdle()
+
+        assertEquals(listOf(ORIGIN to "/tmp/gone"), repository.deleteCalls)
+        assertTrue(!viewModel.uiState.value.cleanupConfirmVisible)
+        assertEquals(null, viewModel.uiState.value.actionError)
+        val loaded = viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded
+        assertEquals(listOf("ws_keep", "ws_down"), loaded.workspaces.map { it.id })
+    }
+
+    @Test
+    fun cleanupMissingReportsFailureAndKeepsTheWorkspaceList() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository(
+            workspaces = listOf(
+                workspace(id = "ws_gone", path = "/tmp/gone", state = WorkspaceState.Missing),
+            ),
+            deleteFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
+        )
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = repository,
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+        viewModel.showCleanupConfirm()
+
+        viewModel.cleanupMissing()
+        advanceUntilIdle()
+
+        assertEquals("Could not reach Harold", viewModel.uiState.value.actionError)
+        assertTrue(viewModel.uiState.value.loadState is WorkspacesLoadState.Loaded)
+        assertTrue(!viewModel.uiState.value.cleanupConfirmVisible)
+    }
+
+    @Test
+    fun cleanupMissingDoesNothingWhenNoWorkspacesAreMissing() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository()
+        val viewModel = WorkspacesViewModel(
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            workspaceRepository = repository,
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        viewModel.cleanupMissing()
+        advanceUntilIdle()
+
+        assertEquals(emptyList<Pair<String, String>>(), repository.deleteCalls)
+    }
+
+    @Test
     fun keepsCachedWorkspacesWhenTheHaroldIsOffline() = runTest(dispatcher) {
         val repository = FakeWorkspaceRepository(
             apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
@@ -186,11 +269,15 @@ class WorkspacesViewModelTest {
         const val LAPTOP = "http://laptop.local:3847"
         const val DESKTOP = "http://desktop.local:3847"
 
-        fun workspace(id: String = "ws_01") = Workspace(
+        fun workspace(
+            id: String = "ws_01",
+            path: String = "/tmp/harold",
+            state: WorkspaceState = WorkspaceState.Available,
+        ) = Workspace(
             id = id,
             name = "harold",
-            path = "/tmp/harold",
-            state = WorkspaceState.Available,
+            path = path,
+            state = state,
             createdAt = "2026-08-05T00:00:00.000Z",
             lastUsedAt = "2026-08-05T00:00:00.000Z",
         )

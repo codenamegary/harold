@@ -40,6 +40,9 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
                     )
                 },
                 onDeleteWorkspace = viewModel::delete,
+                onShowCleanupConfirm = viewModel::showCleanupConfirm,
+                onHideCleanupConfirm = viewModel::hideCleanupConfirm,
+                onCleanupMissing = viewModel::cleanupMissing,
             )
         }
         scope.entry<AddWorkspace> {

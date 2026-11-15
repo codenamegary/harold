@@ -3,6 +3,7 @@ package harold.android.workspaces
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.swipeLeft
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,6 +37,9 @@ class WorkspacesScreenTest {
                     onAddClick = {},
                     onNewSession = {},
                     onDeleteWorkspace = {},
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = {},
                 )
             }
         }
@@ -53,6 +58,9 @@ class WorkspacesScreenTest {
                     onAddClick = {},
                     onNewSession = {},
                     onDeleteWorkspace = {},
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = {},
                 )
             }
         }
@@ -63,24 +71,19 @@ class WorkspacesScreenTest {
     @Test
     fun swipingAWorkspaceConfirmsBeforeDeleting() {
         var deletedId: String? = null
-        val workspace = Workspace(
-            id = "ws_01",
-            name = "harold",
-            path = "/tmp/harold",
-            state = WorkspaceState.Available,
-            createdAt = "2026-08-05T00:00:00.000Z",
-            lastUsedAt = "2026-08-05T00:00:00.000Z",
-        )
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 WorkspacesScreen(
                     uiState = WorkspacesUiState(
-                        loadState = WorkspacesLoadState.Loaded(listOf(workspace)),
+                        loadState = WorkspacesLoadState.Loaded(listOf(screenWorkspace())),
                     ),
                     onBack = {},
                     onAddClick = {},
                     onNewSession = {},
                     onDeleteWorkspace = { deleted -> deletedId = deleted.id },
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = {},
                 )
             }
         }
@@ -106,24 +109,19 @@ class WorkspacesScreenTest {
     @Test
     fun newSessionIconOpensTheWorkspace() {
         var startedWorkspace: Workspace? = null
-        val workspace = Workspace(
-            id = "ws_01",
-            name = "harold",
-            path = "/tmp/harold",
-            state = WorkspaceState.Available,
-            createdAt = "2026-08-05T00:00:00.000Z",
-            lastUsedAt = "2026-08-05T00:00:00.000Z",
-        )
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 WorkspacesScreen(
                     uiState = WorkspacesUiState(
-                        loadState = WorkspacesLoadState.Loaded(listOf(workspace)),
+                        loadState = WorkspacesLoadState.Loaded(listOf(screenWorkspace())),
                     ),
                     onBack = {},
                     onAddClick = {},
                     onNewSession = { startedWorkspace = it },
                     onDeleteWorkspace = {},
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = {},
                 )
             }
         }
@@ -132,4 +130,159 @@ class WorkspacesScreenTest {
 
         assertEquals("ws_01", startedWorkspace?.id)
     }
+
+    @Test
+    fun cleanupMenuHiddenWhenNoWorkspaceIsMissing() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                WorkspacesScreen(
+                    uiState = WorkspacesUiState(
+                        loadState = WorkspacesLoadState.Loaded(listOf(screenWorkspace())),
+                    ),
+                    onBack = {},
+                    onAddClick = {},
+                    onNewSession = {},
+                    onDeleteWorkspace = {},
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = {},
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("workspaces_overflow").assertCountEquals(0)
+    }
+
+    @Test
+    fun cleanupMenuOpensWhenAWorkspaceIsMissing() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                WorkspacesScreen(
+                    uiState = WorkspacesUiState(
+                        loadState = WorkspacesLoadState.Loaded(
+                            listOf(
+                                screenWorkspace(),
+                                screenWorkspace(id = "ws_gone", state = WorkspaceState.Missing),
+                            ),
+                        ),
+                    ),
+                    onBack = {},
+                    onAddClick = {},
+                    onNewSession = {},
+                    onDeleteWorkspace = {},
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("workspaces_overflow").performClick()
+
+        composeTestRule
+            .onNodeWithTag("workspaces_overflow_menu")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Clean up missing").assertIsDisplayed()
+    }
+
+    @Test
+    fun cleanupMenuItemAsksForConfirmation() {
+        var cleanupRequested = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                WorkspacesScreen(
+                    uiState = WorkspacesUiState(
+                        loadState = WorkspacesLoadState.Loaded(
+                            listOf(screenWorkspace(id = "ws_gone", state = WorkspaceState.Missing)),
+                        ),
+                    ),
+                    onBack = {},
+                    onAddClick = {},
+                    onNewSession = {},
+                    onDeleteWorkspace = {},
+                    onShowCleanupConfirm = { cleanupRequested = true },
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("workspaces_overflow").performClick()
+        composeTestRule.onNodeWithTag("workspaces_cleanup_menu_item").performClick()
+
+        assertTrue(cleanupRequested)
+    }
+
+    @Test
+    fun cleanupDialogConfirmsBeforeCleaning() {
+        var cleanupRequested = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                WorkspacesScreen(
+                    uiState = WorkspacesUiState(
+                        loadState = WorkspacesLoadState.Loaded(
+                            listOf(screenWorkspace(id = "ws_gone", state = WorkspaceState.Missing)),
+                        ),
+                        cleanupConfirmVisible = true,
+                    ),
+                    onBack = {},
+                    onAddClick = {},
+                    onNewSession = {},
+                    onDeleteWorkspace = {},
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = {},
+                    onCleanupMissing = { cleanupRequested = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("workspaces_cleanup_dialog").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Clean up missing workspaces?").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("workspaces_cleanup_confirm").performClick()
+
+        assertTrue(cleanupRequested)
+    }
+
+    @Test
+    fun cleanupDialogCancelDismissesWithoutCleaning() {
+        var cleanupRequested = false
+        var dialogDismissed = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                WorkspacesScreen(
+                    uiState = WorkspacesUiState(
+                        loadState = WorkspacesLoadState.Loaded(
+                            listOf(screenWorkspace(id = "ws_gone", state = WorkspaceState.Missing)),
+                        ),
+                        cleanupConfirmVisible = true,
+                    ),
+                    onBack = {},
+                    onAddClick = {},
+                    onNewSession = {},
+                    onDeleteWorkspace = {},
+                    onShowCleanupConfirm = {},
+                    onHideCleanupConfirm = { dialogDismissed = true },
+                    onCleanupMissing = { cleanupRequested = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("workspaces_cleanup_cancel").performClick()
+
+        assertTrue(dialogDismissed)
+        assertTrue(!cleanupRequested)
+    }
+
+    private fun screenWorkspace(
+        id: String = "ws_01",
+        state: WorkspaceState = WorkspaceState.Available,
+    ) = Workspace(
+        id = id,
+        name = "harold",
+        path = "/tmp/harold",
+        state = state,
+        createdAt = "2026-08-05T00:00:00.000Z",
+        lastUsedAt = "2026-08-05T00:00:00.000Z",
+    )
 }
