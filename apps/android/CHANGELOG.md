@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.3.0](https://github.com/codenamegary/harold/compare/harold-android-v4.2.0...harold-android-v4.3.0) (2026-11-15)
+
+
+### Features
+
+* **chat:** show refresh progress on session filter chips ([#517](https://github.com/codenamegary/harold/issues/517)) ([68645a2](https://github.com/codenamegary/harold/commit/68645a28a59d0168ff735e68807e18645d2381f3))
+
+
+### Bug Fixes
+
+* **acp:** advertise form elicitation support ([#518](https://github.com/codenamegary/harold/issues/518)) ([c9786c5](https://github.com/codenamegary/harold/commit/c9786c5d4c97a05972a6302bb152133eb18c540a))
+
 ## [4.2.0](https://github.com/codenamegary/harold/compare/harold-android-v4.1.0...harold-android-v4.2.0) (2026-11-15)
 
 
