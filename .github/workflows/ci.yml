@@ -1,8 +1,8 @@
 name: ci
 
-# Android is the only product in the repo, so every pull request and main
-# push runs the Android checks. ci-ok is the single required status check for
-# branch protection.
+# Android and the demo server are the products in the repo, so every pull
+# request and main push runs both checks. ci-ok is the single required status
+# check for branch protection.
 on:
   push:
     branches:
@@ -59,11 +59,34 @@ jobs:
       - name: Check Play store assets
         run: python3 scripts/checks/store_assets.py
 
+  demo-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/demo-server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun test
+
+      - name: Typecheck
+        run: bun run typecheck
+
   # The single required status check. It always runs and fails unless every
   # job reported success or was skipped.
   ci-ok:
     if: always()
-    needs: [android, store-assets]
+    needs: [android, store-assets, demo-server]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce the gate
