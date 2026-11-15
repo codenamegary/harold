@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.1.0](https://github.com/codenamegary/harold/compare/harold-android-v4.0.1...harold-android-v4.1.0) (2026-11-15)
+
+
+### Features
+
+* **workspaces:** clean up missing workspaces from the header menu ([#508](https://github.com/codenamegary/harold/issues/508)) ([d11cbf2](https://github.com/codenamegary/harold/commit/d11cbf2505f2513345122b04868598a9dc9bc45d))
+
+
+### Bug Fixes
+
+* **android:** handle missing session folders before loading ([#509](https://github.com/codenamegary/harold/issues/509)) ([b6acd89](https://github.com/codenamegary/harold/commit/b6acd89a84009b04ce18372560daff0e7a4c1d48))
+* **android:** keep running ACP sessions alive in background ([#511](https://github.com/codenamegary/harold/issues/511)) ([a9de082](https://github.com/codenamegary/harold/commit/a9de0826b4e2d4687b4c699041e7130cf032dab4))
+
 ## [4.0.1](https://github.com/codenamegary/harold/compare/harold-android-v4.0.0...harold-android-v4.0.1) (2026-11-14)
 
 
