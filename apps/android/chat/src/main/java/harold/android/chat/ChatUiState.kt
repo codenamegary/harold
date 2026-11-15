@@ -35,6 +35,8 @@ data class SessionRow(
     val needsAttention: Boolean = false,
     /** "Needs answer", "Needs permission", or "Needs input". */
     val attentionLabel: String = "Needs input",
+    /** True when the live agent list may be out of date. */
+    val stale: Boolean = false,
 ) {
     val id: String
         get() = if (connectionId.isEmpty()) {
@@ -69,6 +71,23 @@ data class ExtensionUiState(
     val submitting: Boolean = false,
     val error: String? = null,
 )
+
+/**
+ * What the session dropdown should show. Rows stay first so a refresh never
+ * hides a list the user can already see.
+ */
+sealed interface SessionMenuContent {
+    data object Loading : SessionMenuContent
+
+    data class Failed(val message: String) : SessionMenuContent
+
+    data object Empty : SessionMenuContent
+
+    data class Rows(
+        val rows: List<SessionRow>,
+        val refreshError: String? = null,
+    ) : SessionMenuContent
+}
 
 data class ChatUiState(
     val connectionBanner: String? = null,
@@ -132,6 +151,15 @@ data class ChatUiState(
     /** Latest context window usage for the selected session, if the agent reports it. */
     val contextUsage: ContextUsage?
         get() = transcript.usage
+
+    /** The one state the session dropdown renders. */
+    val sessionMenuContent: SessionMenuContent
+        get() = when {
+            recentSessions.isNotEmpty() -> SessionMenuContent.Rows(recentSessions, recentSessionsError)
+            !hasLoaded || isRefreshing || recentSessionsLoading -> SessionMenuContent.Loading
+            recentSessionsError != null -> SessionMenuContent.Failed(recentSessionsError)
+            else -> SessionMenuContent.Empty
+        }
 
     val disconnectConnectionName: String
         get() = selectedSession?.connectionName?.takeIf { it.isNotEmpty() } ?: activeConnectionName

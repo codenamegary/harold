@@ -90,6 +90,7 @@ import harold.android.chat.composer.filterCommands
 import harold.android.chat.composer.insertSlashShortcut
 import harold.android.chat.composer.removeCommandToken
 import harold.android.contracts.AuthSessionStatus
+import harold.android.contracts.SessionState
 import harold.android.ui.promptinput.PromptEdit
 import harold.android.voice.VoiceDictationPresentation
 
@@ -289,6 +290,14 @@ private fun SessionDropdownItem(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+            if (session.stale && !selected && session.state != SessionState.Unavailable) {
+                Text(
+                    text = stringResource(R.string.chat_session_stale),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("session_menu_stale_${session.id}"),
+                )
+            }
         }
         if (selected) {
             Icon(
@@ -314,6 +323,7 @@ fun ChatScreen(
     changesBadgeCount: Int = 0,
     onSessionClick: (SessionRow) -> Unit = {},
     onSeeAllSessionsClick: () -> Unit = {},
+    onRetryRecentSessions: () -> Unit = {},
     onCreateClick: () -> Unit = {},
     onStartNewSessionForGone: (SessionRow) -> Unit = {},
     onAttachmentsPicked: (List<AttachmentPick>) -> Unit = {},
@@ -668,31 +678,62 @@ fun ChatScreen(
                                     color = MaterialTheme.colorScheme.outlineVariant,
                                 )
 
-                                if (uiState.recentSessionsLoading && uiState.recentSessions.isEmpty()) {
-                                    SessionMenuRow(
-                                        text = "Loading…",
-                                        onClick = {},
-                                        enabled = false,
-                                        testTag = "session_menu_loading",
-                                    )
-                                } else if (uiState.recentSessionsError != null) {
-                                    SessionMenuRow(
-                                        text = uiState.recentSessionsError,
-                                        onClick = {},
-                                        enabled = false,
-                                        color = MaterialTheme.colorScheme.error,
-                                        testTag = "session_menu_error",
-                                    )
-                                } else {
-                                    uiState.recentSessions.forEach { session ->
-                                        SessionDropdownItem(
-                                            session = session,
-                                            selected = uiState.selectedSession?.id == session.id,
-                                            onClick = {
-                                                onDismissSessionMenu()
-                                                onSessionClick(session)
-                                            },
+                                when (val content = uiState.sessionMenuContent) {
+                                    SessionMenuContent.Loading -> {
+                                        SessionMenuRow(
+                                            text = stringResource(R.string.chat_sessions_loading),
+                                            onClick = {},
+                                            enabled = false,
+                                            testTag = "session_menu_loading",
                                         )
+                                    }
+
+                                    is SessionMenuContent.Failed -> {
+                                        SessionMenuRow(
+                                            text = content.message,
+                                            onClick = {},
+                                            enabled = false,
+                                            color = MaterialTheme.colorScheme.error,
+                                            testTag = "session_menu_error",
+                                        )
+                                        SessionMenuRow(
+                                            text = stringResource(R.string.chat_sessions_retry),
+                                            onClick = onRetryRecentSessions,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            testTag = "session_menu_retry",
+                                        )
+                                    }
+
+                                    SessionMenuContent.Empty -> {
+                                        SessionMenuRow(
+                                            text = stringResource(R.string.chat_sessions_empty),
+                                            onClick = onRetryRecentSessions,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            testTag = "session_menu_empty",
+                                        )
+                                    }
+
+                                    is SessionMenuContent.Rows -> {
+                                        content.rows.forEach { session ->
+                                            SessionDropdownItem(
+                                                session = session,
+                                                selected = uiState.selectedSession?.id == session.id,
+                                                onClick = {
+                                                    onDismissSessionMenu()
+                                                    onSessionClick(session)
+                                                },
+                                            )
+                                        }
+                                        if (content.refreshError != null) {
+                                            SessionMenuRow(
+                                                text = stringResource(
+                                                    R.string.chat_sessions_refresh_failed,
+                                                ),
+                                                onClick = onRetryRecentSessions,
+                                                color = MaterialTheme.colorScheme.error,
+                                                testTag = "session_menu_refresh_error",
+                                            )
+                                        }
                                     }
                                 }
 

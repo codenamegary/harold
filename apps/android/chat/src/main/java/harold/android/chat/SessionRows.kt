@@ -36,4 +36,23 @@ fun SessionListItem.toSessionRow(): SessionRow = SessionRow(
     updatedAt = session.updatedAt,
     connectionId = connectionId,
     worktreePath = session.worktreePath,
+    stale = stale,
 )
+
+/**
+ * Every connection a session refresh must cover. Saved connections set the
+ * scope when present. The selected and watched sessions are always included so
+ * stale or empty saved-connection metadata cannot filter the open session out
+ * of the catalog.
+ */
+internal fun sessionRefreshOrigins(
+    saved: List<String>,
+    active: String?,
+    selected: String?,
+    watched: String?,
+): List<String> {
+    val scope = if (saved.isNotEmpty()) saved else listOfNotNull(active)
+    return (scope + listOfNotNull(selected, watched))
+        .filter { origin -> origin.isNotBlank() }
+        .distinct()
+}

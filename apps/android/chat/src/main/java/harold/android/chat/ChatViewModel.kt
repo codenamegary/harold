@@ -164,6 +164,7 @@ class ChatViewModel @Inject constructor(
     private var metadataLoaded = false
     private val unreachableOrigins = mutableSetOf<String>()
     private val refreshMutex = Mutex()
+    private var pickerRefreshJob: Job? = null
     private var restoreJob: Job? = null
     private val transcriptMemory = mutableMapOf<String, AcpTranscriptState>()
     private var watchedOrigin: String? = null
@@ -460,25 +461,44 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Shows the cached rows immediately. The refresh runs after the menu has
+     * painted, and repeated opens share the one in-flight scan.
+     */
     fun showPicker() {
         _uiState.update { current ->
             current.copy(
                 pickerVisible = true,
-                recentSessionsLoading = true,
-                recentSessionsError = null,
+                recentSessionsLoading = current.recentSessionsLoading ||
+                    current.recentSessions.isEmpty(),
             )
         }
-        viewModelScope.launch {
-            refreshCatalog()
-            publishRecentSessions()
-            _uiState.update { current ->
-                current.copy(recentSessionsLoading = false)
+        if (_uiState.value.isRefreshing || pickerRefreshJob?.isActive == true) {
+            return
+        }
+        pickerRefreshJob = viewModelScope.launch {
+            try {
+                delay(PICKER_REFRESH_DELAY_MS)
+                refreshCatalog()
+            } finally {
+                _uiState.update { current -> current.copy(recentSessionsLoading = false) }
             }
         }
     }
 
     fun hidePicker() {
         _uiState.update { current -> current.copy(pickerVisible = false) }
+    }
+
+    fun retryRecentSessions() {
+        _uiState.update { current -> current.copy(recentSessionsLoading = true) }
+        viewModelScope.launch {
+            try {
+                refreshCatalog()
+            } finally {
+                _uiState.update { current -> current.copy(recentSessionsLoading = false) }
+            }
+        }
     }
 
     fun onComposerTextChanged(text: String) {
@@ -1744,11 +1764,19 @@ class ChatViewModel @Inject constructor(
             )
         }
         if (origins.isEmpty()) {
-            _uiState.update { current -> current.copy(isRefreshing = false, hasLoaded = true) }
+            _uiState.update { current ->
+                current.copy(
+                    isRefreshing = false,
+                    hasLoaded = true,
+                    recentSessionsLoading = false,
+                )
+            }
             return@withLock
         }
 
         var anySuccess = false
+        var allAuthoritative = origins.isNotEmpty()
+        var refreshError: String? = null
         var lastError: Throwable? = null
         origins.forEach { connectionId ->
             val refreshResult = sessionRepository.refresh(connectionId)
@@ -1758,15 +1786,27 @@ class ChatViewModel @Inject constructor(
                     applyAgents(catalog.agents)
                     anySuccess = true
                     unreachableOrigins.remove(connectionId)
+                    if (!catalog.authoritative) {
+                        allAuthoritative = false
+                        refreshError = refreshError
+                            ?: catalog.error
+                            ?: "Could not refresh sessions"
+                    }
                 },
                 onFailure = { error ->
+                    allAuthoritative = false
+                    refreshError = refreshError ?: apiErrorMessage(error)
                     lastError = error
                     unreachableOrigins.add(connectionId)
                 },
             )
         }
 
-        publishLiveSessions()
+        val currentSessions = sessionRepository.observeSessions().first()
+        if (currentSessions.isNotEmpty() || allAuthoritative) {
+            liveSessions = currentSessions
+        }
+        publishLiveSessions(allowEmpty = allAuthoritative)
         _uiState.update { current ->
             current.copy(
                 hasLoaded = true,
@@ -1776,6 +1816,12 @@ class ChatViewModel @Inject constructor(
                 } else {
                     null
                 },
+                recentSessionsError = if (allAuthoritative) {
+                    null
+                } else {
+                    refreshError ?: current.recentSessionsError
+                },
+                recentSessionsLoading = false,
             )
         }
         publishRecentSessions()
@@ -1785,18 +1831,18 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun loadConnectionMetadata() {
-        savedConnections = connectionRepository.list()
+        savedConnections = runCatching { connectionRepository.list() }.getOrDefault(emptyList())
         activeOrigin = (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
         metadataLoaded = true
         unreachableOrigins.retainAll(targetOrigins().toSet())
     }
 
-    private fun targetOrigins(): List<String> =
-        if (savedConnections.isNotEmpty()) {
-            savedConnections.map { connection -> connection.connectionId }.distinct()
-        } else {
-            listOfNotNull(activeOrigin)
-        }
+    private fun targetOrigins(): List<String> = sessionRefreshOrigins(
+        saved = savedConnections.map { connection -> connection.connectionId },
+        active = activeOrigin,
+        selected = selectedSessionOrigin(),
+        watched = watchedOrigin,
+    )
 
     private fun activeHarold(): SavedConnection? =
         savedConnections.firstOrNull { connection -> connection.connectionId == activeOrigin }
@@ -1820,8 +1866,12 @@ class ChatViewModel @Inject constructor(
     /**
      * Paints the live ACP session catalog. Each agent's rows arrive as its
      * `session/list` answer lands, so a slow agent does not hide the rest.
+     *
+     * [allowEmpty] is true only for the publish that closes a fully
+     * authoritative refresh. A transient empty list from the store, such as a
+     * process exit or a partial page, must not erase rows the user already sees.
      */
-    private fun publishLiveSessions() {
+    private fun publishLiveSessions(allowEmpty: Boolean = false) {
         if (!metadataLoaded) {
             return
         }
@@ -1829,8 +1879,12 @@ class ChatViewModel @Inject constructor(
         val scopedToHarold = savedConnections.isNotEmpty()
         val haroldByOrigin = savedConnections.associateBy { connection -> connection.connectionId }
         val pushedTitles = sessionOwner.sessionTitles.value
-        val rows = liveSessions
-            .filter { listed -> listed.connectionId in origins }
+        val visibleSessions = if (origins.isEmpty()) {
+            liveSessions
+        } else {
+            liveSessions.filter { listed -> listed.connectionId in origins }
+        }
+        val rows = visibleSessions
             .map { listed ->
                 val connection = haroldByOrigin[listed.connectionId]
                 val row = listed.toSessionRow().copy(
@@ -1844,7 +1898,7 @@ class ChatViewModel @Inject constructor(
             }
             .sortedByDescending { row -> row.updatedAt }
         val selected = _uiState.value.selectedSession
-        catalog = rows.map { row ->
+        val nextCatalog = rows.map { row ->
             if (selected != null && row.id == selected.id) {
                 row.copy(
                     state = selected.state,
@@ -1853,6 +1907,9 @@ class ChatViewModel @Inject constructor(
             } else {
                 row
             }
+        }
+        if (nextCatalog.isNotEmpty() || allowEmpty || catalog.isEmpty()) {
+            catalog = nextCatalog
         }
         val updatedSelected = selected?.let { current ->
             catalog.firstOrNull { row -> row.id == current.id } ?: current
@@ -2200,6 +2257,7 @@ class ChatViewModel @Inject constructor(
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val RECENT_SESSIONS_LIMIT = 5
         const val NEW_SESSION_NAME = "New session"
+        const val PICKER_REFRESH_DELAY_MS = 250L
         const val MODEL_SYNC_TIMEOUT_MS = 3_000L
         const val MODEL_SYNC_LIVE_TIMEOUT_MS = 30_000L
 

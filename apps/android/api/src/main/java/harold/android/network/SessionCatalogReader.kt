@@ -28,6 +28,8 @@ data class AgentSessionSnapshot(
     val sessions: List<CatalogSession> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,
+    /** True when the agent process is gone and the rows are last known. */
+    val stale: Boolean = false,
 )
 
 /** Read-only view of the sessions the live ACP runtime currently knows. */

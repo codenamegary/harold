@@ -19,8 +19,8 @@ import kotlinx.coroutines.flow.map
  * directory do not need a second catalog in Room.
  *
  * Each snapshot is owned by one `(connection, agent)` pair. Listing an agent
- * replaces only that agent's rows; process death removes only that agent's
- * rows for the saved connections that shared the process.
+ * replaces only that agent's rows. Process death marks that agent's rows stale
+ * for the saved connections that shared the process.
  */
 @Singleton
 class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
@@ -98,24 +98,31 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
                 agentId = agentId,
             )
             val refreshed = sessions.map { session -> session.toCatalog() }
+            val refreshedIds = refreshed.map { session -> session.sessionId }.toSet()
             val next = if (cwd == null) {
-                // A full refresh is authoritative. Keep only rows already
-                // tombstoned by a gone-session attach. A normal list refresh
-                // must not invent unavailable rows for sessions it never saw.
-                val refreshedIds = refreshed.map { session -> session.sessionId }.toSet()
+                // A final full refresh is authoritative. Keep tombstoned rows
+                // and, while more pages are still arriving, rows this page has
+                // not reported yet. A normal list refresh must not invent
+                // unavailable rows for sessions it never saw.
                 val missing = current.sessions.filter { session ->
-                    session.unavailable && session.sessionId !in refreshedIds
+                    session.sessionId !in refreshedIds && (loading || session.unavailable)
                 }
                 refreshed + missing
             } else {
                 // A folder-scoped refresh replaces only that folder's rows.
-                val kept = current.sessions.filter { session -> session.cwd != cwd }
-                kept + refreshed
+                val outside = current.sessions.filter { session -> session.cwd != cwd }
+                val inside = current.sessions.filter { session ->
+                    session.cwd == cwd &&
+                        session.sessionId !in refreshedIds &&
+                        (loading || session.unavailable)
+                }
+                outside + inside + refreshed
             }
             byKey[key] = current.copy(
                 sessions = sortSessions(next),
                 loading = loading,
                 error = null,
+                stale = false,
             )
             publishLocked()
         }
@@ -208,6 +215,7 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
                 sessions = sortSessions(sessions),
                 loading = false,
                 error = null,
+                stale = false,
             )
             publishLocked()
         }
@@ -248,17 +256,19 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
         }
     }
 
+    /**
+     * A process exit does not prove the agent lost its sessions. Keep the rows
+     * and mark the snapshot stale. The next successful `session/list` clears
+     * the flag and drops rows the agent no longer reports.
+     */
     fun removeAgent(connectionId: String, agentId: AgentId) {
         synchronized(lock) {
             val key = Key(connectionId, agentId)
             val current = byKey[key] ?: return
-            // A process exit drops its live rows. Keep gone-session tombstones
-            // so the user can still see why a session cannot be opened.
-            val tombstones = current.sessions.filter { session -> session.unavailable }
-            if (tombstones.isEmpty()) {
+            if (current.sessions.isEmpty()) {
                 byKey.remove(key)
             } else {
-                byKey[key] = current.copy(sessions = tombstones, loading = false)
+                byKey[key] = current.copy(loading = false, error = null, stale = true)
             }
             publishLocked()
         }

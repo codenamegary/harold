@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -135,6 +137,60 @@ class DefaultSessionRepositoryTest {
             listOf("cursor"),
             agentRepository.observeAgents(ORIGIN).first().map { cached -> cached.agentId },
         )
+    }
+
+    @Test
+    fun refreshIsNotAuthoritativeWhenAnAgentFailedToList() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Alpha")),
+        )
+        catalog.markFailed(ORIGIN, "cursor", "offline")
+        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
+
+        val live = repository.refresh(ORIGIN).getOrThrow()
+
+        assertFalse(live.authoritative)
+        assertEquals("offline", live.error)
+    }
+
+    @Test
+    fun refreshIsAuthoritativeForAnAgentThatListedNoSessions() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = emptyList(),
+        )
+        api.sessions = Result.success(SessionCollection(emptyList()))
+
+        val live = repository.refresh(ORIGIN).getOrThrow()
+
+        assertTrue(live.authoritative)
+        assertNull(live.error)
+    }
+
+    @Test
+    fun refreshIsNotAuthoritativeWhenNoAgentReported() = runTest {
+        api.sessions = Result.success(SessionCollection(emptyList()))
+
+        val live = repository.refresh(ORIGIN).getOrThrow()
+
+        assertFalse(live.authoritative)
+    }
+
+    @Test
+    fun aStaleAgentSnapshotMarksItsRowsOffline() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Alpha")),
+        )
+        catalog.markStale(ORIGIN, "cursor")
+
+        val cached = repository.observeSessions(ORIGIN).first().single()
+
+        assertEquals(true, cached.stale)
     }
 
     @Test
@@ -259,6 +315,26 @@ private class FakeSessionCatalog : SessionCatalogReader {
             agentId = agentId,
             sessions = sessions,
         )
+    }
+
+    fun markFailed(connectionId: String, agentId: AgentId, message: String) {
+        val others = snapshots.value.filterNot { snapshot ->
+            snapshot.connectionId == connectionId && snapshot.agentId == agentId
+        }
+        val current = snapshots.value.firstOrNull { snapshot ->
+            snapshot.connectionId == connectionId && snapshot.agentId == agentId
+        } ?: AgentSessionSnapshot(connectionId = connectionId, agentId = agentId)
+        snapshots.value = others + current.copy(loading = false, error = message)
+    }
+
+    fun markStale(connectionId: String, agentId: AgentId) {
+        val others = snapshots.value.filterNot { snapshot ->
+            snapshot.connectionId == connectionId && snapshot.agentId == agentId
+        }
+        val current = snapshots.value.firstOrNull { snapshot ->
+            snapshot.connectionId == connectionId && snapshot.agentId == agentId
+        } ?: return
+        snapshots.value = others + current.copy(stale = true)
     }
 }
 

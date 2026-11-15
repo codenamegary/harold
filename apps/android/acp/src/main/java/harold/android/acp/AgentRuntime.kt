@@ -45,9 +45,8 @@ class AgentRuntime @Inject constructor(
     private val connections = ConcurrentHashMap<String, String>()
 
     /**
-     * Last known working directories. The catalog drops an agent's rows when
-     * its process dies, but a watched session still needs a cwd hint to
-     * `session/load` on the replacement process.
+     * Last known working directories. A watched session still needs a cwd hint
+     * to `session/load` on a replacement process after the agent exits.
      */
     private val sessionCwds = ConcurrentHashMap<SessionKey, String>()
 
@@ -192,10 +191,13 @@ class AgentRuntime @Inject constructor(
         cwd: String? = null,
     ): Result<List<AcpSessionInfo>> = runCatching {
         val rows = launcher.launchableAgents(connectionId).getOrThrow()
-        catalog.retainAgents(connectionId, rows.map { row -> row.id }.toSet())
         if (rows.isEmpty()) {
-            return@runCatching emptyList()
+            // The host may be mid-setup, or its agent config may not have
+            // loaded. An empty launchable set cannot prove the agent has no
+            // sessions, so keep the previous rows and surface the failure.
+            throw AgentLaunchException("No enabled agents on this host.")
         }
+        catalog.retainAgents(connectionId, rows.map { row -> row.id }.toSet())
 
         catalog.markLoading(connectionId, rows.map { row -> row.id })
         coroutineScope {
@@ -205,6 +207,11 @@ class AgentRuntime @Inject constructor(
                     permits.withPermit {
                         runCatching {
                             withProcess(connectionId, row.id) { process ->
+                                if (!process.supportsSessionList) {
+                                    throw AgentLaunchException(
+                                        "This agent does not support listing sessions.",
+                                    )
+                                }
                                 process.sessionList(connectionId, cwd) { partial ->
                                     catalog.replaceAgent(
                                         connectionId = connectionId,

@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import harold.android.contracts.SessionState
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.LoadingSkeletonList
 import harold.android.ui.components.SwipeToDeleteListItem
@@ -331,7 +332,7 @@ private fun SessionListRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (session.needsAttention || !session.connectionReachable) {
+                if (session.needsAttention || !session.connectionReachable || session.stale) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (session.needsAttention) {
                             Text(
@@ -347,6 +348,14 @@ private fun SessionListRow(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.testTag("session_unreachable_${session.id}"),
+                            )
+                        }
+                        if (session.stale && session.state != SessionState.Unavailable) {
+                            Text(
+                                text = stringResource(R.string.chat_session_stale),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.testTag("session_stale_${session.id}"),
                             )
                         }
                     }

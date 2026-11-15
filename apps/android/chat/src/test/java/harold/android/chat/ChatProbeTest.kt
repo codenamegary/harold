@@ -207,6 +207,35 @@ class ChatProbeTest {
     }
 
     @Test
+    fun factsReportTheMenuStateAndSelectedOrigin() {
+        val state = stateWithSession().copy(
+            pickerVisible = true,
+            selectedSession = sessionRow().copy(connectionId = "laptop"),
+            recentSessions = listOf(sessionRow().copy(connectionId = "laptop")),
+            recentSessionsError = "offline",
+        )
+        val probe = ChatProbe(FakeChatProbeHost(state))
+
+        val facts = probe.facts()
+
+        assertEquals("rows", facts["sessionMenuState"])
+        assertEquals("laptop|opencode:s1", facts["sessionMenuRowIds"])
+        assertEquals("offline", facts["sessionMenuError"])
+        assertEquals("false", facts["sessionMenuLoading"])
+        assertEquals("laptop", facts["selectedSessionOrigin"])
+    }
+
+    @Test
+    fun retrySessionMenuReachesTheHost() {
+        val host = FakeChatProbeHost(stateWithSession())
+        val probe = ChatProbe(host)
+
+        assertTrue(probe.perform("retry_session_menu", emptyMap()))
+
+        assertEquals(listOf("retrySessionMenu"), host.calls)
+    }
+
+    @Test
     fun tagNamesMatchTheStringsTheScreensApply() {
         assertEquals("session_menu_row_cat|1", sessionMenuRowTag("cat|1"))
         assertEquals(
@@ -234,6 +263,10 @@ private class FakeChatProbeHost(
     override fun hideSessionMenu() {
         current = current.copy(pickerVisible = false)
         calls += "hideSessionMenu"
+    }
+
+    override fun retrySessionMenu() {
+        calls += "retrySessionMenu"
     }
 
     override fun selectSession(row: SessionRow) {
