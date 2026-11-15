@@ -186,6 +186,18 @@ const RpcMessageSchema = z.object({
 const sleep = (ms: number): Promise<void> =>
   ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms))
 
+const supportsFormElicitation = (clientCapabilities: unknown): boolean => {
+  if (typeof clientCapabilities !== "object" || clientCapabilities === null) {
+    return false
+  }
+  const elicitation = (clientCapabilities as Record<string, unknown>).elicitation
+  if (typeof elicitation !== "object" || elicitation === null) {
+    return false
+  }
+  const form = (elicitation as Record<string, unknown>).form
+  return form !== undefined && form !== null && form !== false
+}
+
 export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
   const timing = deps.timing ?? DEFAULT_TIMING
   const config = structuredClone(CONFIG_OPTIONS)
@@ -193,7 +205,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     number | string,
     { sessionId: string; promptId: number | string | undefined; question: ElicitationQuestion }
   >()
-  const state = { nextRequestId: 9000 }
+  const state = { nextRequestId: 9000, clientSupportsElicitationForm: false }
 
   const nowIso = (): string => new Date().toISOString()
 
@@ -295,6 +307,11 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     session.history.push({ role: "assistant", text: PLAN_TEXT })
     session.turnIndex = 1
     session.updatedAt = nowIso()
+
+    if (!state.clientSupportsElicitationForm) {
+      respond(promptId, { stopReason: "end_turn" })
+      return
+    }
 
     const question: ElicitationQuestion = {
       sessionId: session.sessionId,
@@ -433,6 +450,9 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     const id = msg.id
 
     if (msg.method === "initialize") {
+      state.clientSupportsElicitationForm = supportsFormElicitation(
+        params.clientCapabilities,
+      )
       respond(id, {
         protocolVersion: 1,
         agentCapabilities: {
@@ -516,7 +536,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
       if (session.usage) {
         notifyUpdate(sessionId, { sessionUpdate: "usage_update", ...session.usage })
       }
-      if (session.pendingQuestion) {
+      if (session.pendingQuestion && state.clientSupportsElicitationForm) {
         const requestId = state.nextRequestId
         state.nextRequestId += 1
         pendingElicitations.set(requestId, {
