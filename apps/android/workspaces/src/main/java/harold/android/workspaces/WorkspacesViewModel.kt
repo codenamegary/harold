@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.Workspace
+import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
 import harold.android.network.apiErrorMessage
@@ -42,6 +43,7 @@ data class WorkspacesUiState(
     val loadState: WorkspacesLoadState = WorkspacesLoadState.Loading,
     val connectionByWorkspaceId: Map<String, WorkspaceConnectionBadge> = emptyMap(),
     val actionError: String? = null,
+    val cleanupConfirmVisible: Boolean = false,
 )
 
 @HiltViewModel
@@ -79,10 +81,7 @@ class WorkspacesViewModel @Inject constructor(
     }
 
     fun delete(workspace: Workspace) {
-        val origin = _uiState.value.connectionByWorkspaceId[workspace.id]?.connectionId
-            ?: targetOrigins.singleOrNull()
-            ?: (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
-            ?: return
+        val origin = originFor(workspace.id) ?: return
 
         viewModelScope.launch {
             workspaceRepository.delete(origin, workspace.path).fold(
@@ -95,6 +94,45 @@ class WorkspacesViewModel @Inject constructor(
             )
         }
     }
+
+    fun showCleanupConfirm() {
+        _uiState.value = _uiState.value.copy(cleanupConfirmVisible = true)
+    }
+
+    fun hideCleanupConfirm() {
+        _uiState.value = _uiState.value.copy(cleanupConfirmVisible = false)
+    }
+
+    fun cleanupMissing() {
+        hideCleanupConfirm()
+        val missing = (_uiState.value.loadState as? WorkspacesLoadState.Loaded)
+            ?.workspaces
+            ?.filter { workspace -> workspace.state == WorkspaceState.Missing }
+            .orEmpty()
+        if (missing.isEmpty()) return
+
+        viewModelScope.launch {
+            var lastError: Throwable? = null
+            missing.forEach { workspace ->
+                val origin = originFor(workspace.id)
+                if (origin == null) {
+                    return@forEach
+                }
+                workspaceRepository.delete(origin, workspace.path).fold(
+                    onSuccess = { },
+                    onFailure = { error -> lastError = error },
+                )
+            }
+            _uiState.value = _uiState.value.copy(
+                actionError = lastError?.let(::apiErrorMessage),
+            )
+        }
+    }
+
+    private fun originFor(workspaceId: String): String? =
+        _uiState.value.connectionByWorkspaceId[workspaceId]?.connectionId
+            ?: targetOrigins.singleOrNull()
+            ?: (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
 
     private suspend fun loadWorkspaces() {
         loadConnectionMetadata()
@@ -168,6 +206,7 @@ class WorkspacesViewModel @Inject constructor(
         _uiState.value = WorkspacesUiState(
             loadState = loadState,
             connectionByWorkspaceId = badges,
+            cleanupConfirmVisible = _uiState.value.cleanupConfirmVisible,
         )
     }
 }

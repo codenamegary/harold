@@ -6,6 +6,12 @@
     <string name="workspaces_delete">Delete</string>
     <string name="workspaces_delete_confirm_title">Delete workspace?</string>
     <string name="workspaces_delete_confirm_body">This removes the workspace from this connection. The folder and its files stay on the host.</string>
+    <string name="workspaces_cleanup_missing">Clean up missing</string>
+    <string name="workspaces_overflow_content_description">More workspace options</string>
+    <string name="workspaces_cleanup_confirm_title">Clean up missing workspaces?</string>
+    <string name="workspaces_cleanup_confirm_body">This removes workspaces whose folders no longer exist on the host.</string>
+    <string name="workspaces_cleanup_confirm_action">Clean up</string>
+    <string name="workspaces_cancel">Cancel</string>
     <string name="add_workspace_title">Add workspace</string>
     <string name="add_workspace_back_content_description">Go back from add workspace</string>
     <string name="add_workspace_mode_open">Open folder</string>
