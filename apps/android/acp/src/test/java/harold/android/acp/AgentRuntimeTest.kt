@@ -550,6 +550,48 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun backgroundKeepsEveryAgentWarmWhileAnySessionHasWork() = runBlocking {
+        val launcher = FakeLauncher(listOf("agent-a", "agent-b"))
+        val runtime = AgentRuntime(
+            launcher = launcher,
+            files = NoopFiles,
+            catalog = AcpSessionCatalog(),
+        )
+        try {
+            val createdA = runtime.createSession(FIRST_ROW, "agent-a", "/tmp/a").getOrThrow()
+            runtime.createSession(FIRST_ROW, "agent-b", "/tmp/b").getOrThrow()
+            val sessionA = runtime.openSession(FIRST_ROW, "agent-a", createdA.sessionId).getOrThrow()
+            launcher.agents[0].answerPrompts = false
+
+            val subscribed = CompletableDeferred<Unit>()
+            val subscription = sessionA.attach()
+            val collector = launch {
+                subscription.events.collect { message ->
+                    if (message is SessionStreamServerMessage.Subscribed) subscribed.complete(Unit)
+                }
+            }
+            withTimeout(10_000) { subscribed.await() }
+            assertEquals(
+                PromptResult.Accepted,
+                sessionA.prompt(PromptRequestBody("keep agent-a busy")).getOrThrow(),
+            )
+            withTimeout(10_000) { launcher.agents[0].promptReceived.await() }
+
+            runtime.onBackground()
+
+            assertFalse(launcher.channels[0].isClosed())
+            assertFalse(launcher.channels[1].isClosed())
+
+            subscription.detach()
+            collector.cancel()
+            sessionA.close()
+        } finally {
+            runtime.closeConnection(FIRST_ROW)
+            launcher.close()
+        }
+    }
+
+    @Test
     fun processDeathDropsOnlyThatAgentsCatalogRows() = runBlocking {
         val launcher = FakeLauncher(listOf("agent-a", "agent-b"))
         val catalog = AcpSessionCatalog()
