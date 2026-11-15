@@ -1831,20 +1831,26 @@ class ChatViewModel @Inject constructor(
                 titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row
             }
             .sortedByDescending { row -> row.updatedAt }
-        catalog = rows
         val selected = _uiState.value.selectedSession
+        catalog = rows.map { row ->
+            if (selected != null && row.id == selected.id) {
+                row.copy(
+                    state = selected.state,
+                    needsAttention = selected.needsAttention,
+                )
+            } else {
+                row
+            }
+        }
         val updatedSelected = selected?.let { current ->
-            rows.firstOrNull { row -> row.id == current.id }?.copy(
-                state = current.state,
-                needsAttention = current.needsAttention,
-            ) ?: current
+            catalog.firstOrNull { row -> row.id == current.id } ?: current
         }
         _uiState.update { current ->
             current.copy(
-                sessions = rows,
+                sessions = catalog,
                 hasLoaded = true,
                 selectedSession = updatedSelected ?: current.selectedSession,
-                sessionsError = if (rows.isNotEmpty()) null else current.sessionsError,
+                sessionsError = if (catalog.isNotEmpty()) null else current.sessionsError,
             )
         }
         publishRecentSessions()
@@ -1944,14 +1950,26 @@ class ChatViewModel @Inject constructor(
         if (state == null) {
             return
         }
+        var changed = false
         _uiState.update { current ->
             val selected = current.selectedSession ?: return@update current
+            if (selected.state == state) {
+                return@update current
+            }
+            changed = true
             val next = selected.copy(state = state)
             catalog = catalog.map { row -> if (row.id == next.id) next else row }
             current.copy(
                 selectedSession = next,
                 sessions = catalog,
             )
+        }
+        if (!changed) {
+            // Streaming frames keep the same session state. Rebuilding the
+            // 700-row catalog and updating the foreground notification on
+            // every chunk starves the main thread and can prevent the
+            // service from entering the foreground.
+            return
         }
         publishRecentSessions()
         syncActiveSessionsFromUiState()

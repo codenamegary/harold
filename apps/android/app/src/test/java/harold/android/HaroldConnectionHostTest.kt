@@ -80,6 +80,24 @@ class HaroldConnectionHostTest {
         assertEquals(0, pool.closeAlls)
     }
 
+    @Test
+    fun backgroundKeepsTheWatchedStreamWhenItsStatusIsRunning() = runTest {
+        val owner = RecordingSessionOwner().apply {
+            setStatus(harold.android.stream.SessionStatus.Running)
+        }
+        // The connection roster reports no live session, so this test proves
+        // the watched session itself can keep the stream alive.
+        val connections = RecordingConnections(stay = false)
+        val pool = RecordingPool()
+        val host = host(owner, connections, pool)
+
+        host.onAppBackground()
+
+        assertEquals(0, owner.backgroundCloses)
+        assertEquals(1, owner.backgrounds)
+        assertEquals(0, pool.closeAlls)
+    }
+
     private fun TestScope.host(
         owner: RecordingSessionOwner,
         connections: RecordingConnections,
@@ -179,6 +197,14 @@ private class RecordingSessionOwner : SessionOwner {
         private set
     var backgroundCloses = 0
         private set
+
+    private val _sessionStatus =
+        MutableStateFlow(harold.android.stream.SessionStatus.Ready)
+    override val sessionStatus: StateFlow<harold.android.stream.SessionStatus> = _sessionStatus
+
+    fun setStatus(status: harold.android.stream.SessionStatus) {
+        _sessionStatus.value = status
+    }
 
     override val connectionState: StateFlow<ConnectionState> = MutableStateFlow(ConnectionState())
     override val snapshot: StateFlow<SessionSnapshot> = MutableStateFlow(SessionSnapshot())

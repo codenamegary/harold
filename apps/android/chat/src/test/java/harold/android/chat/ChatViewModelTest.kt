@@ -131,6 +131,71 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun repeatedFramesWithTheSameSessionStateDoNotRepublishConnectionState() = runTest(dispatcher) {
+        val reported = mutableListOf<Pair<String, List<harold.android.contracts.SessionState>>>()
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            connections = RecordingHaroldConnections(reported),
+        )
+        advanceUntilIdle()
+
+        val running = SessionSnapshot(
+            agentId = "cursor",
+            sessionId = "sess_02",
+            transcript = emptyAcpTranscript.copy(
+                sessionState = SessionState.Running,
+                live = true,
+            ),
+        )
+        sessionOwner.publish(running)
+        advanceUntilIdle()
+        val afterFirstFrame = reported.size
+
+        sessionOwner.publish(
+            running.copy(
+                transcript = running.transcript.copy(currentTurnId = "turn-2"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(afterFirstFrame, reported.size)
+        assertEquals(SessionState.Running, viewModel.uiState.value.selectedSession?.state)
+    }
+
+    @Test
+    fun aCatalogRefreshKeepsTheSelectedRunningStateInConnectionReports() = runTest(dispatcher) {
+        val reported = mutableListOf<Pair<String, List<harold.android.contracts.SessionState>>>()
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            connections = RecordingHaroldConnections(reported),
+        )
+        advanceUntilIdle()
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                transcript = emptyAcpTranscript.copy(
+                    sessionState = SessionState.Running,
+                    live = true,
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onResume()
+        advanceUntilIdle()
+
+        assertTrue(reported.last().second.contains(SessionState.Running))
+        assertEquals(SessionState.Running, viewModel.uiState.value.selectedSession?.state)
+    }
+
+    @Test
     fun waitsForTheLiveSessionListInsteadOfRestoringACache() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
         val repository = ChatFakeUserRepository(sessionsGate = gate)

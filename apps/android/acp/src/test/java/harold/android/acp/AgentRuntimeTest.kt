@@ -461,6 +461,95 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun detachingTheLastStreamKeepsARunningPromptAlive() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/detach").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+            val agent = launcher.agents.single()
+            agent.answerPrompts = false
+
+            val subscribed = CompletableDeferred<Unit>()
+            val subscription = session.attach()
+            val collector = launch {
+                subscription.events.collect { message ->
+                    if (message is SessionStreamServerMessage.Subscribed) subscribed.complete(Unit)
+                }
+            }
+            withTimeout(10_000) { subscribed.await() }
+
+            assertEquals(
+                PromptResult.Accepted,
+                session.prompt(PromptRequestBody("keep working")).getOrThrow(),
+            )
+            withTimeout(10_000) { agent.promptReceived.await() }
+
+            subscription.detach()
+            collector.cancel()
+            delay(200)
+
+            assertTrue(session.isPrompting)
+            assertEquals(0, agent.cancelsReceived.get())
+
+            runtime.onBackground()
+            assertFalse(launcher.channels.single().isClosed())
+
+            session.close()
+        }
+    }
+
+    @Test
+    fun reattachingReplaysAPendingPermissionRequest() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/pending").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+
+            val firstRequest = CompletableDeferred<SessionStreamServerMessage.PermissionRequest>()
+            val firstSubscribed = CompletableDeferred<Unit>()
+            val firstSubscription = session.attach()
+            val firstCollector = launch {
+                firstSubscription.events.collect { message ->
+                    when (message) {
+                        is SessionStreamServerMessage.Subscribed -> firstSubscribed.complete(Unit)
+                        is SessionStreamServerMessage.PermissionRequest -> firstRequest.complete(message)
+                        else -> Unit
+                    }
+                }
+            }
+            withTimeout(10_000) { firstSubscribed.await() }
+
+            assertEquals(
+                PromptResult.Accepted,
+                session.prompt(PromptRequestBody("ask permission")).getOrThrow(),
+            )
+            val request = withTimeout(10_000) { firstRequest.await() }
+
+            firstSubscription.detach()
+            firstCollector.cancel()
+
+            val replayed = CompletableDeferred<SessionStreamServerMessage.PermissionRequest>()
+            val replayedSubscribed = CompletableDeferred<Unit>()
+            val secondSubscription = session.attach()
+            val secondCollector = launch {
+                secondSubscription.events.collect { message ->
+                    when (message) {
+                        is SessionStreamServerMessage.Subscribed -> replayedSubscribed.complete(Unit)
+                        is SessionStreamServerMessage.PermissionRequest -> replayed.complete(message)
+                        else -> Unit
+                    }
+                }
+            }
+            withTimeout(10_000) { replayedSubscribed.await() }
+            val again = withTimeout(10_000) { replayed.await() }
+            assertEquals(request.requestId, again.requestId)
+
+            session.replyPermission(request.requestId, "allow").getOrThrow()
+            awaitStatus(session, SessionStatus.Ready)
+            secondCollector.cancel()
+            session.close()
+        }
+    }
+
+    @Test
     fun processDeathDropsOnlyThatAgentsCatalogRows() = runBlocking {
         val launcher = FakeLauncher(listOf("agent-a", "agent-b"))
         val catalog = AcpSessionCatalog()
@@ -700,6 +789,7 @@ private class FakeAgent(
     private val newSessions = AtomicInteger(0)
 
     val promptsStarted = AtomicInteger(0)
+    val cancelsReceived = AtomicInteger(0)
     val promptReceived = CompletableDeferred<Unit>()
     val sessionLoads = AtomicInteger(0)
     val sessionLists = AtomicInteger(0)
@@ -738,8 +828,12 @@ private class FakeAgent(
     }
 
     private suspend fun handleRequest(message: JsonObject) {
-        val id = message["id"] ?: return
         val method = (message["method"] as? JsonPrimitive)?.content ?: return
+        if (method == "session/cancel") {
+            cancelsReceived.incrementAndGet()
+            return
+        }
+        val id = message["id"] ?: return
         val params = message["params"] as? JsonObject ?: JsonObject(emptyMap())
         when (method) {
             "initialize" -> respond(
@@ -888,8 +982,6 @@ private class FakeAgent(
                 notifyUpdate(sessionId, "permission answered")
                 respond(id, buildJsonObject { put("stopReason", "end_turn") })
             }
-
-            "session/cancel" -> Unit
 
             else -> respondError(id, -32601, "Method not found: $method")
         }
