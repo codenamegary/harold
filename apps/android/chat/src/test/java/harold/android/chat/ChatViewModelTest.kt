@@ -49,6 +49,8 @@ import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
+import harold.android.network.SessionFolderProbe
+import harold.android.network.SessionFolderState
 import harold.android.session.ConnectionHealth
 import harold.android.session.ConnectionStatus
 import harold.android.session.ActiveConnectionState
@@ -368,6 +370,76 @@ class ChatViewModelTest {
         assertEquals("Alpha", viewModel.uiState.value.selectedSession?.name)
         assertEquals(2, viewModel.uiState.value.sessions.size)
         assertEquals("cursor" to "sess_02", sessionOwner.target)
+    }
+
+    @Test
+    fun missingSessionFolderBlocksLoadingAndExposesThePath() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository(
+            extraSessions = listOf(session("sess_gone", "Gone", cwd = "/tmp/gone")),
+        )
+        val sessionOwner = ChatFakeSessionOwner()
+        val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_gone")
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = navigation,
+            sessionOwner = sessionOwner,
+            sessionFolderProbe = SessionFolderProbe { _, path ->
+                if (path == "/tmp/gone") SessionFolderState.Missing else SessionFolderState.Available
+            },
+        )
+
+        advanceUntilIdle()
+
+        assertEquals("Gone", viewModel.uiState.value.selectedSession?.name)
+        assertEquals("/tmp/gone", viewModel.uiState.value.missingSessionFolderPath)
+        assertNull(sessionOwner.target)
+        assertFalse(viewModel.uiState.value.composerEnabled)
+    }
+
+    @Test
+    fun unknownSessionFolderStillLoadsTheSession() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            sessionFolderProbe = SessionFolderProbe { _, _ -> SessionFolderState.Unknown },
+        )
+
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.missingSessionFolderPath)
+        assertEquals("cursor" to "sess_02", sessionOwner.target)
+    }
+
+    @Test
+    fun pendingFolderCheckDoesNotWatchTheSession() = runTest(dispatcher) {
+        val folderState = CompletableDeferred<SessionFolderState>()
+        val repository = ChatFakeUserRepository(
+            extraSessions = listOf(session("sess_gone", "Gone", cwd = "/tmp/gone")),
+        )
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_gone"),
+            sessionOwner = sessionOwner,
+            sessionFolderProbe = SessionFolderProbe { _, _ -> folderState.await() },
+        )
+
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.sessionFolderCheckPending)
+
+        // A catalog refresh during the probe must not attach the stream.
+        viewModel.onResume()
+        advanceUntilIdle()
+        assertNull(sessionOwner.target)
+
+        folderState.complete(SessionFolderState.Missing)
+        advanceUntilIdle()
+
+        assertEquals("/tmp/gone", viewModel.uiState.value.missingSessionFolderPath)
+        assertNull(sessionOwner.target)
     }
 
     @Test
@@ -1929,6 +2001,9 @@ class ChatViewModelTest {
         connections: harold.android.session.Connections? = null,
         sessionAttention: harold.android.foreground.SessionAttentionMarks? = null,
         permissionNotifier: harold.android.foreground.PermissionAttentionNotifier? = null,
+        sessionFolderProbe: SessionFolderProbe = SessionFolderProbe { _, _ ->
+            SessionFolderState.Available
+        },
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         connectionGateway = connectionGateway,
@@ -1941,6 +2016,7 @@ class ChatViewModelTest {
         gitApi = gitApi,
         navigationPreferences = navigation,
         sessionPreferences = sessionPreferences,
+        sessionFolderProbe = sessionFolderProbe,
         voiceDictationController = VoiceDictationController(
             speechClient = FakeSpeechRecognitionClient(),
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),

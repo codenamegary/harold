@@ -75,6 +75,10 @@ data class ChatUiState(
     /** True while the stream is attaching or retrying, not merely stopped. */
     val connectionInProgress: Boolean = false,
     val selectedSession: SessionRow? = null,
+    /** Non-null when the selected session's working folder is gone on the host. */
+    val missingSessionFolderPath: String? = null,
+    /** True while the selected session's working folder is being checked. */
+    val sessionFolderCheckPending: Boolean = false,
     val sessions: List<SessionRow> = emptyList(),
     /** True once the first live session snapshot (or an empty one) has been read. */
     val hasLoaded: Boolean = false,
@@ -160,6 +164,8 @@ data class ChatUiState(
         get() {
             val session = selectedSession ?: return false
             return session.connectionReachable &&
+                missingSessionFolderPath == null &&
+                !sessionFolderCheckPending &&
                 sessionStatus.allowsPrompt &&
                 isComposerPromptable(
                     agentId = session.agentId,
@@ -179,6 +185,8 @@ data class ChatUiState(
     val composerBlockedMessage: String?
         get() = when {
             selectedSession?.connectionReachable == false -> WAITING_FOR_HAROLD
+            missingSessionFolderPath != null -> null
+            sessionFolderCheckPending -> null
             isPendingNewSession -> PENDING_SESSION_MESSAGE
             // The reconnect banner already explains why the composer is
             // locked. Showing the Offline message too just adds a red line
@@ -206,6 +214,7 @@ data class ChatUiState(
             (
                 connectionInProgress ||
                     streamReconnecting ||
+                    sessionFolderCheckPending ||
                     sessionStatus == SessionStatus.Starting ||
                     effectiveSessionState == SessionState.Starting
                 )
@@ -213,6 +222,8 @@ data class ChatUiState(
     val showEmptyWelcome: Boolean
         get() = selectedSession != null &&
             transcript.rows.isEmpty() &&
+            missingSessionFolderPath == null &&
+            !sessionFolderCheckPending &&
             !showProgress &&
             !showSessionLoading
 
@@ -256,6 +267,8 @@ internal fun ChatUiState.resetSessionScopedState(
     keep: SessionResetKeep = SessionResetKeep(),
 ): ChatUiState = copy(
     selectedSession = keep.selectedSession,
+    missingSessionFolderPath = null,
+    sessionFolderCheckPending = false,
     transcript = keep.transcript,
     sessionStatus = SessionStatus.Ready,
     composerText = "",

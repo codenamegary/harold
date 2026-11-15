@@ -60,6 +60,8 @@ import harold.android.navigation.SessionPreferences
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
+import harold.android.network.SessionFolderProbe
+import harold.android.network.SessionFolderState
 import harold.android.network.apiErrorMessage
 import harold.android.credentials.SavedConnection
 import harold.android.session.ConnectionHealth
@@ -102,6 +104,7 @@ class ChatViewModel @Inject constructor(
     private val attachmentApi: AttachmentApi,
     private val configApi: SessionConfigApi,
     private val gitApi: GitApi,
+    private val sessionFolderProbe: SessionFolderProbe,
     private val navigationPreferences: NavigationPreferences,
     private val sessionPreferences: SessionPreferences,
     private val activeSessionTracker: ActiveSessionTracker? = null,
@@ -289,8 +292,12 @@ class ChatViewModel @Inject constructor(
                     sessionForegroundCoordinator?.setConnectionId(
                         selectedSessionOrigin() ?: active.connectionId,
                     )
-                    _uiState.value.selectedSession?.let { selected ->
-                        sessionOwner.watch(selected.agentId, selected.sessionId)
+                    if (_uiState.value.missingSessionFolderPath == null &&
+                        !_uiState.value.sessionFolderCheckPending
+                    ) {
+                        _uiState.value.selectedSession?.let { selected ->
+                            sessionOwner.watch(selected.agentId, selected.sessionId)
+                        }
                     }
                     refreshCatalog()
                 } else {
@@ -365,6 +372,8 @@ class ChatViewModel @Inject constructor(
         val path = selected?.worktreePath ?: selected?.cwd.orEmpty()
         if (
             selected == null ||
+            _uiState.value.missingSessionFolderPath != null ||
+            _uiState.value.sessionFolderCheckPending ||
             origin == null ||
             selected.sessionId.isEmpty() ||
             path.isEmpty()
@@ -1365,6 +1374,11 @@ class ChatViewModel @Inject constructor(
             !row.connectionReachable -> transcriptMemory[row.id] ?: emptyAcpTranscript
             else -> emptyAcpTranscript
         }
+        val origin = row.connectionId.ifEmpty { activeOrigin.orEmpty() }
+        val checkFolder = row.sessionId.isNotEmpty() &&
+            row.connectionReachable &&
+            origin.isNotEmpty() &&
+            row.cwd.isNotEmpty()
         _uiState.update { current ->
             current.resetSessionScopedState(
                 SessionResetKeep(
@@ -1376,9 +1390,24 @@ class ChatViewModel @Inject constructor(
             ).copy(
                 sessions = catalog,
                 modelSyncPending = applyPendingModel,
+                sessionFolderCheckPending = checkFolder,
             )
         }
         agentAuth.resetFor(row.agentId)
+        if (checkFolder && sessionFolderProbe.probe(origin, row.cwd) == SessionFolderState.Missing) {
+            _uiState.update { current ->
+                current.copy(
+                    missingSessionFolderPath = row.cwd,
+                    sessionFolderCheckPending = false,
+                )
+            }
+            sessionOwner.watch(null, null)
+            clearChangesBadge()
+            publishRecentSessions()
+            syncActiveSessionsFromUiState()
+            return
+        }
+        _uiState.update { current -> current.copy(sessionFolderCheckPending = false) }
         syncWatch()
         refreshChangesBadge()
         publishRecentSessions()
@@ -1644,8 +1673,11 @@ class ChatViewModel @Inject constructor(
      */
     private fun syncWatch() {
         val selected = _uiState.value.selectedSession
-        if (selected == null) {
+        if (selected == null || _uiState.value.missingSessionFolderPath != null) {
             sessionOwner.watch(null, null)
+            return
+        }
+        if (_uiState.value.sessionFolderCheckPending) {
             return
         }
         if (selected.connectionId.isNotEmpty()) {
@@ -1854,7 +1886,10 @@ class ChatViewModel @Inject constructor(
             ?: return
         if (_uiState.value.selectedSession?.id == row.id) {
             _uiState.update { current -> current.copy(selectedSession = row) }
-            if (row.connectionReachable) {
+            if (row.connectionReachable &&
+                _uiState.value.missingSessionFolderPath == null &&
+                !_uiState.value.sessionFolderCheckPending
+            ) {
                 if (row.connectionId.isNotEmpty()) {
                     watchedOrigin = row.connectionId
                     sessionOwner.connect(row.connectionId)
