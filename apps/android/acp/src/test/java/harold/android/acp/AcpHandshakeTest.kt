@@ -5,6 +5,7 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -27,6 +28,14 @@ class AcpHandshakeTest {
     fun otherAgentsDoNotDeclareTheCursorCapability() {
         assertNull(acpInitializeParams("claude").capabilities()["_meta"])
         assertNull(acpInitializeParams().capabilities()["_meta"])
+    }
+
+    @Test
+    fun advertisesFormElicitationSupport() {
+        val elicitation = acpInitializeParams().capabilities()["elicitation"]?.jsonObject
+
+        assertNotNull(elicitation)
+        assertEquals(emptyMap<String, String>(), elicitation?.get("form")?.jsonObject?.toMap())
     }
 
     private fun JsonObject.capabilities(): JsonObject =

@@ -21,6 +21,12 @@ fun acpInitializeParams(agentId: AgentId? = null): JsonObject = buildJsonObject 
                 },
             )
             put("terminal", true)
+            put(
+                "elicitation",
+                buildJsonObject {
+                    put("form", buildJsonObject { })
+                },
+            )
             if (agentId == CURSOR_AGENT_ID) {
                 // Cursor otherwise bakes effort/thinking into model variant
                 // values instead of exposing a thought_level config option.

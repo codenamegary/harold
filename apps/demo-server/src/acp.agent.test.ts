@@ -13,11 +13,10 @@ type JsonRpcMessage = {
   error?: { code: number; message: string }
 }
 
-const createHarness = () => {
+const createHarness = (sessionStore = createAgentSessionStore()) => {
   const vfs = createVfsStore({ home: "/home/demo" })
   const repos = seedVfsAndRepos(vfs)
   const git = createVirtualGit(vfs, repos)
-  const sessionStore = createAgentSessionStore()
   const outbound: Array<JsonRpcMessage> = []
 
   const agent = createAcpAgentRunner({
@@ -175,9 +174,104 @@ describe("acp.agent", () => {
     expect(rejected?.error?.message).toContain("Unknown session")
   })
 
+  test("skips the form question when the client does not advertise elicitation support", async () => {
+    const { agent, outbound } = createHarness()
+
+    await agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 30,
+        method: "initialize",
+        params: { clientCapabilities: {} },
+      }),
+    )
+    await agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 31,
+        method: "session/new",
+        params: { cwd: CAT_WORKTREE_ROOT },
+      }),
+    )
+    const sessionId = (outbound.find((m) => m.id === 31)?.result?.sessionId as string) ?? ""
+
+    await agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 32,
+        method: "session/prompt",
+        params: { sessionId, prompt: [{ type: "text", text: "start" }] },
+      }),
+    )
+
+    expect(outbound.some((m) => m.method === "elicitation/create")).toBe(false)
+    expect(outbound.find((m) => m.id === 32)?.result?.stopReason).toBe("end_turn")
+  })
+
+  test("does not replay a pending question to a client without elicitation support", async () => {
+    const sessionStore = createAgentSessionStore()
+    const capable = createHarness(sessionStore)
+
+    await capable.agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 40,
+        method: "initialize",
+        params: { clientCapabilities: { elicitation: { form: {} } } },
+      }),
+    )
+    await capable.agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 41,
+        method: "session/new",
+        params: { cwd: CAT_WORKTREE_ROOT },
+      }),
+    )
+    const sessionId = (capable.outbound.find((m) => m.id === 41)?.result?.sessionId as string) ?? ""
+    await capable.agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 42,
+        method: "session/prompt",
+        params: { sessionId, prompt: [{ type: "text", text: "start" }] },
+      }),
+    )
+    expect(capable.outbound.some((m) => m.method === "elicitation/create")).toBe(true)
+
+    const limited = createHarness(sessionStore)
+    await limited.agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 50,
+        method: "initialize",
+        params: { clientCapabilities: {} },
+      }),
+    )
+    await limited.agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 51,
+        method: "session/load",
+        params: { sessionId, cwd: CAT_WORKTREE_ROOT },
+      }),
+    )
+
+    expect(limited.outbound.some((m) => m.method === "elicitation/create")).toBe(false)
+    expect(limited.outbound.find((m) => m.id === 51)?.error).toBeUndefined()
+  })
+
   test("advances through the 3-turn linear script regardless of prompt text", async () => {
     const { agent, outbound, git } = createHarness()
 
+    await agent.handleLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 9,
+        method: "initialize",
+        params: { clientCapabilities: { elicitation: { form: {} } } },
+      }),
+    )
     await agent.handleLine(
       JSON.stringify({
         jsonrpc: "2.0",
