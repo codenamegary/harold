@@ -70,6 +70,8 @@
     <string name="create_session_starting">Starting…</string>
     <string name="sessions_title">Sessions</string>
     <string name="sessions_search_label">Search sessions</string>
+    <string name="sessions_refreshing_connection">Refreshing %1$s</string>
+    <string name="sessions_refresh_failed_state">Refresh failed: %1$s</string>
     <string name="sessions_see_all">See all sessions…</string>
     <string name="sessions_delete">Delete</string>
     <string name="sessions_delete_confirm_title">Delete session?</string>

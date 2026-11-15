@@ -20,6 +20,7 @@ import harold.android.session.ActiveConnectionState
 import harold.android.stream.ConnectionState
 import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeConnectionGateway
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -224,6 +226,86 @@ class SessionsViewModelTest {
         assertEquals(listOf("Gamma", "Alpha", "Beta"), sessions.map { row -> row.name })
         assertEquals(false, sessions.single { row -> row.name == "Alpha" }.connectionReachable)
         assertEquals(true, sessions.single { row -> row.name == "Gamma" }.connectionReachable)
+    }
+
+    @Test
+    fun refreshingConnectionIdsFollowTheConnectionBeingRefreshed() = runTest {
+        val laptopGate = CompletableDeferred<Unit>()
+        val desktopGate = CompletableDeferred<Unit>()
+        val sessionRepository = TestSessionRepository(
+            OriginSessionRepository(
+                sessionsByOrigin = mapOf(
+                    LAPTOP to listOf(session("sess_laptop", "Alpha", "2026-08-03T00:00:00.000Z")),
+                    DESKTOP to listOf(session("sess_desktop", "Beta", "2026-08-02T00:00:00.000Z")),
+                ),
+            ),
+        )
+        sessionRepository.beforeRefresh = { connectionId ->
+            when (connectionId) {
+                LAPTOP -> laptopGate.await()
+                DESKTOP -> desktopGate.await()
+            }
+        }
+
+        val viewModel = viewModel(
+            sessionRepository = sessionRepository,
+            savedConnections = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
+        )
+
+        assertEquals(setOf(LAPTOP), viewModel.uiState.value.refreshingConnectionIds)
+
+        laptopGate.complete(Unit)
+
+        assertEquals(setOf(DESKTOP), viewModel.uiState.value.refreshingConnectionIds)
+
+        desktopGate.complete(Unit)
+
+        assertTrue(viewModel.uiState.value.refreshingConnectionIds.isEmpty())
+    }
+
+    @Test
+    fun connectionErrorsNameTheConnectionThatFailedToRefresh() = runTest {
+        val network = OriginSessionRepository(
+            sessionsByOrigin = mapOf(
+                DESKTOP to listOf(session("sess_desktop", "Beta", "2026-08-02T00:00:00.000Z")),
+            ),
+        )
+        network.failOrigins += LAPTOP
+
+        val viewModel = viewModel(
+            repository = network,
+            savedConnections = saved(laptop("laptop", "tide", "bolt"), desktop("desktop", "ink", "mark")),
+        )
+
+        assertEquals("offline", viewModel.uiState.value.connectionErrors[LAPTOP])
+        assertNull(viewModel.uiState.value.connectionErrors[DESKTOP])
+    }
+
+    @Test
+    fun connectionErrorsIncludeAgentRefreshFailures() = runTest {
+        val sessionRepository = TestSessionRepository(
+            OriginSessionRepository(
+                sessionsByOrigin = mapOf(
+                    LAPTOP to listOf(session("sess_laptop", "Alpha", "2026-08-03T00:00:00.000Z")),
+                ),
+            ),
+        )
+        val viewModel = viewModel(
+            sessionRepository = sessionRepository,
+            savedConnections = saved(laptop("laptop", "tide", "bolt")),
+        )
+
+        sessionRepository.markFailed(
+            LAPTOP,
+            "cursor",
+            "Sign in on the host to list this agent's sessions.",
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            "Sign in on the host to list this agent's sessions.",
+            viewModel.uiState.value.connectionErrors[LAPTOP],
+        )
     }
 
     private fun viewModel(

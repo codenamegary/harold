@@ -223,26 +223,6 @@ class SessionSelectorUiTest {
     }
 
     @Test
-    fun sessionsSearchShowsInlineLoadingIndicator() {
-        composeTestRule.setContent {
-            HaroldTheme(dynamicColor = false) {
-                SessionsListContent(
-                    uiState = SessionsUiState(
-                        sessions = listOf(sampleSession),
-                        loading = true,
-                    ),
-                    onSearchChanged = {},
-                    onSessionClick = {},
-                    onDeleteSession = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithTag("sessions_search_loading").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("session_row_cursor:sess_01").assertIsDisplayed()
-    }
-
-    @Test
     fun sessionRowShowsTheHaroldAndAnUnreachableMark() {
         val laptop = sampleSession.copy(
             sessionId = "sess_laptop",
