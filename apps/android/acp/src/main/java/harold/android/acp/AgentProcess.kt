@@ -5,10 +5,12 @@ import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionResponse
 import harold.android.network.isAcpAuthRequiredError
+import harold.android.network.isAcpSessionGoneError
 import harold.android.process.AgentAuthRequiredException
 import harold.android.process.AgentLaunchException
 import harold.android.process.AgentProcessChannel
 import harold.android.process.AgentProcessLauncher
+import harold.android.process.AgentSessionGoneException
 import harold.android.process.SessionFileService
 import java.io.Closeable
 import java.io.IOException
@@ -243,9 +245,10 @@ class AgentProcess internal constructor(
         val cwd = cwdHint
             ?: info?.cwd
             ?: resolveSessionInfo(connectionId, sessionId)?.cwd
-            ?: error(
-                "The agent did not return this session from session/list. " +
-                    "Refresh the session list and pick it again.",
+            ?: throw AgentSessionGoneException(
+                agentId = agentId,
+                sessionId = sessionId,
+                detail = "The agent no longer lists this session.",
             )
         val session = AcpSession(
             connectionId = connectionId,
@@ -288,6 +291,13 @@ class AgentProcess internal constructor(
         } catch (error: AcpRemoteException) {
             if (isAcpAuthRequiredError(error.code, error.message)) {
                 throw AgentAuthRequiredException(agentId, error.message)
+            }
+            if (isAcpSessionGoneError(error.code, error.message)) {
+                throw AgentSessionGoneException(
+                    agentId = agentId,
+                    sessionId = session.sessionId,
+                    detail = error.message,
+                )
             }
             throw error
         }

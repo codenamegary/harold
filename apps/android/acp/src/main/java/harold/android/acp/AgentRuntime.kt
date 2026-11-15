@@ -131,6 +131,27 @@ class AgentRuntime @Inject constructor(
     }
 
     /**
+     * The agent says this session no longer exists. Drop the in-memory session
+     * and keep the catalog row, marked unavailable, so the user can see what
+     * happened and start a replacement.
+     */
+    fun sessionGone(connectionId: String, agentId: AgentId, sessionId: String) {
+        val key = SessionKey(connectionId, agentId, sessionId)
+        attachFailures.remove(key)
+        val poolKey = connections[connectionId]
+        val process = poolKey?.let { current -> processes[processKey(current, agentId)] }
+        val session = process?.findSession(connectionId, sessionId)
+        process?.removeSession(connectionId, sessionId)?.close()
+        catalog.markUnavailable(
+            connectionId = connectionId,
+            agentId = agentId,
+            sessionId = sessionId,
+            cwd = session?.cwd,
+            title = session?.currentTitle,
+        )
+    }
+
+    /**
      * Records a failed stream attach. The in-memory session is discarded so
      * the next attach builds a fresh one. Repeated failures also restart the
      * warm agent process, because a process stuck mid-load cannot be fixed by

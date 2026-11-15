@@ -22,6 +22,7 @@ import harold.android.contracts.SessionStreamServerMessage.StreamReset
 import harold.android.contracts.SessionStreamServerMessage.Subscribed
 import harold.android.network.PromptResult
 import harold.android.process.AgentAuthRequiredException
+import harold.android.process.AgentSessionGoneException
 import harold.android.stream.SessionStatus
 import java.io.Closeable
 import java.time.Instant
@@ -105,6 +106,10 @@ class AcpSession internal constructor(
     @Volatile
     private var title: String? = initialTitle
 
+    /** Last title reported by the agent, for tombstones after the session is gone. */
+    val currentTitle: String?
+        get() = title
+
     @Volatile
     private var configOptions: List<JsonElement> = initialConfigOptions
 
@@ -166,6 +171,7 @@ class AcpSession internal constructor(
                         process.sessionLoad(this, cwd)
                     } catch (error: Throwable) {
                         _status.value = when {
+                            error is AgentSessionGoneException -> SessionStatus.Gone
                             error is AgentAuthRequiredException -> SessionStatus.AuthFailed
                             process.isDead -> SessionStatus.Offline
                             else -> SessionStatus.Error
@@ -232,6 +238,7 @@ class AcpSession internal constructor(
                         message = error.message ?: "Could not attach to the session.",
                         agentId = agentId,
                         sessionId = sessionId,
+                        sessionGone = error is AgentSessionGoneException,
                     ),
                 )
             }

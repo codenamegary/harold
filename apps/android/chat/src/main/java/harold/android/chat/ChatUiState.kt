@@ -160,11 +160,16 @@ data class ChatUiState(
             listSessionState = selectedSession?.state,
         )
 
+    /** The agent no longer has the selected session. It cannot be resumed. */
+    val sessionGone: Boolean
+        get() = effectiveSessionState == SessionState.Unavailable
+
     val composerEnabled: Boolean
         get() {
             val session = selectedSession ?: return false
             return session.connectionReachable &&
                 missingSessionFolderPath == null &&
+                !sessionGone &&
                 !sessionFolderCheckPending &&
                 sessionStatus.allowsPrompt &&
                 isComposerPromptable(
@@ -184,6 +189,7 @@ data class ChatUiState(
 
     val composerBlockedMessage: String?
         get() = when {
+            sessionGone -> null
             selectedSession?.connectionReachable == false -> WAITING_FOR_HAROLD
             missingSessionFolderPath != null -> null
             sessionFolderCheckPending -> null
@@ -210,6 +216,7 @@ data class ChatUiState(
      */
     val showSessionLoading: Boolean
         get() = selectedSession != null &&
+            !sessionGone &&
             transcript.rows.isEmpty() &&
             (
                 connectionInProgress ||
@@ -223,6 +230,7 @@ data class ChatUiState(
         get() = selectedSession != null &&
             transcript.rows.isEmpty() &&
             missingSessionFolderPath == null &&
+            !sessionGone &&
             !sessionFolderCheckPending &&
             !showProgress &&
             !showSessionLoading

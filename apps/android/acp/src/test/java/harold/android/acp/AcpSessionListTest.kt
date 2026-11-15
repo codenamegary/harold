@@ -206,6 +206,82 @@ class AcpSessionListTest {
     }
 
     @Test
+    fun fullRefreshKeepsGoneSessionsUntilTheUserActs() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(
+                session("opencode", "sess_1", "2026-11-01T00:00:00Z"),
+                session("opencode", "sess_2", "2026-11-02T00:00:00Z"),
+            ),
+        )
+        catalog.markUnavailable("conn", "opencode", "sess_2")
+
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+
+        assertEquals(2, catalog.snapshot("conn", "opencode")?.sessions?.size)
+        assertEquals(false, catalog.find("conn", "opencode", "sess_1")?.unavailable)
+        assertEquals(true, catalog.find("conn", "opencode", "sess_2")?.unavailable)
+    }
+
+    @Test
+    fun seeingAMissingSessionAgainClearsUnavailable() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+        catalog.markUnavailable("conn", "opencode", "sess_1")
+        assertEquals(true, catalog.find("conn", "opencode", "sess_1")?.unavailable)
+
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+
+        assertEquals(false, catalog.find("conn", "opencode", "sess_1")?.unavailable)
+    }
+
+    @Test
+    fun markUnavailableKeepsTheSessionRow() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+
+        catalog.markUnavailable("conn", "opencode", "sess_1")
+
+        assertEquals(true, catalog.find("conn", "opencode", "sess_1")?.unavailable)
+    }
+
+    @Test
+    fun markUnavailableCreatesARowWhenTheListAlreadyDroppedIt() {
+        val catalog = AcpSessionCatalog()
+
+        catalog.markUnavailable(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessionId = "sess_gone",
+            cwd = "/repo",
+            title = "Gone session",
+        )
+
+        val session = catalog.find("conn", "opencode", "sess_gone")
+        assertEquals("/repo", session?.cwd)
+        assertEquals("Gone session", session?.title)
+        assertEquals(true, session?.unavailable)
+    }
+
+    @Test
     fun folderScopedRefreshKeepsSessionsInOtherFolders() {
         val catalog = AcpSessionCatalog()
         val inFolder = session("opencode", "sess_1", "2026-11-01T00:00:00Z")
@@ -217,6 +293,25 @@ class AcpSessionListTest {
 
         assertNull(catalog.find("conn", "opencode", "sess_1"))
         assertEquals("sess_2", catalog.find("conn", "opencode", "sess_2")?.sessionId)
+    }
+
+    @Test
+    fun processExitKeepsGoneSessionTombstones() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(
+                session("opencode", "sess_1", "2026-11-01T00:00:00Z"),
+                session("opencode", "sess_2", "2026-11-02T00:00:00Z"),
+            ),
+        )
+        catalog.markUnavailable("conn", "opencode", "sess_2")
+
+        catalog.removeAgent("conn", "opencode")
+
+        assertNull(catalog.find("conn", "opencode", "sess_1"))
+        assertEquals(true, catalog.find("conn", "opencode", "sess_2")?.unavailable)
     }
 
     @Test

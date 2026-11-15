@@ -96,6 +96,20 @@ class ChatUiStateTest {
     }
 
     @Test
+    fun unavailableSessionShowsNoComposerMessageButBlocksPrompting() {
+        val state = ChatUiState(
+            selectedSession = sessionRow(SessionState.Unavailable),
+            transcript = AcpTranscriptState(sessionState = SessionState.Unavailable),
+        )
+
+        assertTrue(state.sessionGone)
+        assertFalse(state.composerEnabled)
+        assertNull(state.composerBlockedMessage)
+        assertFalse(state.showEmptyWelcome)
+        assertFalse(state.showSessionLoading)
+    }
+
+    @Test
     fun composerRequiresAReadyOrRunningSessionStatus() {
         val offline = ChatUiState(
             selectedSession = sessionRow(SessionState.Idle),

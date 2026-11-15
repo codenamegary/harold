@@ -4,6 +4,7 @@ import harold.android.contracts.AgentId
 import harold.android.network.AgentSessionSnapshot
 import harold.android.network.CatalogSession
 import harold.android.network.SessionCatalogReader
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -96,17 +97,71 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
                 connectionId = connectionId,
                 agentId = agentId,
             )
-            // A folder-scoped refresh replaces only that folder's rows.
-            val kept = if (cwd == null) {
-                emptyList()
+            val refreshed = sessions.map { session -> session.toCatalog() }
+            val next = if (cwd == null) {
+                // A full refresh is authoritative. Keep only rows already
+                // tombstoned by a gone-session attach. A normal list refresh
+                // must not invent unavailable rows for sessions it never saw.
+                val refreshedIds = refreshed.map { session -> session.sessionId }.toSet()
+                val missing = current.sessions.filter { session ->
+                    session.unavailable && session.sessionId !in refreshedIds
+                }
+                refreshed + missing
             } else {
-                current.sessions.filter { session -> session.cwd != cwd }
+                // A folder-scoped refresh replaces only that folder's rows.
+                val kept = current.sessions.filter { session -> session.cwd != cwd }
+                kept + refreshed
             }
             byKey[key] = current.copy(
-                sessions = sortSessions(kept + sessions.map { session -> session.toCatalog() }),
+                sessions = sortSessions(next),
                 loading = loading,
                 error = null,
             )
+            publishLocked()
+        }
+    }
+
+    /**
+     * Keeps a session row but marks it as no longer available on the agent. A
+     * concurrent list refresh can drop the row before the attach failure lands,
+     * so recreate it from the known cwd and title when necessary.
+     */
+    fun markUnavailable(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+        cwd: String? = null,
+        title: String? = null,
+    ) {
+        synchronized(lock) {
+            val key = Key(connectionId, agentId)
+            val current = byKey[key] ?: AgentSessionSnapshot(
+                connectionId = connectionId,
+                agentId = agentId,
+            )
+            val existing = current.sessions.find { session -> session.sessionId == sessionId }
+            val updated = if (existing != null) {
+                if (existing.unavailable) {
+                    return
+                }
+                current.sessions.map { session ->
+                    if (session.sessionId == sessionId) {
+                        session.copy(unavailable = true)
+                    } else {
+                        session
+                    }
+                }
+            } else {
+                current.sessions + CatalogSession(
+                    agentId = agentId,
+                    sessionId = sessionId,
+                    cwd = cwd.orEmpty(),
+                    title = title ?: "New session",
+                    updatedAt = Instant.now().toString(),
+                    unavailable = true,
+                )
+            }
+            byKey[key] = current.copy(sessions = sortSessions(updated), loading = false)
             publishLocked()
         }
     }
@@ -195,7 +250,16 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
 
     fun removeAgent(connectionId: String, agentId: AgentId) {
         synchronized(lock) {
-            byKey.remove(Key(connectionId, agentId))
+            val key = Key(connectionId, agentId)
+            val current = byKey[key] ?: return
+            // A process exit drops its live rows. Keep gone-session tombstones
+            // so the user can still see why a session cannot be opened.
+            val tombstones = current.sessions.filter { session -> session.unavailable }
+            if (tombstones.isEmpty()) {
+                byKey.remove(key)
+            } else {
+                byKey[key] = current.copy(sessions = tombstones, loading = false)
+            }
             publishLocked()
         }
     }

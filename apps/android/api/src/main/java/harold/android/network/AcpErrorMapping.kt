@@ -13,6 +13,21 @@ fun isAcpAuthRequiredError(code: Int?, message: String?): Boolean {
 
 const val AUTH_REQUIRED_CODE = -32000
 
+const val SESSION_NOT_FOUND_CODE = -32002
+
+/** True when an ACP error says the agent no longer has the requested session. */
+fun isAcpSessionGoneError(code: Int?, message: String?): Boolean {
+    if (code == SESSION_NOT_FOUND_CODE) {
+        return true
+    }
+    val normalized = message?.lowercase()?.replace('_', ' ') ?: return false
+    return "unknown session" in normalized ||
+        "session not found" in normalized ||
+        "no such session" in normalized ||
+        "session does not exist" in normalized ||
+        "session was not found" in normalized
+}
+
 /**
  * Tells the chat UI what to tell the user when an agent needs a host sign-in.
  * Agents with a known host CLI get that command; everything else falls back

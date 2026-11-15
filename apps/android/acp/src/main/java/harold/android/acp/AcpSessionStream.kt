@@ -4,6 +4,7 @@ import harold.android.contracts.AgentId
 import harold.android.contracts.SessionStreamServerMessage.Error
 import harold.android.contracts.SessionStreamServerMessage.Subscribed
 import harold.android.process.AgentAuthRequiredException
+import harold.android.process.AgentSessionGoneException
 import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStatus
 import harold.android.stream.SessionStream
@@ -58,6 +59,7 @@ private class AcpSessionStream(
     private val lastFrame = AtomicLong(0L)
     private val closed = AtomicBoolean(false)
     private val opened = AtomicBoolean(false)
+    private val sawGone = AtomicBoolean(false)
     private var job: Job? = null
     private var statusJob: Job? = null
 
@@ -90,8 +92,13 @@ private class AcpSessionStream(
                 throw error
             } catch (error: Throwable) {
                 if (!closed.get()) {
-                    runtime.sessionAttachFailed(connectionId, agentId, sessionId)
+                    if (error is AgentSessionGoneException) {
+                        runtime.sessionGone(connectionId, agentId, sessionId)
+                    } else {
+                        runtime.sessionAttachFailed(connectionId, agentId, sessionId)
+                    }
                     _status.value = when {
+                        error is AgentSessionGoneException -> SessionStatus.Gone
                         error is AgentAuthRequiredException -> SessionStatus.AuthFailed
                         error is AcpClosedException -> SessionStatus.Offline
                         else -> SessionStatus.Error
@@ -101,6 +108,7 @@ private class AcpSessionStream(
                             message = error.message ?: "Could not start the session.",
                             agentId = agentId,
                             sessionId = sessionId,
+                            sessionGone = error is AgentSessionGoneException,
                         ),
                         null,
                     )
@@ -121,6 +129,9 @@ private class AcpSessionStream(
             try {
                 attached.events.collect { message ->
                     lastFrame.set(System.nanoTime())
+                    if (message is Error && message.sessionGone) {
+                        sawGone.set(true)
+                    }
                     if (message is Subscribed && opened.compareAndSet(false, true)) {
                         runtime.sessionAttachSucceeded(connectionId, agentId, sessionId)
                         handlers.onOpen()
@@ -130,14 +141,27 @@ private class AcpSessionStream(
                 val reason = attached.closed.await()
                 if (!closed.get()) {
                     val sessionStatus = session.status.value
-                    _status.value = sessionStatus
-                    if (!opened.get()) {
-                        runtime.sessionAttachFailed(connectionId, agentId, sessionId)
-                    }
-                    val cause = if (sessionStatus == SessionStatus.AuthFailed) {
-                        DisconnectCause.Unauthorized(reason)
+                    val gone = sessionStatus == SessionStatus.Gone || sawGone.get()
+                    if (gone) {
+                        // sessionGone closes the in-memory session, which
+                        // publishes Offline. Keep the terminal Gone state and
+                        // stop mirroring the session object.
+                        statusJob?.cancel()
+                        runtime.sessionGone(connectionId, agentId, sessionId)
+                        _status.value = SessionStatus.Gone
                     } else {
-                        causeFor(reason ?: "The agent process closed.")
+                        _status.value = sessionStatus
+                        if (!opened.get()) {
+                            runtime.sessionAttachFailed(connectionId, agentId, sessionId)
+                        }
+                    }
+                    val cause = when {
+                        gone -> DisconnectCause.Gone(
+                            reason ?: "The agent no longer has this session.",
+                        )
+                        sessionStatus == SessionStatus.AuthFailed ->
+                            DisconnectCause.Unauthorized(reason)
+                        else -> causeFor(reason ?: "The agent process closed.")
                     }
                     handlers.onDisconnect(cause)
                 }
@@ -161,6 +185,7 @@ private class AcpSessionStream(
         lastFrame.get().takeIf { value -> value > 0L }
 
     private fun causeFor(error: Throwable): DisconnectCause = when (error) {
+        is AgentSessionGoneException -> DisconnectCause.Gone(error.message ?: "Session unavailable.")
         is AgentAuthRequiredException -> DisconnectCause.Unauthorized(error.message)
         is AcpRemoteException -> DisconnectCause.Protocol(error.message ?: "ACP error")
         else -> {

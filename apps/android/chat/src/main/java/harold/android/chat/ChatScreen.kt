@@ -315,6 +315,7 @@ fun ChatScreen(
     onSessionClick: (SessionRow) -> Unit = {},
     onSeeAllSessionsClick: () -> Unit = {},
     onCreateClick: () -> Unit = {},
+    onStartNewSessionForGone: (SessionRow) -> Unit = {},
     onAttachmentsPicked: (List<AttachmentPick>) -> Unit = {},
     onRemoveAttachment: (String) -> Unit = {},
     onComposerTextChanged: (String) -> Unit = {},
@@ -839,6 +840,7 @@ fun ChatScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = if (
+                    uiState.sessionGone ||
                     uiState.missingSessionFolderPath != null ||
                     uiState.showSessionLoading ||
                     uiState.showEmptyWelcome ||
@@ -850,6 +852,16 @@ fun ChatScreen(
                 },
             ) {
                 when {
+                    uiState.sessionGone -> {
+                        SessionGonePanel(
+                            connectionName = uiState.selectedSession?.connectionName.orEmpty(),
+                            onStartNewSession = {
+                                uiState.selectedSession?.let(onStartNewSessionForGone)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
                     uiState.missingSessionFolderPath != null -> {
                         MissingSessionFolderPanel(
                             path = uiState.missingSessionFolderPath,

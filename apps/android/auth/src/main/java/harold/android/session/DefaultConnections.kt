@@ -182,5 +182,6 @@ private fun isLiveSession(state: SessionState): Boolean =
         SessionState.Idle,
         SessionState.Offline,
         SessionState.Error,
+        SessionState.Unavailable,
         -> false
     }

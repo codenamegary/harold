@@ -28,6 +28,10 @@ enum class SessionState {
 
     @SerialName("error")
     Error,
+
+    /** The agent no longer has this session. Terminal until the user starts a new one. */
+    @SerialName("unavailable")
+    Unavailable,
 }
 
 @Serializable

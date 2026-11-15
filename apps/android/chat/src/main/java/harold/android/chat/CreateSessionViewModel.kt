@@ -52,6 +52,7 @@ class CreateSessionViewModel @Inject constructor(
     private var pendingCreatedWorkspace: CreatedWorkspaceResult? = null
     private var rememberedSelection: LastSessionSelection? = null
     private var preferredWorkspace: PreferredCreateSessionWorkspace? = null
+    private var preferredAgentId: AgentId? = null
 
     init {
         viewModelScope.launch {
@@ -60,6 +61,7 @@ class CreateSessionViewModel @Inject constructor(
             // otherwise the first workspace wins before the value arrives.
             rememberedSelection = sessionPreferences.loadLastSessionSelection()
             preferredWorkspace = navigator.consumePreferredCreateSessionWorkspace()
+            preferredAgentId = preferredWorkspace?.agentId
             observeWorkspaces()
             refreshWorkspaces()
         }
@@ -333,14 +335,22 @@ class CreateSessionViewModel @Inject constructor(
             .map { agent -> AgentOption(id = agent.agentId, displayName = agent.displayName) }
         val rememberedAgent = rememberedAgentForSelectedWorkspace()
             ?.takeIf { remembered -> agents.any { agent -> agent.id == remembered } }
-        _uiState.update { current ->
-            current.copy(
+        val preferredAgent = preferredAgentId
+            ?.takeIf { preferred -> agents.any { agent -> agent.id == preferred } }
+        val current = _uiState.value
+        val selectedAgent = current.selectedAgentId
+            ?.takeIf { selected -> agents.any { agent -> agent.id == selected } }
+            ?: preferredAgent
+            ?: rememberedAgent
+            ?: defaultAgentForSelectedWorkspace(agents)
+            ?: agents.firstOrNull()?.id
+        if (preferredAgent != null && selectedAgent == preferredAgent) {
+            preferredAgentId = null
+        }
+        _uiState.update { state ->
+            state.copy(
                 agents = agents,
-                selectedAgentId = current.selectedAgentId
-                    ?.takeIf { selected -> agents.any { agent -> agent.id == selected } }
-                    ?: rememberedAgent
-                    ?: defaultAgentForSelectedWorkspace(agents)
-                    ?: agents.firstOrNull()?.id,
+                selectedAgentId = selectedAgent,
                 error = null,
             )
         }

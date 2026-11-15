@@ -144,6 +144,8 @@ sealed interface SessionStreamServerMessage {
         val message: String,
         val agentId: AgentId? = null,
         val sessionId: String? = null,
+        /** True when the agent definitively no longer has this session. */
+        val sessionGone: Boolean = false,
     ) : SessionStreamServerMessage
 
     @Serializable

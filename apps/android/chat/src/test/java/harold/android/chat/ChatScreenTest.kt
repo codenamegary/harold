@@ -102,6 +102,45 @@ class ChatScreenTest {
     }
 
     @Test
+    fun unavailableSessionShowsSpecificErrorAndOffersNewSession() {
+        var newSessionClicks = 0
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            sessionId = "sess_gone",
+                            name = "Repo identity and creation date",
+                            cwd = "/home/gary/harold-e2e",
+                            workspaceId = "",
+                            workspaceLabel = "/home/gary/harold-e2e",
+                            agentId = "opencode",
+                            agentLabel = "OpenCode",
+                            state = SessionState.Unavailable,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                            connectionId = "ssh://gary@host:22",
+                            connectionName = "Office PC",
+                        ),
+                        transcript = AcpTranscriptState(
+                            sessionState = SessionState.Unavailable,
+                        ),
+                    ),
+                    onStartNewSessionForGone = { newSessionClicks += 1 },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_gone_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Session unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Office PC", substring = true).assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("session_gone_start_new")
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        assertEquals(1, newSessionClicks)
+    }
+
+    @Test
     fun rendersComposerConfigChipsAndForwardsModeCycle() {
         var cycled: ConfigOptionValue? = null
         val composerState = TextFieldState()

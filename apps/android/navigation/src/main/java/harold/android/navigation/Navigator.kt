@@ -23,6 +23,7 @@ data class CreatedWorkspaceResult(
 data class PreferredCreateSessionWorkspace(
     val connectionId: String = "",
     val path: String,
+    val agentId: AgentId? = null,
 )
 
 private const val SAVED_STATE_KEY = "connection.navigation"
@@ -105,10 +106,15 @@ class Navigator @Inject constructor() {
         backStack.add(CreateSession)
     }
 
-    fun openCreateSessionForWorkspace(connectionId: String, path: String) {
+    fun openCreateSessionForWorkspace(
+        connectionId: String,
+        path: String,
+        agentId: AgentId? = null,
+    ) {
         preferredCreateSessionWorkspace = PreferredCreateSessionWorkspace(
             connectionId = connectionId,
             path = path,
+            agentId = agentId,
         )
         backStack.add(CreateSession)
     }
