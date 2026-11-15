@@ -41,12 +41,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.contracts.SessionState
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.LoadingSkeletonList
 import harold.android.ui.components.SwipeToDeleteListItem
+import harold.android.ui.components.haroldColorOption
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -131,16 +133,6 @@ fun SessionsListContent(
                 .testTag("sessions_search"),
             singleLine = true,
             label = { Text(text = stringResource(R.string.sessions_search_label)) },
-            trailingIcon = {
-                if (uiState.loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .testTag("sessions_search_loading"),
-                        strokeWidth = 2.dp,
-                    )
-                }
-            },
         )
 
         if (uiState.connections.isNotEmpty()) {
@@ -171,24 +163,55 @@ fun SessionsListContent(
                 )
                 uiState.connections.forEach { connection ->
                     val selected = uiState.connectionFilter == connection.connectionId
+                    val refreshing = connection.connectionId in uiState.refreshingConnectionIds
+                    val error = uiState.connectionErrors[connection.connectionId]
+                    val statusDescription = when {
+                        error != null -> stringResource(R.string.sessions_refresh_failed_state, error)
+                        refreshing -> stringResource(R.string.sessions_refreshing_connection, connection.name)
+                        else -> null
+                    }
+                    val errorColor = MaterialTheme.colorScheme.error
                     FilterChip(
                         selected = selected,
                         onClick = { onConnectionFilter(connection.connectionId) },
                         leadingIcon = {
-                            HaroldBadge(
-                                colorId = connection.colorId,
-                                iconId = connection.iconId,
-                                size = 18.dp,
-                            )
+                            if (refreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .testTag("session_filter_loading_${connection.connectionId}"),
+                                    color = haroldColorOption(connection.colorId).containerColor,
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                HaroldBadge(
+                                    colorId = connection.colorId,
+                                    iconId = connection.iconId,
+                                    size = 18.dp,
+                                )
+                            }
                         },
                         label = { Text(text = connection.name) },
                         colors = chipColors,
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = selected,
-                            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                            borderColor = if (error != null) errorColor else MaterialTheme.colorScheme.outline,
+                            selectedBorderColor = if (error != null) {
+                                errorColor
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                            },
+                            borderWidth = if (error != null) 2.dp else 1.dp,
+                            selectedBorderWidth = if (error != null) 2.dp else 1.dp,
                         ),
-                        modifier = Modifier.testTag("session_filter_${connection.connectionId}"),
+                        modifier = Modifier
+                            .testTag("session_filter_${connection.connectionId}")
+                            .semantics {
+                                if (statusDescription != null) {
+                                    stateDescription = statusDescription
+                                }
+                            },
                     )
                 }
             }
@@ -201,30 +224,6 @@ fun SessionsListContent(
                 modifier = Modifier.testTag("sessions_list_error"),
             )
         }
-
-        uiState.agents
-            .filter { agent -> agent.loading || agent.error != null }
-            .forEach { agent ->
-                val label = listOf(agent.connectionName, agent.agentId)
-                    .filter { part -> part.isNotEmpty() }
-                    .joinToString(" · ")
-                Text(
-                    text = if (agent.error != null) {
-                        "$label: ${agent.error}"
-                    } else {
-                        "Refreshing $label…"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (agent.error != null) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.testTag(
-                        "sessions_agent_status_${agent.connectionId}_${agent.agentId}",
-                    ),
-                )
-            }
 
         when {
             uiState.sessions.isEmpty() && uiState.loading -> {

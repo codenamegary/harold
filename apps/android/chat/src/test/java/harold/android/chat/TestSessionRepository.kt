@@ -29,6 +29,9 @@ class TestSessionRepository(
     var authoritative: Boolean = true
     var refreshError: String? = null
 
+    /** Runs before each network refresh so tests can hold one open. */
+    var beforeRefresh: (suspend (String) -> Unit)? = null
+
     override fun observeSessions(): Flow<List<SessionListItem>> = sessions
 
     override fun observeSessions(connectionId: String): Flow<List<SessionListItem>> =
@@ -50,6 +53,7 @@ class TestSessionRepository(
         }
 
     override suspend fun refresh(connectionId: String): Result<SessionCatalog> {
+        beforeRefresh?.invoke(connectionId)
         val listed = network.listSessions(connectionId)
         if (listed.isFailure) {
             return Result.failure(checkNotNull(listed.exceptionOrNull()))

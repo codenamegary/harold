@@ -10,6 +10,7 @@ import harold.android.database.session.SessionRepository
 import harold.android.foreground.SessionAttentionMarks
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
+import harold.android.network.AgentSessionSnapshot
 import harold.android.network.apiErrorMessage
 import harold.android.session.ActiveConnectionState
 import harold.android.session.ConnectionGateway
@@ -27,22 +28,15 @@ data class ConnectionFilterChoice(
     val iconId: String,
 )
 
-data class AgentSessionsState(
-    val connectionId: String,
-    val connectionName: String,
-    val agentId: String,
-    val loading: Boolean,
-    val error: String?,
-)
-
 data class SessionsUiState(
     val sessions: List<SessionRow> = emptyList(),
     val connections: List<ConnectionFilterChoice> = emptyList(),
     val connectionFilter: String? = null,
     val search: String = "",
     val loading: Boolean = true,
+    val refreshingConnectionIds: Set<String> = emptySet(),
+    val connectionErrors: Map<String, String> = emptyMap(),
     val error: String? = null,
-    val agents: List<AgentSessionsState> = emptyList(),
 )
 
 @HiltViewModel
@@ -63,10 +57,12 @@ class SessionsViewModel @Inject constructor(
     private var savedConnections: List<ConnectionFilterChoice> = emptyList()
     private var savedByOrigin: Map<String, SavedConnection> = emptyMap()
     private val unreachableOrigins = mutableSetOf<String>()
+    private val unreachableErrors = mutableMapOf<String, String>()
     private val refreshingOrigins = mutableSetOf<String>()
+    private val workingOrigins = mutableSetOf<String>()
     private var pushedTitles: Map<String, String> = emptyMap()
     private var connectionFilter: String? = null
-    private var agentSnapshots: List<AgentSessionsState> = emptyList()
+    private var agentSnapshots: List<AgentSessionSnapshot> = emptyList()
 
     init {
         viewModelScope.launch {
@@ -77,16 +73,8 @@ class SessionsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             sessionRepository.observeSnapshots().collect { snapshots ->
-                agentSnapshots = snapshots.map { snapshot ->
-                    AgentSessionsState(
-                        connectionId = snapshot.connectionId,
-                        connectionName = savedByOrigin[snapshot.connectionId]?.name.orEmpty(),
-                        agentId = snapshot.agentId,
-                        loading = snapshot.loading,
-                        error = snapshot.error,
-                    )
-                }
-                publishLoading()
+                agentSnapshots = snapshots
+                publishProgress()
                 publish()
             }
         }
@@ -173,23 +161,28 @@ class SessionsViewModel @Inject constructor(
 
         refreshingOrigins.clear()
         refreshingOrigins.addAll(origins)
-        publishLoading()
+        publishProgress()
 
         var anySuccess = false
         var lastError: Throwable? = null
         origins.forEach { connectionId ->
+            workingOrigins.add(connectionId)
+            publishProgress()
             sessionRepository.refresh(connectionId).fold(
                 onSuccess = {
                     anySuccess = true
                     unreachableOrigins.remove(connectionId)
+                    unreachableErrors.remove(connectionId)
                 },
                 onFailure = { error ->
                     lastError = error
                     unreachableOrigins.add(connectionId)
+                    unreachableErrors[connectionId] = apiErrorMessage(error)
                 },
             )
+            workingOrigins.remove(connectionId)
             refreshingOrigins.remove(connectionId)
-            publishLoading()
+            publishProgress()
         }
 
         val hasLiveRows = origins.isNotEmpty() && liveSessions.any { session -> session.connectionId in origins }
@@ -200,14 +193,16 @@ class SessionsViewModel @Inject constructor(
                 error = error?.let(::apiErrorMessage),
             )
         }
-        publishLoading()
+        publishProgress()
         rebuildCatalog()
     }
 
-    private fun publishLoading() {
+    private fun publishProgress() {
+        val loadingAgents = agentSnapshots.filter { agent -> agent.loading }
         _uiState.update { current ->
             current.copy(
-                loading = refreshingOrigins.isNotEmpty() || agentSnapshots.any { agent -> agent.loading },
+                loading = refreshingOrigins.isNotEmpty() || loadingAgents.isNotEmpty(),
+                refreshingConnectionIds = workingOrigins + loadingAgents.map { agent -> agent.connectionId },
             )
         }
     }
@@ -246,12 +241,16 @@ class SessionsViewModel @Inject constructor(
         val sessions = visibleSessionRows(catalog, connectionFilter)
             .filter { row -> search.isEmpty() || row.name.contains(search, ignoreCase = true) }
             .sortedByDescending { row -> row.updatedAt }
+        val agentErrors = agentSnapshots
+            .mapNotNull { snapshot -> snapshot.error?.let { message -> snapshot.connectionId to message } }
+            .groupBy({ (connectionId, _) -> connectionId }, { (_, message) -> message })
+            .mapValues { (_, messages) -> messages.distinct().joinToString(" ") }
         _uiState.update { current ->
             current.copy(
                 sessions = sessions,
                 connections = connections,
                 connectionFilter = connectionFilter,
-                agents = agentSnapshots,
+                connectionErrors = agentErrors + unreachableErrors,
             )
         }
     }
