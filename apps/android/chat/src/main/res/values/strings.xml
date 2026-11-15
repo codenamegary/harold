@@ -52,6 +52,9 @@
     <string name="chat_welcome_title">Chat with an agent</string>
     <string name="chat_welcome_body">Send a prompt directly to an agent without leaving the console.</string>
     <string name="chat_welcome_select_session_body">Start a new session or pick an existing one.</string>
+    <string name="chat_session_folder_missing_title">Session folder missing</string>
+    <string name="chat_session_folder_missing_body">The folder %1$s no longer exists on %2$s. This session can\'t be resumed.</string>
+    <string name="chat_session_folder_missing_start_new">Start new session</string>
     <string name="chat_select_session">Select session</string>
     <string name="chat_new_session">New session</string>
     <string name="create_session_new_workspace">New workspace</string>

@@ -839,6 +839,7 @@ fun ChatScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = if (
+                    uiState.missingSessionFolderPath != null ||
                     uiState.showSessionLoading ||
                     uiState.showEmptyWelcome ||
                     uiState.showSelectSessionCta
@@ -849,6 +850,15 @@ fun ChatScreen(
                 },
             ) {
                 when {
+                    uiState.missingSessionFolderPath != null -> {
+                        MissingSessionFolderPanel(
+                            path = uiState.missingSessionFolderPath,
+                            connectionName = uiState.selectedSession?.connectionName.orEmpty(),
+                            onStartNewSession = onCreateClick,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
                     uiState.showSelectSessionCta -> {
                         Box(
                             modifier = Modifier
