@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android:
     runs-on: ubuntu-latest
@@ -34,14 +38,32 @@ jobs:
         with:
           packages: "platform-tools platforms;android-37.0 build-tools;36.0.0"
 
+      # Enhanced caching is the default: restore keys, deduped dependencies,
+      # and cleanup. Basic caching is exact-key only and discards the whole
+      # Gradle home whenever a build file changes.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
+
+      - name: Read Robolectric version
+        id: robolectric_version
+        run: |
+          version="$(sed -n 's/^robolectric[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' gradle/libs.versions.toml)"
+          if [ -z "$version" ]; then
+            echo "::error::Could not read the Robolectric version from gradle/libs.versions.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Robolectric jars
+        uses: actions/cache@v6
         with:
-          # Open-source actions/cache wrapper. The default provider is proprietary.
-          cache-provider: basic
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ steps.robolectric_version.outputs.version }}
+          restore-keys: |
+            robolectric-${{ runner.os }}-
 
       - name: Android checks
-        run: ./gradlew --no-daemon --stacktrace lintRelease testDebugUnitTest testBuildLogic
+        run: ./gradlew --stacktrace lintRelease testDebugUnitTest testBuildLogic
 
       - name: Upload test results
         if: failure()
