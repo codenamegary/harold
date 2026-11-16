@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.3.1](https://github.com/codenamegary/harold/compare/harold-android-v4.3.0...harold-android-v4.3.1) (2026-11-16)
+
+
+### CI
+
+* **android:** improve Gradle cache reuse and CI latency ([#520](https://github.com/codenamegary/harold/issues/520)) ([cc7c913](https://github.com/codenamegary/harold/commit/cc7c91324dc6d602bed1b90f6b2a8694d3150507))
+
 ## [4.3.0](https://github.com/codenamegary/harold/compare/harold-android-v4.2.0...harold-android-v4.3.0) (2026-11-15)
 
 
