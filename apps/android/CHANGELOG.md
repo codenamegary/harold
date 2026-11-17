@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.4.0](https://github.com/codenamegary/harold/compare/harold-android-v4.3.1...harold-android-v4.4.0) (2026-11-17)
+
+
+### Features
+
+* **host:** keep ACP agents alive across disconnects ([#522](https://github.com/codenamegary/harold/issues/522)) ([3a7e1a8](https://github.com/codenamegary/harold/commit/3a7e1a828046b9e392de0431a44ac1e0a13a8b9c))
+
 ## [4.3.1](https://github.com/codenamegary/harold/compare/harold-android-v4.3.0...harold-android-v4.3.1) (2026-11-16)
 
 
