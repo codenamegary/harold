@@ -28,6 +28,7 @@ You need a machine you can reach with SSH that runs an ACP-compatible coding age
 Host requirements:
 
 - sshd with exec and SFTP
+- POSIX shell tools: `sh`, `bash`, `mkfifo`, `flock`, `nohup`, `tail`
 - an ACP-compatible agent CLI
 - `git` (for workspace and change review)
 
@@ -35,7 +36,12 @@ Host requirements:
 2. Sign in with your SSH credentials.
 3. Start a session in any folder on that host.
 
-Harold installs nothing on the host. It runs your agent CLI over an SSH exec channel and keeps agent and workspace settings in `~/.harold/` as plain files. Session history stays with the agent and is read through ACP `session/list`.
+Harold installs nothing on the host. It sends a small host script inline over
+SSH; the script starts a detached agent host with `nohup` and keeps runtime
+state in `~/.harold/run/`. Agent and workspace settings live in `~/.harold/` as
+plain files. The agent keeps running when the phone disconnects, and the next
+connection attaches to the same process. Session history stays with the agent
+and is read through ACP `session/list`.
 
 ## Working on the app
 

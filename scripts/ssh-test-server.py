@@ -85,7 +85,7 @@ async def handle_client(process: asyncssh.SSHServerProcess) -> None:
         process.exit(1)
         return
 
-    print(f"exec {command}", file=sys.stderr)
+    print(f"exec {command[:240]}{'...' if len(command) > 240 else ''}", file=sys.stderr)
     home = HOME_DIR or os.path.expanduser("~")
     os.makedirs(home, exist_ok=True)
     env = os.environ.copy()

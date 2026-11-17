@@ -472,7 +472,7 @@ class AgentRuntimeTest {
             val error = catalog.snapshot(FIRST_ROW, AGENT_ID)?.error
             assertNotNull(error)
             assertFalse(error.orEmpty().contains("Read end dead"))
-            assertTrue(error.orEmpty().contains("failed to start"))
+            assertTrue(error.orEmpty().contains("Could not list"))
         }
     }
 
@@ -972,6 +972,11 @@ private class FakeAgent(
     var listPageGate: CompletableDeferred<Unit>? = null
 
     fun start() {
+        // The real app talks to a detached host that owns initialize and
+        // replays that response before the client's first request.
+        scope.launch(Dispatchers.IO) {
+            respond(JsonPrimitive("harold-host-init"), initializeResult())
+        }
         scope.launch(Dispatchers.IO) {
             try {
                 channel.agentInputSource.bufferedReader().useLines { lines ->
@@ -991,6 +996,19 @@ private class FakeAgent(
         }
     }
 
+    private fun initializeResult(): JsonObject = buildJsonObject {
+        put("protocolVersion", 1)
+        putJsonObject("agentCapabilities") {
+            put("loadSession", true)
+            putJsonObject("sessionCapabilities") {
+                if (supportsSessionList) {
+                    putJsonObject("list") { }
+                }
+                putJsonObject("delete") { }
+            }
+        }
+    }
+
     private suspend fun handleRequest(message: JsonObject) {
         val method = (message["method"] as? JsonPrimitive)?.content ?: return
         if (method == "session/cancel") {
@@ -1000,21 +1018,7 @@ private class FakeAgent(
         val id = message["id"] ?: return
         val params = message["params"] as? JsonObject ?: JsonObject(emptyMap())
         when (method) {
-            "initialize" -> respond(
-                id,
-                buildJsonObject {
-                    put("protocolVersion", 1)
-                    putJsonObject("agentCapabilities") {
-                        put("loadSession", true)
-                        putJsonObject("sessionCapabilities") {
-                            if (supportsSessionList) {
-                                putJsonObject("list") { }
-                            }
-                            putJsonObject("delete") { }
-                        }
-                    }
-                },
-            )
+            "initialize" -> respond(id, initializeResult())
 
             "session/new" -> {
                 val sessionId = "fake-session-${newSessions.incrementAndGet()}"

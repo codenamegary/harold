@@ -30,13 +30,35 @@ Install a debug build on a connected device or emulator:
 
 ## The SSH transport, end to end
 
-Harold keeps one SSH connection per host identity and one ACP agent process per
-agent. Many ACP sessions share that process:
+Harold keeps one SSH connection per host identity for management. For each
+host identity and agent, it starts one persistent host process that owns the
+agent:
 
 ```
-Android app -> SSH connection pool -> `agent acp` (one process per host identity + agent) -> many ACP sessions
+Android app -> SSH exec (inline host script) -> detached host -> `agent acp` -> many ACP sessions
 ```
 
+- The host script is sent inline in the SSH exec command. No script file,
+  compiled binary, or service is installed on the host. Only runtime state is
+  written, under `~/.harold/run/<agent>/`.
+- The first client starts the host with `nohup` and the app's file
+  descriptors detached. Later clients run the same command and attach to the
+  live host instead of starting another agent.
+- The host owns the agent's stdin FIFO and stdout log. Every client tails the
+  same append-only log, so two clients see the same output and share one agent
+  process.
+- The host owns the one ACP `initialize`. Clients replay that response instead
+  of initializing the agent again.
+- Closing the app or losing the network closes only the attach bridge. The
+  host and agent keep running. Reopening runs the same command and attaches to
+  the same process.
+- A reconnect follows only new output. Session history comes from ACP
+  `session/load`, not from replaying old responses.
+- Restarting an agent or removing its last saved connection sends the host's
+  stop command and ends the detached process.
+- `nohup` is the portable default. A host with
+  `systemd` `KillUserProcesses=yes` kills user processes at logout even with
+  `nohup`; that host needs lingering or a different service manager.
 - Connecting to a host enrolls the phone with it: generate an Ed25519 key
   (or import a key, or use a password), append the public key to
   `~/.ssh/authorized_keys` on the host, and pin the host key by SHA-256
@@ -48,8 +70,7 @@ Android app -> SSH connection pool -> `agent acp` (one process per host identity
   break a connection that already copied it.
 - When several saved connections point at the same SSH endpoint, later rows
   get a numeric suffix on their connection id so they stay separate entries.
-  Rows with the same endpoint and credentials share one pooled SSH session and
-  one agent process.
+  Rows with the same endpoint and credentials share one pooled SSH session.
 - Opening a session attaches to the warm process. Closing the event stream
   detaches but keeps the process. Reopening resumes the transcript with ACP
   `session/load` and a stream reset.
@@ -61,11 +82,11 @@ Android app -> SSH connection pool -> `agent acp` (one process per host identity
   confirms them. The watched session reconnects through the one existing retry
   loop and starts one new process. Other sessions start a process when opened.
 - A failed session attach discards the in-memory session. Two consecutive
-  failures also restart that agent's warm process. After five failed attaches
+  failures also restart that agent's host. After five failed attaches
   before the stream opens, the reconnect loop stops and shows the agent's
   error instead of retrying forever.
 - Removing the last saved connection for a host identity closes its pooled SSH
-  session and every agent process on it.
+  session and stops every detached host on it.
 
 The Android app is split into `:transport` (SSH primitives and setup),
 `:host` (workspaces, git, agent settings, auth, process launch), `:acp` (ACP
@@ -83,6 +104,14 @@ Everything Harold keeps on the host lives under `~/.harold/`:
   workspaces.json    remembered workspace folders
   hidden-workspaces.json  workspace paths deleted from the list
   uploads/<sessionId>/...             attachment uploads
+  run/<agent>/       runtime state for detached ACP hosts
+    in               FIFO, agent stdin
+    out              append-only agent stdout log
+    err              agent stderr
+    ready            present after the host initialize response
+    status           host exit reason
+    host.pid         detached host process
+    agent.pid        agent process
 ```
 
 Session history stays with the agent. Harold reads it with ACP `session/list`
@@ -90,10 +119,10 @@ and compiles the per-agent lists in memory; it does not write session files
 to the host. Older releases created `sessions/<agent>/<sessionId>.json`; those
 files are ignored and safe to delete.
 
-No Harold daemon, service, or port runs on the host. Agent processes are
-children of the app's SSH sessions. A backgrounded app closes processes with
-no live session. A lost network ends them. Opening the session again starts one
-process and resumes through ACP `session/load`.
+No compiled Harold binary, daemon, or extra port runs on the host. The host
+script is held in memory for the lifetime of the host process. The host needs
+standard shell tools only: `sh`, `bash`, `mkfifo`, `flock`, `nohup`, and
+`tail`. Runtime state under `run/` can be deleted when no host is running.
 
 ## Agent settings
 
