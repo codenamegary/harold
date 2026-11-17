@@ -127,6 +127,10 @@ class ConnectionsEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onShowForgetConfirm = viewModel::showForgetConfirm,
                 onHideForgetConfirm = viewModel::hideForgetConfirm,
                 onForget = viewModel::forget,
+                onShowLogsCleanup = viewModel::showLogCleanupConfirm,
+                onHideLogsCleanup = viewModel::hideLogCleanupConfirm,
+                onCleanupLogs = viewModel::cleanupLogs,
+                onReloadLogs = viewModel::reloadHostLogs,
             )
         }
     }

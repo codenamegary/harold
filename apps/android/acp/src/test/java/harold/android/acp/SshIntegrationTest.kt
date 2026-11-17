@@ -2,6 +2,7 @@ package harold.android.acp
 
 import harold.android.contracts.CreateCustomAgentBody
 import harold.android.contracts.CreateWorkspaceBody
+import harold.android.contracts.LogCleanupPolicy
 import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.contracts.UpdateAgentBody
@@ -14,6 +15,7 @@ import harold.android.credentials.SavedConnection
 import harold.android.host.HostAgentApi
 import harold.android.host.HostAgentConfigRow
 import harold.android.host.HostConnections
+import harold.android.host.HostLogsRepository
 import harold.android.host.HostWorkspaceApi
 import harold.android.host.SshAgentProcessLauncher
 import harold.android.host.SshSessionFileService
@@ -51,6 +53,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -73,6 +76,7 @@ class SshIntegrationTest {
     private lateinit var acpApi: DefaultAcpAgentApi
     private lateinit var hostAgents: HostAgentApi
     private lateinit var hostWorkspaces: HostWorkspaceApi
+    private lateinit var hostLogs: HostLogsRepository
     private lateinit var catalog: AcpSessionCatalog
 
     @Before
@@ -172,6 +176,7 @@ class SshIntegrationTest {
         )
         hostAgents = HostAgentApi(connections, AgentAuthCache(), acpApi)
         hostWorkspaces = HostWorkspaceApi(connections, catalog)
+        hostLogs = HostLogsRepository(connections)
 
         // Start host state fresh: a previous run's agents.json would carry a
         // path into its deleted temp directory.
@@ -456,8 +461,57 @@ class SshIntegrationTest {
     }
 
     @Test
-    fun createSessionReportsAStaleAgentPath() = runBlocking {
-        writeAgentConfig(
+    fun hostLogsRotatePerProcessAndCleanupKeepsTheActiveRun() = runBlocking {
+        val cwd = Files.createTempDirectory(Path.of("/tmp/opencode"), "harold-log-runs")
+        acpApi.createSession(
+            connectionId,
+            harold.android.contracts.CreateSessionBody(agentId = "opencode", cwd = cwd.toString()),
+        ).getOrThrow()
+
+        val firstLogs = hostLogs.listHostLogs(connectionId).getOrThrow()
+        val firstAgent = firstLogs.agents.first { agent -> agent.agentId == "opencode" }
+        assertTrue(firstAgent.hostRunning)
+        val firstRun = firstAgent.runs.single()
+        assertTrue(firstRun.active)
+        assertTrue(firstRun.outBytes > 0)
+        assertTrue(firstRun.startedAt != null)
+        assertEquals(firstRun.id, firstAgent.activeRunId)
+
+        // Reconnecting reuses the live process and its run directory.
+        acpApi.listSessions(connectionId).getOrThrow()
+        val reconnected = hostLogs.listHostLogs(connectionId).getOrThrow()
+            .agents.first { agent -> agent.agentId == "opencode" }
+        assertEquals(firstRun.id, reconnected.activeRunId)
+        assertEquals(1, reconnected.runs.size)
+
+        // A new host process creates a new run and leaves the first untouched.
+        acpApi.restartAgent(connectionId, "opencode").getOrThrow()
+        acpApi.createSession(
+            connectionId,
+            harold.android.contracts.CreateSessionBody(agentId = "opencode", cwd = cwd.toString()),
+        ).getOrThrow()
+        val rotated = hostLogs.listHostLogs(connectionId).getOrThrow()
+            .agents.first { agent -> agent.agentId == "opencode" }
+        assertNotEquals(firstRun.id, rotated.activeRunId)
+        assertEquals(2, rotated.runs.size)
+        val preserved = rotated.runs.first { run -> run.id == firstRun.id }
+        assertTrue(preserved.outBytes >= firstRun.outBytes)
+        assertTrue(preserved.errBytes >= firstRun.errBytes)
+
+        val cleanup = hostLogs.cleanupHostLogs(connectionId, LogCleanupPolicy.AllInactive)
+            .getOrThrow()
+        assertEquals(1, cleanup.deletedRuns)
+        assertEquals(preserved.outBytes + preserved.errBytes, cleanup.removedBytes)
+
+        val afterCleanup = hostLogs.listHostLogs(connectionId).getOrThrow()
+            .agents.first { agent -> agent.agentId == "opencode" }
+        assertEquals(rotated.activeRunId, afterCleanup.activeRunId)
+        assertEquals(1, afterCleanup.runs.size)
+        assertTrue(afterCleanup.runs.single().active)
+    }
+
+    @Test
+    fun createSessionReportsAStaleAgentPath() = runBlocking {        writeAgentConfig(
             listOf(
                 HostAgentConfigRow(
                     id = "opencode",

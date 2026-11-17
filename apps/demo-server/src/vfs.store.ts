@@ -31,6 +31,7 @@ export type VfsStore = {
   home: string
   resolvePath: (rawPath: string, cwd?: string) => string
   stat: (targetPath: string) => VfsStat | null
+  /** Returns the stored buffer. Callers must treat it as read-only. */
   readFile: (targetPath: string) => Buffer | null
   writeFile: (targetPath: string, content: Buffer, options?: { mode?: number }) => void
   mkdir: (targetPath: string, options?: { recursive?: boolean }) => boolean
@@ -117,7 +118,7 @@ export const createVfsStore = (options: { home: string }): VfsStore => {
     if (!node || node.kind !== "file") {
       return null
     }
-    return Buffer.from(node.content)
+    return node.content
   }
 
   const writeFile = (

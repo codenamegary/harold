@@ -1,7 +1,8 @@
 import { Server } from "ssh2"
-import { createAcpAgentRunner, createAgentSessionStore } from "./acp.agent"
-import { routeExecCommand } from "./exec.router"
+import { createAcpAgentRunner, createAgentSessionStore, createInitializeResult } from "./acp.agent"
+import { isHostScriptCommand, routeExecCommand } from "./exec.router"
 import { createVirtualGit } from "./git.virtual"
+import { createDemoHostStore } from "./host.store"
 import { DEMO_HOME, seedVfsAndRepos } from "./seed.data"
 import { DEFAULT_MAX_SFTP_HANDLES, attachSftpHandlers } from "./sftp.handlers"
 import { createVfsStore } from "./vfs.store"
@@ -13,21 +14,26 @@ export type DemoSshLimits = {
   maxExecLineBytes: number
   maxExecPendingLines: number
   maxCommandBytes: number
+  /** The app inlines the host script in every host command. */
+  maxHostCommandBytes: number
 }
 
 export const DEFAULT_DEMO_SSH_LIMITS: DemoSshLimits = {
   maxConnections: 16,
   maxSessionsPerConnection: 16,
   maxSftpHandles: DEFAULT_MAX_SFTP_HANDLES,
-  maxExecLineBytes: 1024 * 1024,
+  maxExecLineBytes: 256 * 1024,
   maxExecPendingLines: 64,
   maxCommandBytes: 16 * 1024,
+  /** The app inlines the host script (~16 KB) in every host command. */
+  maxHostCommandBytes: 32 * 1024,
 }
 
 export type DemoSshServerOptions = {
   host: string
   port: number
   hostKey: string | Buffer
+  seedWarningRun?: boolean
   timing?: {
     charDelayMs: number
     toolDelayMs: number
@@ -54,6 +60,8 @@ export const createDemoSshServer = (options: DemoSshServerOptions): DemoSshServe
   // Sessions are server state, not connection state. The app can create a
   // session on one pooled SSH connection and list or load it on another.
   const sessionStore = createAgentSessionStore()
+  // Host runs are also server state: a reconnect must reuse the active run.
+  const host = createDemoHostStore({ seedWarningRun: options.seedWarningRun })
 
   const server = new Server(
     {
@@ -112,16 +120,17 @@ export const createDemoSshServer = (options: DemoSshServerOptions): DemoSshServe
             const stream = acceptExec()
             stream.once("close", release)
 
-            if (byteLength(info.command) > limits.maxCommandBytes) {
-              stream.stderr.write(
-                `exec command exceeds ${limits.maxCommandBytes} bytes\n`,
-              )
+            const commandLimit = isHostScriptCommand(info.command)
+              ? limits.maxHostCommandBytes
+              : limits.maxCommandBytes
+            if (byteLength(info.command) > commandLimit) {
+              stream.stderr.write(`exec command exceeds ${commandLimit} bytes\n`)
               stream.exit(1)
               stream.end()
               return
             }
 
-            const outcome = routeExecCommand(info.command, { vfs, git })
+            const outcome = routeExecCommand(info.command, { vfs, git, host })
 
             if (outcome.kind === "result") {
               if (outcome.stdout) {
@@ -135,15 +144,35 @@ export const createDemoSshServer = (options: DemoSshServerOptions): DemoSshServe
               return
             }
 
+            const hostConnect = outcome.kind === "host-connect"
+            if (hostConnect) {
+              const initLine = `${JSON.stringify({
+                jsonrpc: "2.0",
+                id: "harold-host-init",
+                result: createInitializeResult(outcome.agentId),
+              })}\n`
+              if (!stream.destroyed) {
+                stream.write(initLine)
+              }
+              if (outcome.run.created) {
+                host.recordOut(outcome.agentId, byteLength(initLine))
+              }
+            }
+
             const agent = createAcpAgentRunner({
               agentId: outcome.agentId,
               vfs,
               git,
               sessionStore,
               timing: options.timing,
+              hostInitialized: hostConnect,
               emit: (msg) => {
+                const line = `${JSON.stringify(msg)}\n`
                 if (!stream.destroyed) {
-                  stream.write(`${JSON.stringify(msg)}\n`)
+                  stream.write(line)
+                }
+                if (hostConnect) {
+                  host.recordOut(outcome.agentId, byteLength(line))
                 }
               },
             })

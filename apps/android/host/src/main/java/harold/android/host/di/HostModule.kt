@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import harold.android.host.DefaultHostApi
 import harold.android.host.HostAgentApi
+import harold.android.host.HostLogsRepository
 import harold.android.host.HostSessionFolderProbe
 import harold.android.host.HostWorkspaceApi
 import harold.android.host.SshAgentProcessLauncher
@@ -15,6 +16,7 @@ import harold.android.network.AgentSettingsApi
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.HostApi
+import harold.android.network.HostLogsApi
 import harold.android.network.SessionFolderProbe
 import harold.android.network.WorkspaceApi
 import harold.android.process.AgentProcessLauncher
@@ -43,6 +45,10 @@ abstract class HostModule {
     @Binds
     @Singleton
     abstract fun gitApi(impl: HostWorkspaceApi): GitApi
+
+    @Binds
+    @Singleton
+    abstract fun hostLogsApi(impl: HostLogsRepository): HostLogsApi
 
     @Binds
     @Singleton

@@ -139,6 +139,27 @@
     <string name="settings_default_agent_none">Ask every time</string>
     <string name="settings_default_workspace_label">Default folder</string>
     <string name="settings_default_workspace_placeholder">/home/you/projects</string>
+    <string name="settings_agent_logs_section">Agent logs</string>
+    <string name="settings_agent_logs_loading">Reading agent logs…</string>
+    <string name="settings_agent_logs_error">Could not read agent logs: %1$s</string>
+    <string name="settings_agent_logs_retry">Retry</string>
+    <string name="settings_agent_logs_empty">No agent logs on this host yet.</string>
+    <string name="settings_agent_logs_total">Total on host: %1$s</string>
+    <string name="settings_agent_logs_warning">Agent logs are over 512 MB. Delete old runs to free space on the host.</string>
+    <string name="settings_agent_logs_cleanup">Review cleanup</string>
+    <string name="settings_agent_logs_run_current">Current run</string>
+    <string name="settings_agent_logs_run_latest">Latest run</string>
+    <string name="settings_agent_logs_cleanup_title">Delete old agent logs?</string>
+    <string name="settings_agent_logs_cleanup_running">Deleting…</string>
+    <string name="settings_agent_logs_cleanup_confirm">Delete logs</string>
+    <plurals name="settings_agent_logs_cleanup_body">
+        <item quantity="one">This deletes %1$d run and frees %2$s. The current run is kept. This cannot be undone.</item>
+        <item quantity="other">This deletes %1$d runs and frees %2$s. The current run is kept. This cannot be undone.</item>
+    </plurals>
+    <plurals name="settings_agent_logs_cleanup_result">
+        <item quantity="one">Deleted %1$d run and freed %2$s.</item>
+        <item quantity="other">Deleted %1$d runs and freed %2$s.</item>
+    </plurals>
     <string name="settings_fingerprint_label">Host key fingerprint</string>
     <string name="settings_auth_label">Sign-in</string>
     <string name="settings_credential_section">SSH sign-in</string>

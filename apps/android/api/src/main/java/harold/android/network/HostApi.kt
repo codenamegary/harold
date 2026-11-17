@@ -10,6 +10,9 @@ import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
+import harold.android.contracts.HostLogs
+import harold.android.contracts.LogCleanupPolicy
+import harold.android.contracts.LogCleanupResult
 import harold.android.contracts.UpdateAgentBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
@@ -96,8 +99,27 @@ interface AgentAuthApi {
     ): Result<AgentAuthSummary>
 }
 
+/** Host-side agent log storage. Sizes are read on demand, never with listAgents. */
+interface HostLogsApi {
+    suspend fun listHostLogs(connectionId: String): Result<HostLogs>
+
+    /**
+     * Deletes whole run directories. The host protects the active run and the
+     * newest run per agent; the app never sends a path.
+     */
+    suspend fun cleanupHostLogs(
+        connectionId: String,
+        policy: LogCleanupPolicy,
+    ): Result<LogCleanupResult>
+}
+
 /** Everything host state and git expose for one saved connection. */
-interface HostApi : WorkspaceApi, AgentSettingsApi, AgentAuthApi, AttachmentApi, GitApi
+interface HostApi : WorkspaceApi,
+    AgentSettingsApi,
+    AgentAuthApi,
+    AttachmentApi,
+    GitApi,
+    HostLogsApi
 
 private fun unsupported(what: String): UnsupportedOperationException =
     UnsupportedOperationException(what)

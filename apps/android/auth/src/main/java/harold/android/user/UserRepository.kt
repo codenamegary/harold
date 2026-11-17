@@ -14,6 +14,9 @@ import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
+import harold.android.contracts.HostLogs
+import harold.android.contracts.LogCleanupPolicy
+import harold.android.contracts.LogCleanupResult
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
@@ -45,6 +48,15 @@ interface UserRepository {
     ): Result<SessionCollection>
 
     suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection>
+
+    suspend fun listHostLogs(connectionId: String): Result<HostLogs> =
+        Result.failure(unsupported("host logs are not supported"))
+
+    suspend fun cleanupHostLogs(
+        connectionId: String,
+        policy: LogCleanupPolicy,
+    ): Result<LogCleanupResult> =
+        Result.failure(unsupported("host log cleanup is not supported"))
 
     suspend fun scanAgents(
         connectionId: String,

@@ -8,10 +8,12 @@ import harold.android.contracts.CreateCustomAgentBody
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
+import harold.android.contracts.LogCleanupPolicy
 import harold.android.contracts.UpdateAgentBody
 import harold.android.network.AcpAgentApi
 import harold.android.network.AgentAuthApi
 import harold.android.network.AgentSettingsApi
+import harold.android.network.HostLogsApi
 import harold.android.network.WorkspaceApi
 import javax.inject.Inject
 
@@ -20,6 +22,7 @@ class DefaultUserRepository @Inject constructor(
     private val acpAgentApi: AcpAgentApi,
     private val agentSettingsApi: AgentSettingsApi,
     private val agentAuthApi: AgentAuthApi,
+    private val hostLogsApi: HostLogsApi,
 ) : UserRepository {
     override suspend fun listWorkspaces(
         connectionId: String,
@@ -47,6 +50,13 @@ class DefaultUserRepository @Inject constructor(
     ) = acpAgentApi.listSessions(connectionId, cwd)
 
     override suspend fun listAgents(connectionId: String) = agentSettingsApi.listAgents(connectionId)
+
+    override suspend fun listHostLogs(connectionId: String) = hostLogsApi.listHostLogs(connectionId)
+
+    override suspend fun cleanupHostLogs(
+        connectionId: String,
+        policy: LogCleanupPolicy,
+    ) = hostLogsApi.cleanupHostLogs(connectionId, policy)
 
     override suspend fun scanAgents(connectionId: String) = agentSettingsApi.scanAgents(connectionId)
 

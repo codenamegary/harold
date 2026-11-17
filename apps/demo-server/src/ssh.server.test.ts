@@ -1,14 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { generateKeyPairSync } from "node:crypto"
-import fs from "node:fs"
-import path from "node:path"
 import { Client, SFTPWrapper } from "ssh2"
+import { DEMO_HOST_KEY } from "./host.key"
 import { createDemoSshServer } from "./ssh.server"
 
-const HOST_KEY = fs.readFileSync(
-  path.join(import.meta.dir, "..", "keys", "ssh_host_ed25519_key"),
-  "utf8",
-)
+const HOST_KEY = DEMO_HOST_KEY
 
 const connectClient = (options: {
   port: number
@@ -127,6 +123,88 @@ const acpCall = (
     })
   })
 
+const quote = (value: string): string => `'${value.replace(/'/g, "'\\''")}'`
+
+const hostCommand = (mode: string, ...args: Array<string>): string => {
+  const script = `#!/bin/sh\n${"# inlined host script body\n".repeat(800)}`
+  return `export HAROLD_AGENT_SCRIPT=${quote(script)}; exec sh -c ${quote(
+    'eval "$HAROLD_AGENT_SCRIPT"',
+  )} harold-agent ${mode}${args.length > 0 ? ` ${args.map(quote).join(" ")}` : ""}`
+}
+
+type JsonLineReader = {
+  next: () => Promise<Record<string, unknown>>
+}
+
+const jsonLineReader = (stream: { on: (event: string, cb: (chunk: Buffer) => void) => void }): JsonLineReader => {
+  let buffer = ""
+  const lines: Array<string> = []
+  const waiters: Array<(line: string) => void> = []
+  stream.on("data", (chunk: Buffer) => {
+    buffer += chunk.toString("utf8")
+    const parts = buffer.split("\n")
+    buffer = parts.pop() ?? ""
+    for (const line of parts) {
+      if (!line.trim()) continue
+      const waiter = waiters.shift()
+      if (waiter) {
+        waiter(line)
+      } else {
+        lines.push(line)
+      }
+    }
+  })
+  return {
+    next: () =>
+      new Promise((resolve, reject) => {
+        const existing = lines.shift()
+        if (existing !== undefined) {
+          resolve(JSON.parse(existing) as Record<string, unknown>)
+          return
+        }
+        const timer = setTimeout(
+          () => reject(new Error("timed out waiting for an ACP line")),
+          5_000,
+        )
+        waiters.push((line) => {
+          clearTimeout(timer)
+          resolve(JSON.parse(line) as Record<string, unknown>)
+        })
+      }),
+  }
+}
+
+const hostConnect = (
+  client: Client,
+  agentId: string,
+): Promise<{
+  stream: { end: () => void; write: (data: string) => void }
+  reader: JsonLineReader
+  init: Record<string, unknown>
+}> =>
+  new Promise((resolve, reject) => {
+    client.exec(hostCommand("connect", agentId), (err, stream) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      const reader = jsonLineReader(stream)
+      reader
+        .next()
+        .then((init) => resolve({ stream, reader, init }))
+        .catch(reject)
+    })
+  })
+
+const logRows = (stdout: string): Array<Array<string>> =>
+  stdout
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => line.split("\t"))
+
+const activeRows = (stdout: string, agentId: string): Array<Array<string>> =>
+  logRows(stdout).filter((row) => row[1] === agentId && row[5] === "1")
+
 describe("ssh.server", () => {
   const serverHandle = createDemoSshServer({
     host: "127.0.0.1",
@@ -185,6 +263,12 @@ describe("ssh.server", () => {
 
     const workspacesRaw = await sftpReadFile(sftp, "/home/demo/.harold/workspaces.json")
     expect(workspacesRaw.toString("utf8")).toContain("cat-screensaver")
+
+    // A path outside the virtual home never reaches the container filesystem.
+    const outsideExists = await new Promise<boolean>((resolve) => {
+      sftp.readFile("/etc/passwd", (err) => resolve(err === undefined || err === null))
+    })
+    expect(outsideExists).toBe(false)
 
     const agentsBefore = await sftpReadFile(sftp, "/home/demo/.harold/agents.json")
     expect(agentsBefore.toString("utf8")).toContain("opencode")
@@ -347,6 +431,105 @@ describe("ssh.server", () => {
 
     clientA.end()
     clientB.end()
+  })
+})
+
+describe("ssh.server host lifecycle", () => {
+  const serverHandle = createDemoSshServer({
+    host: "127.0.0.1",
+    port: 0,
+    hostKey: HOST_KEY,
+    seedWarningRun: true,
+    timing: { charDelayMs: 0, toolDelayMs: 0 },
+  })
+  const portState = { port: 0 }
+
+  beforeAll(async () => {
+    portState.port = await serverHandle.listen()
+  })
+
+  afterAll(async () => {
+    await serverHandle.close()
+  })
+
+  test("replays host initialize, reuses the live run, rotates on restart, and cleans inactive runs", async () => {
+    const client = await connectClient({
+      port: portState.port,
+      username: "host-tester",
+      password: "pw",
+    })
+
+    const first = await hostConnect(client, "opencode")
+    expect(first.init.jsonrpc).toBe("2.0")
+    expect(first.init.id).toBe("harold-host-init")
+    expect((first.init.result as Record<string, unknown>).agentInfo).toBeDefined()
+
+    const newSession = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "session/new",
+      params: { cwd: "/home/demo/sites/meow" },
+    }
+    first.stream.write(`${JSON.stringify(newSession)}\n`)
+    const created = await first.reader.next()
+    expect((created.result as Record<string, unknown>).sessionId).toMatch(
+      /^ses_demo_opencode_\d{4}$/,
+    )
+    first.stream.end()
+
+    const logs1 = await execCommand(client, hostCommand("logs"))
+    const active1 = activeRows(logs1.stdout, "opencode")
+    expect(active1).toHaveLength(1)
+    expect(active1[0]?.[6]).toBe("1")
+    expect(Number(active1[0]?.[3])).toBeGreaterThan(0)
+    const firstRunId = active1[0]?.[2] ?? ""
+
+    // A reconnect reuses the live run.
+    const second = await hostConnect(client, "opencode")
+    second.stream.end()
+    const logs2 = await execCommand(client, hostCommand("logs"))
+    const active2 = activeRows(logs2.stdout, "opencode")
+    expect(active2).toHaveLength(1)
+    expect(active2[0]?.[2]).toBe(firstRunId)
+
+    // Stop keeps the run, and the next host start gets a new one.
+    await execCommand(client, hostCommand("stop", "opencode"))
+    const stopped = activeRows((await execCommand(client, hostCommand("logs"))).stdout, "opencode")
+    expect(stopped[0]?.[6]).toBe("0")
+
+    const third = await hostConnect(client, "opencode")
+    third.stream.end()
+    const logs3 = await execCommand(client, hostCommand("logs"))
+    const active3 = activeRows(logs3.stdout, "opencode")
+    expect(active3).toHaveLength(1)
+    expect(active3[0]?.[2]).not.toBe(firstRunId)
+    expect(logRows(logs3.stdout).some((row) => row[2] === firstRunId)).toBe(true)
+
+    const cleanup = await execCommand(client, hostCommand("cleanup", "all-inactive"))
+    expect(cleanup.stdout).toMatch(/^cleanup\t\d+\t\d+\n$/)
+    const after = await execCommand(client, hostCommand("logs"))
+    const stillActive = activeRows(after.stdout, "opencode")
+    expect(stillActive).toHaveLength(1)
+    expect(stillActive[0]?.[2]).toBe(active3[0]?.[2])
+    expect(logRows(after.stdout).some((row) => row[2] === firstRunId)).toBe(false)
+    expect(after.stdout).not.toContain("629145600")
+
+    client.end()
+  })
+
+  test("rejects an oversized inlined host command", async () => {
+    const client = await connectClient({
+      port: portState.port,
+      username: "host-limit-tester",
+      password: "pw",
+    })
+    const script = `#!/bin/sh\n${"# too large\n".repeat(2_800)}`
+    const command = `export HAROLD_AGENT_SCRIPT=${quote(script)}; exec sh -c ${quote(
+      'eval "$HAROLD_AGENT_SCRIPT"',
+    )} harold-agent logs`
+    const result = await execCommand(client, command)
+    expect(result.code).toBe(1)
+    client.end()
   })
 })
 
