@@ -3,6 +3,9 @@ package harold.android.connections
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.contracts.HostLogs
+import harold.android.contracts.LogCleanupPolicy
+import harold.android.contracts.LogCleanupResult
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshCredential
@@ -40,7 +43,18 @@ data class ConnectionSettingsUiState(
     val loaded: Boolean = false,
     val saved: Boolean = false,
     val forgetConfirmVisible: Boolean = false,
+    val agentLogs: AgentLogsUiState = AgentLogsUiState(),
     val error: String? = null,
+)
+
+/** Host log stats load on their own so the settings form stays usable. */
+data class AgentLogsUiState(
+    val loading: Boolean = false,
+    val logs: HostLogs? = null,
+    val error: String? = null,
+    val cleanupConfirmVisible: Boolean = false,
+    val cleanupRunning: Boolean = false,
+    val cleanupResult: LogCleanupResult? = null,
 )
 
 data class AgentOptionUi(
@@ -103,6 +117,73 @@ class ConnectionSettingsViewModel @Inject constructor(
                 )
             }
             loadDefaultAgents()
+            loadHostLogs()
+        }
+    }
+
+    /** Reloads the on-demand host log stats without touching the form. */
+    fun reloadHostLogs() {
+        loadHostLogs()
+    }
+
+    fun showLogCleanupConfirm() {
+        _uiState.update { current ->
+            current.copy(
+                agentLogs = current.agentLogs.copy(
+                    cleanupConfirmVisible = true,
+                    cleanupResult = null,
+                ),
+            )
+        }
+    }
+
+    fun hideLogCleanupConfirm() {
+        _uiState.update { current ->
+            current.copy(
+                agentLogs = current.agentLogs.copy(cleanupConfirmVisible = false),
+            )
+        }
+    }
+
+    /**
+     * Explicit, destructive cleanup. The host protects the active and newest
+     * run; the app only names the policy and never sends a path.
+     */
+    fun cleanupLogs() {
+        if (_uiState.value.agentLogs.cleanupRunning) {
+            return
+        }
+        _uiState.update { current ->
+            current.copy(
+                agentLogs = current.agentLogs.copy(cleanupRunning = true, error = null),
+            )
+        }
+        viewModelScope.launch {
+            userRepository.cleanupHostLogs(connectionId, LogCleanupPolicy.AllInactive).fold(
+                onSuccess = { result ->
+                    _uiState.update { current ->
+                        current.copy(
+                            agentLogs = current.agentLogs.copy(
+                                cleanupRunning = false,
+                                cleanupConfirmVisible = false,
+                                cleanupResult = result,
+                            ),
+                        )
+                    }
+                    loadHostLogs()
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            agentLogs = current.agentLogs.copy(
+                                cleanupRunning = false,
+                                error = error.message
+                                    ?: "Could not clean up the agent logs on the host.",
+                            ),
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -213,6 +294,43 @@ class ConnectionSettingsViewModel @Inject constructor(
             },
             onFailure = { },
         )
+    }
+
+    private fun loadHostLogs() {
+        if (connectionId.isBlank()) {
+            return
+        }
+        _uiState.update { current ->
+            current.copy(
+                agentLogs = current.agentLogs.copy(loading = true, error = null),
+            )
+        }
+        viewModelScope.launch {
+            userRepository.listHostLogs(connectionId).fold(
+                onSuccess = { logs ->
+                    _uiState.update { current ->
+                        current.copy(
+                            agentLogs = current.agentLogs.copy(
+                                loading = false,
+                                logs = logs,
+                                error = null,
+                            ),
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            agentLogs = current.agentLogs.copy(
+                                loading = false,
+                                error = error.message
+                                    ?: "Could not read the agent logs on the host.",
+                            ),
+                        )
+                    }
+                },
+            )
+        }
     }
 
     private fun authSummary(auth: SshAuth): String = when (auth) {

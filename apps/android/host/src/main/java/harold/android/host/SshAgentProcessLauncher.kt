@@ -1,5 +1,6 @@
 package harold.android.host
 
+import harold.android.contracts.LogCleanupPolicy
 import harold.android.process.AgentLaunchException
 import harold.android.process.AgentProcessChannel
 import harold.android.process.AgentProcessLauncher
@@ -259,13 +260,28 @@ internal fun hostAgentCommand(
             append(offset)
         }
     }
-    return buildString {
-        append("export HAROLD_AGENT_SCRIPT=")
-        append(SshSessionStore.shellQuote(script))
-        append("; exec sh -c ")
-        append(SshSessionStore.shellQuote("eval \"\$HAROLD_AGENT_SCRIPT\""))
-        append(arguments)
-    }
+    return hostScriptCommand(script, arguments)
+}
+
+/** Lists every run for every agent on the host. */
+internal fun hostLogsCommand(script: String): String =
+    hostScriptCommand(script, " harold-agent logs")
+
+/** Deletes whole run directories according to [policy]. */
+internal fun hostCleanupCommand(
+    script: String,
+    policy: LogCleanupPolicy,
+): String = hostScriptCommand(
+    script,
+    " harold-agent cleanup " + SshSessionStore.shellQuote(policy.wireValue),
+)
+
+private fun hostScriptCommand(script: String, arguments: String): String = buildString {
+    append("export HAROLD_AGENT_SCRIPT=")
+    append(SshSessionStore.shellQuote(script))
+    append("; exec sh -c ")
+    append(SshSessionStore.shellQuote("eval \"\$HAROLD_AGENT_SCRIPT\""))
+    append(arguments)
 }
 
 /** Loads the one host script packaged with the app. */

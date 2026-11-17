@@ -48,6 +48,7 @@ type SessionRecord = {
 export type AgentSessionStore = {
   getSessions: (agentId: string) => Array<SessionRecord>
   nextSessionId: (agentId: string) => string
+  canCreate: (agentId: string) => boolean
 }
 
 type AgentSessionBucket = {
@@ -92,6 +93,8 @@ export const createAgentSessionStore = (): AgentSessionStore => {
       bucket.nextNumber += 1
       return sessionId
     },
+    canCreate: (agentId: string) =>
+      bucketFor(agentId).sessions.length < MAX_SESSIONS_PER_AGENT,
   }
 }
 
@@ -106,7 +109,34 @@ export type AcpAgentRunnerDeps = {
   git: VirtualGit
   sessionStore: AgentSessionStore
   timing?: AcpTiming
+  /** The demo host already owns initialize, so the client never sends one. */
+  hostInitialized?: boolean
   emit: (message: Record<string, unknown>) => void
+}
+
+/** The initialize result the host replays to every attaching client. */
+export const createInitializeResult = (agentId: string): Record<string, unknown> => ({
+  protocolVersion: 1,
+  agentCapabilities: {
+    loadSession: true,
+    promptCapabilities: { image: true, embeddedContext: true },
+    sessionCapabilities: { list: {}, delete: {}, resume: {} },
+  },
+  authMethods: [],
+  agentInfo: {
+    name: AGENT_NAMES[agentId] ?? agentId,
+    version: "demo",
+  },
+})
+
+const MAX_HISTORY_MESSAGES = 60
+const MAX_SESSIONS_PER_AGENT = 100
+
+const appendHistory = (session: SessionRecord, ...messages: Array<SeededMessage>): void => {
+  session.history.push(...messages)
+  if (session.history.length > MAX_HISTORY_MESSAGES) {
+    session.history.splice(0, session.history.length - MAX_HISTORY_MESSAGES)
+  }
 }
 
 const DEFAULT_TIMING: AcpTiming = {
@@ -205,7 +235,10 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     number | string,
     { sessionId: string; promptId: number | string | undefined; question: ElicitationQuestion }
   >()
-  const state = { nextRequestId: 9000, clientSupportsElicitationForm: false }
+  const state = {
+    nextRequestId: 9000,
+    clientSupportsElicitationForm: deps.hostInitialized ?? false,
+  }
 
   const nowIso = (): string => new Date().toISOString()
 
@@ -304,7 +337,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     await emitTool(session.sessionId, "tool-plan-settings", "src/settings.js", "read")
     await emitTool(session.sessionId, "tool-plan-main", "src/main.js", "read")
     await emitText(session.sessionId, PLAN_TEXT)
-    session.history.push({ role: "assistant", text: PLAN_TEXT })
+    appendHistory(session, { role: "assistant", text: PLAN_TEXT })
     session.turnIndex = 1
     session.updatedAt = nowIso()
 
@@ -375,7 +408,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     notifyUpdate(session.sessionId, { sessionUpdate: "usage_update", ...usage })
 
     await emitText(session.sessionId, BUILD_SUMMARY)
-    session.history.push({ role: "assistant", text: BUILD_SUMMARY })
+    appendHistory(session, { role: "assistant", text: BUILD_SUMMARY })
     session.turnIndex = 2
     session.updatedAt = nowIso()
     respond(promptId, { stopReason: "end_turn" })
@@ -394,7 +427,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     await emitTool(session.sessionId, "tool-pr-open", "gh pr create --draft", "execute")
 
     await emitText(session.sessionId, PR_SUMMARY)
-    session.history.push({ role: "assistant", text: PR_SUMMARY })
+    appendHistory(session, { role: "assistant", text: PR_SUMMARY })
     session.turnIndex = 3
     session.updatedAt = nowIso()
     respond(promptId, { stopReason: "end_turn" })
@@ -422,8 +455,8 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
     )
     const label = option?.title ?? rawValue
     const reply = `${label} it is. Send any follow-up message and I'll apply the edits so you can inspect the git diff.`
-    session.history.push({ role: "user", text: label })
-    session.history.push({ role: "assistant", text: reply })
+    appendHistory(session, { role: "user", text: label })
+    appendHistory(session, { role: "assistant", text: reply })
     session.updatedAt = nowIso()
     await emitText(session.sessionId, reply)
     respond(pending.promptId, { stopReason: "end_turn" })
@@ -453,23 +486,15 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
       state.clientSupportsElicitationForm = supportsFormElicitation(
         params.clientCapabilities,
       )
-      respond(id, {
-        protocolVersion: 1,
-        agentCapabilities: {
-          loadSession: true,
-          promptCapabilities: { image: true, embeddedContext: true },
-          sessionCapabilities: { list: {}, delete: {}, resume: {} },
-        },
-        authMethods: [],
-        agentInfo: {
-          name: AGENT_NAMES[deps.agentId] ?? deps.agentId,
-          version: "demo",
-        },
-      })
+      respond(id, createInitializeResult(deps.agentId))
       return
     }
 
     if (msg.method === "session/new") {
+      if (!deps.sessionStore.canCreate(deps.agentId)) {
+        respondError(id, -32000, "Demo session limit reached. Delete a session first.")
+        return
+      }
       const cwd = typeof params.cwd === "string" && params.cwd ? params.cwd : deps.vfs.home
       const sessions = deps.sessionStore.getSessions(deps.agentId)
       const sessionId = deps.sessionStore.nextSessionId(deps.agentId)
@@ -512,6 +537,10 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
         // The app can create a session on one SSH connection and attach from
         // another, or resume a cached id after a server restart. Adopt the id
         // so the demo chat can attach instead of failing with Unknown session.
+        if (!deps.sessionStore.canCreate(deps.agentId)) {
+          respondError(id, -32000, "Demo session limit reached. Delete a session first.")
+          return
+        }
         const cwd = typeof params.cwd === "string" && params.cwd ? params.cwd : deps.vfs.home
         session = {
           sessionId,
@@ -600,7 +629,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
         )
         .map((b) => b.text)
         .join("\n")
-      session.history.push({ role: "user", text: userText })
+      appendHistory(session, { role: "user", text: userText })
       session.updatedAt = nowIso()
 
       if (session.turnIndex === 0) {
@@ -616,7 +645,7 @@ export const createAcpAgentRunner = (deps: AcpAgentRunnerDeps) => {
         return
       }
       await emitText(session.sessionId, WRAP_UP_TEXT)
-      session.history.push({ role: "assistant", text: WRAP_UP_TEXT })
+      appendHistory(session, { role: "assistant", text: WRAP_UP_TEXT })
       respond(id, { stopReason: "end_turn" })
       return
     }

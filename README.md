@@ -38,10 +38,12 @@ Host requirements:
 
 Harold installs nothing on the host. It sends a small host script inline over
 SSH; the script starts a detached agent host with `nohup` and keeps runtime
-state in `~/.harold/run/`. Agent and workspace settings live in `~/.harold/` as
-plain files. The agent keeps running when the phone disconnects, and the next
-connection attaches to the same process. Session history stays with the agent
-and is read through ACP `session/list`.
+state in `~/.harold/run/`. Each host process writes its own
+`~/.harold/run/<agent>/logs/<run-id>/` directory, so a restart never erases
+the previous process's output. Agent and workspace settings live in
+`~/.harold/` as plain files. The agent keeps running when the phone
+disconnects, and the next connection attaches to the same process. Session
+history stays with the agent and is read through ACP `session/list`.
 
 ## Working on the app
 

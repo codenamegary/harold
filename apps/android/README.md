@@ -45,8 +45,8 @@ Android app -> SSH exec (inline host script) -> detached host -> `agent acp` -> 
   descriptors detached. Later clients run the same command and attach to the
   live host instead of starting another agent.
 - The host owns the agent's stdin FIFO and stdout log. Every client tails the
-  same append-only log, so two clients see the same output and share one agent
-  process.
+  same append-only `logs/<run-id>/out.jsonl`, so two clients see the same
+  output and share one agent process.
 - The host owns the one ACP `initialize`. Clients replay that response instead
   of initializing the agent again.
 - Closing the app or losing the network closes only the attach bridge. The
@@ -105,14 +105,25 @@ Everything Harold keeps on the host lives under `~/.harold/`:
   hidden-workspaces.json  workspace paths deleted from the list
   uploads/<sessionId>/...             attachment uploads
   run/<agent>/       runtime state for detached ACP hosts
+    logs/active      active run id, written atomically before ready
+    logs/<run-id>/   one directory per host process
+      out.jsonl      append-only agent stdout, one ACP message per line
+      err.log        agent stderr
     in               FIFO, agent stdin
-    out              append-only agent stdout log
-    err              agent stderr
     ready            present after the host initialize response
     status           host exit reason
     host.pid         detached host process
     agent.pid        agent process
 ```
+
+Every host start creates a new `logs/<run-id>/` directory (`<UTC start>-<host pid>`).
+A previous process's logs are never truncated, reopened, or renamed. A run is
+the unit of deletion: `rm -rf` of one directory. Cleanup protects the active
+run and the newest run for each agent. The host lists runs with the `logs`
+mode and deletes whole inactive runs only when asked with `cleanup
+all-inactive`. The app's Connection settings section shows total, per-agent,
+and per-run sizes and warns above 512 MB; it never deletes on its own.
+Log directories are `700` and log files are `600`.
 
 Session history stays with the agent. Harold reads it with ACP `session/list`
 and compiles the per-agent lists in memory; it does not write session files
@@ -200,7 +211,10 @@ with the distribution key held in repo secrets.
 
 ## Tests
 
-Unit tests run with the standard gate above. The SSH integration test
+Unit tests run with the standard gate above. The host script lifecycle tests
+(`HostLogScriptTest` in `:host`) run the packaged script on the local machine
+with a tiny shell ACP agent, so run rotation, reconnect, cleanup protection,
+and permissions are covered without an SSH server. The SSH integration test
 (`SshIntegrationTest` in `:acp`) drives a real SSH session against
 `scripts/ssh-test-server.py` and a multi-session fake ACP agent
 (`scripts/fake-acp-agent.py`). It is skipped unless the Python dependency is

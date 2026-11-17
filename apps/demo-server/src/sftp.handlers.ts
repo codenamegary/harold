@@ -145,9 +145,11 @@ export const attachSftpHandlers = (
     const resolved = vfs.resolvePath(filename)
     const isWrite = (flags & OPEN_MODE.WRITE) !== 0
     const isCreate = (flags & OPEN_MODE.CREAT) !== 0
-    const existing = vfs.readFile(resolved)
+    // Check existence with stat. Reading the content here would copy the
+    // whole file just to answer "does it exist?".
+    const existing = vfs.stat(resolved)
 
-    if (!existing && !isCreate && !isWrite) {
+    if ((!existing || existing.isDirectory) && !isCreate && !isWrite) {
       sftp.status(reqid, STATUS_CODE.NO_SUCH_FILE)
       return
     }

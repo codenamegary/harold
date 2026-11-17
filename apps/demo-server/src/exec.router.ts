@@ -1,5 +1,6 @@
 import path from "node:path"
 import { VirtualGit } from "./git.virtual"
+import { DemoHostConnect, DemoHostStore } from "./host.store"
 import { AGENT_BINARIES } from "./seed.data"
 import { VfsStore } from "./vfs.store"
 
@@ -14,11 +15,24 @@ export type ExecOutcome =
       kind: "acp"
       agentId: string
     }
+  | {
+      kind: "host-connect"
+      agentId: string
+      run: DemoHostConnect
+    }
 
 export type ExecRouterDeps = {
   vfs: VfsStore
   git: VirtualGit
+  host: DemoHostStore
 }
+
+/** The app embeds the whole host script in one exec command. */
+export const HOST_SCRIPT_PREFIX = "export HAROLD_AGENT_SCRIPT="
+const HOST_SCRIPT_WRAPPER = "; exec sh -c "
+const HOST_AGENT_ARGUMENTS = " harold-agent "
+
+const KNOWN_AGENT_IDS = new Set(Object.keys(AGENT_BINARIES))
 
 const tokenizeShell = (input: string): Array<string> => {
   const tokens: Array<string> = []
@@ -111,7 +125,111 @@ const resolveAgentIdFromToken = (token: string): string | null => {
   return null
 }
 
+export const isHostScriptCommand = (rawCommand: string): boolean =>
+  rawCommand.startsWith(HOST_SCRIPT_PREFIX)
+
+type HostInvocation = {
+  mode: string
+  args: ReadonlyArray<string>
+}
+
+/**
+ * The host script is inlined in every host command. Only the short suffix
+ * after the script is parsed, so a reconnect never copies or tokenizes the
+ * ~16 KB script body.
+ */
+const parseHostInvocation = (rawCommand: string): HostInvocation | null => {
+  if (!isHostScriptCommand(rawCommand)) {
+    return null
+  }
+  const wrapperIndex = rawCommand.lastIndexOf(HOST_SCRIPT_WRAPPER)
+  if (wrapperIndex < 0) {
+    return null
+  }
+  const wrapper = rawCommand.slice(wrapperIndex + HOST_SCRIPT_WRAPPER.length)
+  const agentIndex = wrapper.indexOf(HOST_AGENT_ARGUMENTS)
+  if (agentIndex < 0) {
+    return null
+  }
+  const tokens = tokenizeShell(wrapper.slice(agentIndex + HOST_AGENT_ARGUMENTS.length))
+  const mode = tokens[0]
+  if (!mode) {
+    return null
+  }
+  return { mode, args: tokens.slice(1) }
+}
+
+const routeHostCommand = (
+  invocation: HostInvocation,
+  host: DemoHostStore,
+): ExecOutcome => {
+  const [first] = invocation.args
+
+  if (invocation.mode === "connect") {
+    if (!first || !KNOWN_AGENT_IDS.has(first)) {
+      return {
+        kind: "result",
+        exitCode: 127,
+        stdout: "",
+        stderr: `harold-agent: unknown agent: ${(first ?? "").slice(0, 64)}\n`,
+      }
+    }
+    const run = host.connect(first)
+    if (!run) {
+      return {
+        kind: "result",
+        exitCode: 127,
+        stdout: "",
+        stderr: "harold-agent: host state is unavailable\n",
+      }
+    }
+    return { kind: "host-connect", agentId: first, run }
+  }
+
+  if (invocation.mode === "stop") {
+    if (first) {
+      host.stop(first)
+    }
+    return { kind: "result", exitCode: 0, stdout: "", stderr: "" }
+  }
+
+  if (invocation.mode === "logs") {
+    return { kind: "result", exitCode: 0, stdout: host.logs(), stderr: "" }
+  }
+
+  if (invocation.mode === "cleanup") {
+    const policy = first ?? "all-inactive"
+    const result = host.cleanup(policy)
+    if (!result) {
+      return {
+        kind: "result",
+        exitCode: 2,
+        stdout: "",
+        stderr: `harold-agent: unknown cleanup policy: ${policy.slice(0, 64)}\n`,
+      }
+    }
+    return {
+      kind: "result",
+      exitCode: 0,
+      stdout: `cleanup\t${result.deletedRuns}\t${result.removedBytes}\n`,
+      stderr: "",
+    }
+  }
+
+  return {
+    kind: "result",
+    exitCode: 2,
+    stdout: "",
+    stderr: `harold-agent: unsupported mode: ${invocation.mode.slice(0, 64)}\n`,
+  }
+}
+
 export const routeExecCommand = (rawCommand: string, deps: ExecRouterDeps): ExecOutcome => {
+  const hostInvocation = parseHostInvocation(rawCommand)
+  if (hostInvocation) {
+    return routeHostCommand(hostInvocation, deps.host)
+  }
+
   const command = unwrapBashLc(rawCommand)
 
   // KnownAgents presence probe script
