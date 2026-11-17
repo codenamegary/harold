@@ -3,6 +3,7 @@ package harold.android.acp
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CompletableDeferred
@@ -52,6 +53,13 @@ class AcpClient(
 ) {
     private val writeLock = Mutex()
     private val pending = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
+
+    /**
+     * String ids keep the exact value across JSON parsers. Large numeric ids
+     * lose precision in agents that parse JSON as doubles, so a response can
+     * echo a rounded id that no pending request matches.
+     */
+    private val idPrefix = "harold-${UUID.randomUUID().toString().take(8)}"
     private val nextId = AtomicLong(1)
     val closed = CompletableDeferred<Throwable?>()
     private var readerJob: Job? = null
@@ -81,12 +89,24 @@ class AcpClient(
         beginRequest(method, params).await(timeoutMillis)
 
     /**
+     * Waits for a response the app did not request over this client. The host
+     * owns `initialize`, so its response is already in the replay.
+     *
+     * Register before [start] so the reader cannot pass the line first.
+     */
+    fun expectResponse(id: String): PendingRequest {
+        val deferred = CompletableDeferred<JsonElement>()
+        pending[id] = deferred
+        return PendingRequest(id, deferred)
+    }
+
+    /**
      * Writes a request and returns before its response arrives. Used by
      * prompts: callers know the write landed, then await the turn elsewhere.
      */
     suspend fun beginRequest(method: String, params: JsonElement): PendingRequest {
-        val id = nextId.getAndIncrement()
-        val key = id.toString()
+        val id = "$idPrefix-${nextId.getAndIncrement()}"
+        val key = id
         val deferred = CompletableDeferred<JsonElement>()
         pending[key] = deferred
         val message = buildJsonObject {

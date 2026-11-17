@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -137,14 +138,23 @@ class AgentProcess internal constructor(
 
     suspend fun start() {
         check(started.compareAndSet(false, true)) { "Agent process already started" }
+        // The host owns initialize. Register before the reader starts so the
+        // replayed response cannot arrive first and be dropped.
+        val hostInit = acp.expectResponse(HOST_INIT_ID)
         acp.start()
 
         val initialize = try {
-            acp.request(
-                method = "initialize",
-                params = acpInitializeParams(agentId),
-                timeoutMillis = INITIALIZE_TIMEOUT_MILLIS,
-            )
+            try {
+                hostInit.await(HOST_INIT_WAIT_MILLIS)
+            } catch (timeout: TimeoutCancellationException) {
+                // A direct process (older host, test agent) has no host-owned
+                // handshake. Fall back to the client initialize.
+                acp.request(
+                    method = "initialize",
+                    params = acpInitializeParams(agentId),
+                    timeoutMillis = INITIALIZE_TIMEOUT_MILLIS,
+                )
+            }
         } catch (error: Throwable) {
             throw launchFailure(error)
         }
@@ -625,6 +635,8 @@ class AgentProcess internal constructor(
         const val NEW_SESSION_TITLE: String = "New session"
 
         private const val INITIALIZE_TIMEOUT_MILLIS = 60_000L
+        private const val HOST_INIT_WAIT_MILLIS = 1_500L
+        private const val HOST_INIT_ID = "harold-host-init"
         private const val SESSION_NEW_TIMEOUT_MILLIS = 180_000L
         private const val SESSION_LOAD_TIMEOUT_MILLIS = 180_000L
         private const val SESSION_LIST_TIMEOUT_MILLIS = 60_000L

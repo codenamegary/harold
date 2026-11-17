@@ -38,7 +38,7 @@ session_counter = 0
 
 next_id = 1000
 pending: dict[int, dict] = {}
-prompts: dict[str, int] = {}
+prompts: dict[str, object] = {}
 
 
 def log(message: str) -> None:
@@ -156,11 +156,11 @@ def send(message: dict) -> None:
     sys.stdout.flush()
 
 
-def respond(request_id: int, result: object) -> None:
+def respond(request_id: object, result: object) -> None:
     send({"jsonrpc": "2.0", "id": request_id, "result": result})
 
 
-def respond_error(request_id: int, code: int, message: str) -> None:
+def respond_error(request_id: object, code: int, message: str) -> None:
     send({"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}})
 
 
@@ -214,7 +214,7 @@ def prompt_text(params: dict) -> str:
     return "\n".join(parts)
 
 
-def clear_prompt(session_id: str) -> int | None:
+def clear_prompt(session_id: str) -> object | None:
     prompt_id = prompts.pop(session_id, None)
     if prompt_id is not None:
         for key, action in list(pending.items()):
@@ -271,7 +271,7 @@ for line in sys.stdin:
             update(session_id, "hello from fake acp")
             update_session(session_id, append="hello from fake acp")
             prompts.pop(session_id, None)
-            respond(int(prompt_id), {"stopReason": "end_turn"})
+            respond(prompt_id, {"stopReason": "end_turn"})
             request(
                 "terminal/release",
                 {"sessionId": session_id, "terminalId": terminal_id},
@@ -390,7 +390,7 @@ for line in sys.stdin:
         prompt_id = clear_prompt(session_id)
         log(f"session/cancel id={session_id} prompt={prompt_id}")
         if prompt_id is not None:
-            respond(int(prompt_id), {"stopReason": "cancelled"})
+            respond(prompt_id, {"stopReason": "cancelled"})
     elif method == "session/set_config_option":
         respond(request_id, {"configOptions": CONFIG_OPTIONS})
     elif method == "fs/read_text_file":

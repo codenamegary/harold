@@ -275,6 +275,9 @@ class AgentRuntime @Inject constructor(
         if (process != null) {
             process.close(intentional = true)
         }
+        // Closing the attach channel leaves the detached host alive. A restart
+        // must stop it so the next acquire starts a fresh agent process.
+        launcher.stopAgent(connectionId, agentId).getOrThrow()
     }
 
     fun capabilities(
@@ -332,12 +335,16 @@ class AgentRuntime @Inject constructor(
         val poolKey = connections.remove(connectionId)
             ?: runCatching { launcher.keyFor(connectionId) }.getOrNull()
             ?: return
-        processes.values
-            .filter { process -> process.poolKey == poolKey }
-            .forEach { process -> process.close(intentional = true) }
+        val owned = processes.values.filter { process -> process.poolKey == poolKey }
+        val agentIds = owned.map { process -> process.agentId }.distinct()
+        owned.forEach { process -> process.close(intentional = true) }
         catalog.removeConnection(connectionId)
         sessionCwds.keys.removeAll { key -> key.connectionId == connectionId }
         attachFailures.keys.removeAll { key -> key.connectionId == connectionId }
+        // Removing a connection should not leave its detached hosts running.
+        agentIds.forEach { agentId ->
+            launcher.stopAgent(connectionId, agentId).getOrNull()
+        }
     }
 
     /** Closes processes with no attached stream and no running prompt. */

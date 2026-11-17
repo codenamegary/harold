@@ -28,6 +28,13 @@ interface AgentProcessLauncher {
 
     suspend fun launchAgent(connectionId: String, agentId: String): Result<AgentProcessChannel>
 
+    /**
+     * Stops the persistent host for this agent. Launchers that own the process
+     * directly can leave this as a no-op: closing the channel already ends it.
+     */
+    suspend fun stopAgent(connectionId: String, agentId: String): Result<Unit> =
+        Result.success(Unit)
+
     suspend fun launchTerminal(
         connectionId: String,
         spec: TerminalLaunchSpec,
