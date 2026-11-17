@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.5.0](https://github.com/codenamegary/harold/compare/harold-android-v4.4.0...harold-android-v4.5.0) (2026-11-17)
+
+
+### Features
+
+* **host:** rotate agent logs per host process ([#525](https://github.com/codenamegary/harold/issues/525)) ([d73cbc1](https://github.com/codenamegary/harold/commit/d73cbc13ee3048da3508ccfce1503d9d74807ef4))
+
 ## [4.4.0](https://github.com/codenamegary/harold/compare/harold-android-v4.3.1...harold-android-v4.4.0) (2026-11-17)
 
 
