@@ -28,7 +28,7 @@ class HostLogScriptTest {
 
     @Before
     fun setUp() {
-        tempDir = Files.createTempDirectory(Path.of("/tmp/opencode"), "harold-host-logs")
+        tempDir = Files.createTempDirectory("harold-host-logs")
         hostScript = tempDir.resolve("harold-agent.sh")
         Files.writeString(hostScript, hostAgentScript())
         fakeAgent = tempDir.resolve("fake-agent.sh")
@@ -61,7 +61,9 @@ class HostLogScriptTest {
                 process.destroyForcibly()
             }
         }
-        tempDir.toFile().deleteRecursively()
+        if (::tempDir.isInitialized) {
+            tempDir.toFile().deleteRecursively()
+        }
     }
 
     @Test
