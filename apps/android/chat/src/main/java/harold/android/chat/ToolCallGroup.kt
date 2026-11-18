@@ -141,7 +141,7 @@ private fun CompletedToolsSummary(
 }
 
 @Composable
-private fun ToolCallItem(tool: TranscriptToolRow) {
+internal fun ToolCallItem(tool: TranscriptToolRow) {
     val failed = tool.status == ToolCallStatus.Failed
     var expanded by rememberSaveable(tool.toolCallId, failed) { mutableStateOf(failed) }
     val roles = chatTextRoles()

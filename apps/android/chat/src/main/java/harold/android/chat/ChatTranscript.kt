@@ -54,24 +54,6 @@ internal fun liveAssistantRowIndex(
     }
 }
 
-internal fun liveThinkingRowIndex(
-    rows: List<TranscriptRow>,
-    isRunning: Boolean,
-): Int {
-    if (!isRunning) {
-        return -1
-    }
-
-    val turnId = rows.lastOrNull()?.turnId ?: return -1
-    val lastInTurn = rows.lastOrNull { row -> row.turnId == turnId } ?: return -1
-    if (lastInTurn !is TranscriptThinkingRow) {
-        return -1
-    }
-    return rows.indexOfLast { row ->
-        row is TranscriptThinkingRow && row.turnId == turnId
-    }
-}
-
 internal fun measuredTailSize(listState: LazyListState): Int? {
     val info = listState.layoutInfo
     val last = info.visibleItemsInfo.lastOrNull() ?: return null
@@ -131,7 +113,11 @@ fun ChatTranscript(
     )
     val showActivity = activity != null
     val streamingRowIndex = liveAssistantRowIndex(rows = rows, isRunning = isRunning)
-    val thinkingRowIndex = liveThinkingRowIndex(rows = rows, isRunning = isRunning)
+    val activeActivityStart = activeActivityStartIndex(
+        blocks = blocks,
+        rows = rows,
+        isRunning = isRunning,
+    )
     var followLatest by remember { mutableStateOf(true) }
     var showJumpToLatest by remember { mutableStateOf(false) }
     val lastIndex = blocks.size - 1 + if (showActivity) 1 else 0
@@ -205,8 +191,11 @@ fun ChatTranscript(
                                     TranscriptTurnHeader(row = block.row)
                                 }
 
-                                is TranscriptBlock.ToolRun -> {
-                                    ToolCallGroup(tools = block.tools)
+                                is TranscriptBlock.ActivityRun -> {
+                                    ActivityGroup(
+                                        run = block,
+                                        active = block.startIndex == activeActivityStart,
+                                    )
                                 }
 
                                 is TranscriptBlock.Row -> {
@@ -214,7 +203,6 @@ fun ChatTranscript(
                                         row = block.row,
                                         index = block.index,
                                         streaming = block.index == streamingRowIndex,
-                                        thinkingActive = block.index == thinkingRowIndex,
                                     )
                                 }
                             }
@@ -277,7 +265,6 @@ private fun TranscriptBlockRow(
     row: TranscriptRow,
     index: Int,
     streaming: Boolean,
-    thinkingActive: Boolean,
 ) {
     when (row) {
         is TranscriptUserRow -> {
@@ -285,7 +272,7 @@ private fun TranscriptBlockRow(
         }
 
         is TranscriptThinkingRow -> {
-            ThinkingSection(text = row.text, active = thinkingActive)
+            ThinkingSection(text = row.text)
         }
 
         is TranscriptAssistantRow -> {
@@ -311,8 +298,8 @@ private fun TranscriptBlockRow(
 
 private fun transcriptBlockKey(block: TranscriptBlock): String =
     when (block) {
-        is TranscriptBlock.ToolRun ->
-            "tools-${block.startIndex}-${block.tools.firstOrNull()?.toolCallId ?: "empty"}"
+        is TranscriptBlock.ActivityRun ->
+            "activity-${block.startIndex}-${block.rows.firstOrNull()?.turnId ?: "empty"}"
         is TranscriptBlock.TurnHeader -> "turn-${block.row.turnId}"
         is TranscriptBlock.Row -> transcriptRowKey(block.row, block.index)
     }

@@ -12,9 +12,10 @@ import org.junit.Test
 
 class GroupTranscriptRowsTest {
     @Test
-    fun groupsConsecutiveToolRowsIntoOneRun() {
+    fun groupsConsecutiveThinkingAndToolsIntoOneActivityRun() {
         val rows = listOf(
             user("turn_1"),
+            TranscriptThinkingRow(turnId = "turn_1", text = "plan"),
             tool("t1"),
             tool("t2"),
             TranscriptAssistantRow(turnId = "turn_1", text = "done"),
@@ -24,14 +25,15 @@ class GroupTranscriptRowsTest {
 
         assertEquals(3, blocks.size)
         assertTrue(blocks[0] is TranscriptBlock.TurnHeader)
-        assertTrue(blocks[1] is TranscriptBlock.ToolRun)
+        assertTrue(blocks[1] is TranscriptBlock.ActivityRun)
         assertTrue(blocks[2] is TranscriptBlock.Row)
-        val run = blocks[1] as TranscriptBlock.ToolRun
+        val run = blocks[1] as TranscriptBlock.ActivityRun
         assertEquals(listOf("t1", "t2"), run.tools.map { it.toolCallId })
+        assertEquals(listOf("plan"), run.thinking.map { it.text })
     }
 
     @Test
-    fun startsANewToolRunAtTextThinkingAndTurnBoundaries() {
+    fun startsANewActivityRunAtAssistantAndTurnBoundaries() {
         val rows = listOf(
             user("turn_1"),
             tool("t1"),
@@ -40,7 +42,7 @@ class GroupTranscriptRowsTest {
             TranscriptThinkingRow(turnId = "turn_1", text = "thinking"),
             tool("t3"),
             user("turn_2"),
-            tool("t4"),
+            tool("t4", turnId = "turn_2"),
         )
 
         val blocks = groupTranscriptRows(rows)
@@ -48,21 +50,42 @@ class GroupTranscriptRowsTest {
         assertEquals(
             listOf(
                 "TurnHeader",
-                "ToolRun",
+                "ActivityRun",
                 "Row",
-                "ToolRun",
-                "Row",
-                "ToolRun",
+                "ActivityRun",
                 "TurnHeader",
-                "ToolRun",
+                "ActivityRun",
             ),
             blocks.map { it::class.simpleName },
         )
         assertEquals(
-            listOf("t1", "t2", "t3", "t4"),
-            blocks.filterIsInstance<TranscriptBlock.ToolRun>().map { run ->
-                run.tools.single().toolCallId
+            listOf(listOf("t1"), listOf("t2", "t3"), listOf("t4")),
+            blocks.filterIsInstance<TranscriptBlock.ActivityRun>().map { run ->
+                run.tools.map { tool -> tool.toolCallId }
             },
+        )
+    }
+
+    @Test
+    fun keepsInterleavedActivityInOriginalOrder() {
+        val rows = listOf(
+            user("turn_1"),
+            TranscriptThinkingRow(turnId = "turn_1", text = "one"),
+            tool("t1"),
+            TranscriptThinkingRow(turnId = "turn_1", text = "two"),
+            tool("t2"),
+        )
+
+        val run = groupTranscriptRows(rows).filterIsInstance<TranscriptBlock.ActivityRun>().single()
+
+        assertEquals(
+            listOf(
+                "TranscriptThinkingRow",
+                "TranscriptToolRow",
+                "TranscriptThinkingRow",
+                "TranscriptToolRow",
+            ),
+            run.rows.map { row -> row::class.simpleName },
         )
     }
 
@@ -87,37 +110,85 @@ class GroupTranscriptRowsTest {
             listOf("TurnHeader", "Row", "Row"),
             blocks.map { it::class.simpleName },
         )
-        assertTrue(blocks.none { it is TranscriptBlock.ToolRun })
+        assertTrue(blocks.none { it is TranscriptBlock.ActivityRun })
     }
 
     @Test
-    fun keepsFailedToolsOutOfTheCompletedFold() {
+    fun countsFailedAndActiveToolsInTheRun() {
         val rows = listOf(
             user("turn_1"),
             tool("t1"),
             tool("t2", status = ToolCallStatus.Failed),
-            tool("t3"),
+            tool("t3", status = ToolCallStatus.InProgress),
         )
 
-        val run = groupTranscriptRows(rows).filterIsInstance<TranscriptBlock.ToolRun>().single()
+        val run = groupTranscriptRows(rows).filterIsInstance<TranscriptBlock.ActivityRun>().single()
 
-        assertEquals(listOf("t1", "t3"), run.completed.map { it.toolCallId })
-        assertEquals(listOf("t2"), run.visible.map { it.toolCallId })
-        assertTrue(run.tools[1].status == ToolCallStatus.Failed)
+        assertEquals(1, run.failedCount)
+        assertEquals(
+            listOf(ToolCallStatus.Completed, ToolCallStatus.Failed, ToolCallStatus.InProgress),
+            run.tools.map { tool -> tool.status },
+        )
     }
 
     @Test
-    fun keepsActiveToolsVisible() {
+    fun labelsActivityRunsByShapeAndState() {
+        val thinking = groupTranscriptRows(
+            listOf(
+                user("turn_1"),
+                TranscriptThinkingRow(turnId = "turn_1", text = "plan"),
+            ),
+        ).filterIsInstance<TranscriptBlock.ActivityRun>().single()
+        assertEquals("Thinking...", activitySummary(run = thinking, active = true))
+        assertEquals("Thinking", activitySummary(run = thinking, active = false))
+
+        val tools = groupTranscriptRows(
+            listOf(
+                user("turn_1"),
+                tool("t1", status = ToolCallStatus.InProgress),
+                tool("t2"),
+            ),
+        ).filterIsInstance<TranscriptBlock.ActivityRun>().single()
+        assertEquals("Using tools", activitySummary(run = tools, active = true))
+        assertEquals("2 tools", activitySummary(run = tools, active = false))
+
+        val mixed = groupTranscriptRows(
+            listOf(
+                user("turn_1"),
+                TranscriptThinkingRow(turnId = "turn_1", text = "plan"),
+                tool("t1"),
+                tool("t2"),
+            ),
+        ).filterIsInstance<TranscriptBlock.ActivityRun>().single()
+        assertEquals("Thought, 2 tools", activitySummary(run = mixed, active = false))
+    }
+
+    @Test
+    fun findsTheActiveActivityRunAtTheTail() {
         val rows = listOf(
             user("turn_1"),
-            tool("t1"),
-            tool("t2", status = ToolCallStatus.InProgress),
+            TranscriptThinkingRow(turnId = "turn_1", text = "plan"),
+            tool("t1", status = ToolCallStatus.InProgress),
         )
 
-        val run = groupTranscriptRows(rows).filterIsInstance<TranscriptBlock.ToolRun>().single()
+        val blocks = groupTranscriptRows(rows)
 
-        assertEquals(listOf("t1"), run.completed.map { it.toolCallId })
-        assertEquals(listOf("t2"), run.visible.map { it.toolCallId })
+        assertEquals(1, activeActivityStartIndex(blocks = blocks, rows = rows, isRunning = true))
+        assertEquals(-1, activeActivityStartIndex(blocks = blocks, rows = rows, isRunning = false))
+    }
+
+    @Test
+    fun keepsNoRunActiveOnceTheAssistantReplies() {
+        val rows = listOf(
+            user("turn_1"),
+            TranscriptThinkingRow(turnId = "turn_1", text = "plan"),
+            tool("t1"),
+            TranscriptAssistantRow(turnId = "turn_1", text = "done"),
+        )
+
+        val blocks = groupTranscriptRows(rows)
+
+        assertEquals(-1, activeActivityStartIndex(blocks = blocks, rows = rows, isRunning = true))
     }
 
     private fun user(turnId: String): TranscriptUserRow =
@@ -125,9 +196,10 @@ class GroupTranscriptRowsTest {
 
     private fun tool(
         toolCallId: String,
+        turnId: String = "turn_1",
         status: ToolCallStatus = ToolCallStatus.Completed,
     ): TranscriptToolRow = TranscriptToolRow(
-        turnId = "turn_1",
+        turnId = turnId,
         toolCallId = toolCallId,
         toolName = "read",
         toolKind = ToolKind.Read,

@@ -72,7 +72,7 @@ class ChatTranscriptTest {
     }
 
     @Test
-    fun expandsThinkingSectionWhileTheAgentIsThinking() {
+    fun expandsActivityGroupWhileTheAgentIsThinking() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 ChatTranscript(
@@ -87,14 +87,14 @@ class ChatTranscriptTest {
         }
 
         composeTestRule.onNodeWithTag("activity_status_line").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("thinking_section").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("thinking_section_body").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Thinking").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("activity_group").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("activity_group_body").assertIsDisplayed()
         composeTestRule.onNodeWithText("Thinking...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("planning").assertIsDisplayed()
     }
 
     @Test
-    fun rendersCompletedThinkingAsCollapsibleSection() {
+    fun rendersCompletedActivityAsCollapsedGroup() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 ChatTranscript(
@@ -111,11 +111,38 @@ class ChatTranscriptTest {
 
         composeTestRule.onAllNodesWithTag("activity_status_line").assertCountEquals(0)
         composeTestRule.onAllNodesWithTag("thinking_indicator").assertCountEquals(0)
-        composeTestRule.onNodeWithText("Thinking...").assertIsDisplayed()
-        composeTestRule.onAllNodesWithTag("thinking_section_body").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Thinking").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("activity_group_body").assertCountEquals(0)
 
-        composeTestRule.onNodeWithText("Thinking...").performClick()
+        composeTestRule.onNodeWithTag("activity_group_summary").performClick()
         composeTestRule.onNodeWithText("planning").assertIsDisplayed()
+    }
+
+    @Test
+    fun groupsThinkingAndToolsIntoOneCollapsedActivityGroup() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatTranscript(
+                    rows = listOf(
+                        TranscriptUserRow(turnId = "turn_1", text = "Explain auth"),
+                        TranscriptThinkingRow(turnId = "turn_1", text = "planning"),
+                        toolRow("t1", "read"),
+                        toolRow("t2", "grep"),
+                        TranscriptAssistantRow(turnId = "turn_1", text = "Auth uses JWT"),
+                    ),
+                    isRunning = false,
+                    showWelcome = false,
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("activity_group").assertCountEquals(1)
+        composeTestRule.onNodeWithText("Thought, 2 tools").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("activity_group_body").assertCountEquals(0)
+
+        composeTestRule.onNodeWithTag("activity_group_summary").performClick()
+        composeTestRule.onNodeWithText("planning").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("tool_call_item").assertCountEquals(2)
     }
 
     @Test
@@ -150,7 +177,7 @@ class ChatTranscriptTest {
             }
         }
 
-        composeTestRule.onAllNodesWithTag("thinking_section_body").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("activity_group_body").assertCountEquals(0)
         composeTestRule.onNodeWithText("Added.").assertIsDisplayed()
     }
 
@@ -217,7 +244,8 @@ class ChatTranscriptTest {
 
         composeTestRule.onNodeWithText("Replying").assertIsDisplayed()
         composeTestRule.onNodeWithTag("activity_status_line").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Thinking...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Thinking").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("activity_group_body").assertCountEquals(0)
     }
 
     @Test
@@ -243,6 +271,7 @@ class ChatTranscriptTest {
         }
 
         composeTestRule.onNodeWithText("Search pattern").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("activity_group_body").assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("activity_status_line").assertCountEquals(0)
         composeTestRule.onAllNodesWithText("grep · pattern").assertCountEquals(0)
     }
@@ -291,7 +320,7 @@ class ChatTranscriptTest {
     }
 
     @Test
-    fun rendersCollapsedToolCallSummaryThatExpands() {
+    fun rendersCollapsedActivityGroupThatExpands() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 ChatTranscript(
@@ -333,15 +362,15 @@ class ChatTranscriptTest {
             }
         }
 
-        composeTestRule.onNodeWithText("4 completed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("4 tools").assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("tool_call_item").assertCountEquals(0)
 
-        composeTestRule.onNodeWithTag("tool_call_group_summary").performClick()
+        composeTestRule.onNodeWithTag("activity_group_summary").performClick()
         composeTestRule.onNodeWithText("Read a.ts").assertIsDisplayed()
     }
 
     @Test
-    fun keepsTheActiveToolVisibleWhileCompletedCallsFold() {
+    fun autoExpandsTheActiveActivityGroup() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 ChatTranscript(
@@ -369,9 +398,43 @@ class ChatTranscriptTest {
             }
         }
 
-        composeTestRule.onNodeWithText("1 completed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Using tools").assertIsDisplayed()
         composeTestRule.onNodeWithText("Search pattern").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("tool_call_item").assertCountEquals(2)
         composeTestRule.onAllNodesWithTag("activity_status_line").assertCountEquals(0)
+    }
+
+    @Test
+    fun keepsCompletedGroupsCollapsedWhileTheLatestGroupIsActive() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatTranscript(
+                    rows = listOf(
+                        TranscriptUserRow(turnId = "turn_1", text = "go"),
+                        TranscriptThinkingRow(turnId = "turn_1", text = "first plan"),
+                        toolRow("t1", "read"),
+                        TranscriptAssistantRow(turnId = "turn_1", text = "progress"),
+                        TranscriptThinkingRow(turnId = "turn_1", text = "second plan"),
+                        TranscriptToolRow(
+                            turnId = "turn_1",
+                            toolCallId = "t2",
+                            toolName = "grep",
+                            toolKind = ToolKind.Execute,
+                            status = ToolCallStatus.Pending,
+                            detail = "pattern",
+                        ),
+                    ),
+                    isRunning = true,
+                    showWelcome = false,
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("activity_group").assertCountEquals(2)
+        composeTestRule.onAllNodesWithTag("activity_group_body").assertCountEquals(1)
+        composeTestRule.onAllNodesWithText("first plan").assertCountEquals(0)
+        composeTestRule.onNodeWithText("second plan").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Search pattern").assertIsDisplayed()
     }
 
     @Test
@@ -434,7 +497,7 @@ class ChatTranscriptTest {
     }
 
     @Test
-    fun collapsesThinkingWhenTheAgentStopsThinking() {
+    fun collapsesActivityGroupWhenTheAgentStops() {
         var running by mutableStateOf(true)
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
@@ -449,12 +512,12 @@ class ChatTranscriptTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("thinking_section_body").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("activity_group_body").assertIsDisplayed()
 
         composeTestRule.runOnIdle { running = false }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onAllNodesWithTag("thinking_section_body").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("activity_group_body").assertCountEquals(0)
     }
 
     @Test
@@ -484,7 +547,7 @@ class ChatTranscriptTest {
         composeTestRule
             .onNodeWithTag("tool_status_dot", useUnmergedTree = true)
             .assertContentDescriptionEquals("Failed")
-        composeTestRule.onAllNodesWithTag("tool_call_group_summary").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("activity_group_body").assertIsDisplayed()
     }
 
     @Test
@@ -504,7 +567,8 @@ class ChatTranscriptTest {
             }
         }
 
-        composeTestRule.onAllNodesWithText("1 completed").assertCountEquals(2)
+        composeTestRule.onAllNodesWithTag("activity_group").assertCountEquals(2)
+        composeTestRule.onAllNodesWithTag("activity_group_body").assertCountEquals(0)
         composeTestRule.onAllNodesWithTag("tool_call_item").assertCountEquals(0)
     }
 
