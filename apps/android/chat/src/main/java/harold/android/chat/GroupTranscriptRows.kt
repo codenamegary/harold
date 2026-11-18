@@ -3,6 +3,7 @@ package harold.android.chat
 import harold.android.contracts.ToolCallStatus
 import harold.android.live.TranscriptQuestionRow
 import harold.android.live.TranscriptRow
+import harold.android.live.TranscriptThinkingRow
 import harold.android.live.TranscriptToolRow
 import harold.android.live.TranscriptUserRow
 
@@ -17,16 +18,20 @@ sealed interface TranscriptBlock {
         val index: Int,
     ) : TranscriptBlock
 
-    data class ToolRun(
-        val tools: List<TranscriptToolRow>,
+    data class ActivityRun(
+        val rows: List<TranscriptRow>,
         val startIndex: Int,
     ) : TranscriptBlock {
-        /** Completed calls fold into one summary row. Failed and active calls stay visible. */
-        val completed: List<TranscriptToolRow> =
-            tools.filter { tool -> tool.status == ToolCallStatus.Completed }
+        val thinking: List<TranscriptThinkingRow> =
+            rows.filterIsInstance<TranscriptThinkingRow>()
 
-        val visible: List<TranscriptToolRow> =
-            tools.filter { tool -> tool.status != ToolCallStatus.Completed }
+        val tools: List<TranscriptToolRow> =
+            rows.filterIsInstance<TranscriptToolRow>()
+
+        val failedCount: Int =
+            tools.count { tool -> tool.status == ToolCallStatus.Failed }
+
+        val hasFailure: Boolean = failedCount > 0
     }
 }
 
@@ -51,24 +56,61 @@ fun groupTranscriptRows(rows: List<TranscriptRow>): List<TranscriptBlock> {
             continue
         }
 
-        if (row !is TranscriptToolRow) {
+        if (row !is TranscriptThinkingRow && row !is TranscriptToolRow) {
             blocks.add(TranscriptBlock.Row(row = row, index = index))
             index += 1
             continue
         }
 
-        val tools = mutableListOf<TranscriptToolRow>()
+        val activity = mutableListOf<TranscriptRow>()
         val startIndex = index
         while (index < rows.size) {
             val candidate = rows[index]
-            if (candidate !is TranscriptToolRow || candidate.turnId != row.turnId) {
+            if (candidate.turnId != row.turnId) {
                 break
             }
-            tools.add(candidate)
+            if (candidate is TranscriptToolRow && candidate.toolCallId in questionToolCallIds) {
+                break
+            }
+            if (candidate !is TranscriptThinkingRow && candidate !is TranscriptToolRow) {
+                break
+            }
+            activity.add(candidate)
             index += 1
         }
-        blocks.add(TranscriptBlock.ToolRun(tools = tools, startIndex = startIndex))
+        blocks.add(TranscriptBlock.ActivityRun(rows = activity, startIndex = startIndex))
     }
 
     return blocks
+}
+
+/** The run containing the live tail, or -1 when the agent is not inside an activity run. */
+internal fun activeActivityStartIndex(
+    blocks: List<TranscriptBlock>,
+    rows: List<TranscriptRow>,
+    isRunning: Boolean,
+): Int {
+    if (!isRunning) {
+        return -1
+    }
+
+    val lastIndex = rows.lastIndex
+    if (lastIndex < 0) {
+        return -1
+    }
+    val last = rows[lastIndex]
+    if (last !is TranscriptThinkingRow && last !is TranscriptToolRow) {
+        return -1
+    }
+
+    blocks.forEach { block ->
+        if (
+            block is TranscriptBlock.ActivityRun &&
+            lastIndex >= block.startIndex &&
+            lastIndex < block.startIndex + block.rows.size
+        ) {
+            return block.startIndex
+        }
+    }
+    return -1
 }
