@@ -6,6 +6,7 @@ import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.HostApi
 import harold.android.network.HostLogsApi
+import harold.android.network.HostUsageApi
 import harold.android.network.WorkspaceApi
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,10 +17,12 @@ class DefaultHostApi @Inject constructor(
     private val agents: HostAgentApi,
     private val workspaces: HostWorkspaceApi,
     private val logs: HostLogsRepository,
+    private val usage: HostUsageRepository,
 ) : HostApi,
     WorkspaceApi by workspaces,
     AgentSettingsApi by agents,
     AgentAuthApi by agents,
     AttachmentApi by workspaces,
     GitApi by workspaces,
-    HostLogsApi by logs
+    HostLogsApi by logs,
+    HostUsageApi by usage

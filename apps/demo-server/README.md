@@ -37,6 +37,8 @@ container filesystem.
   payload into the VFS.
 - Host logs are byte counters, not log content. A seeded 600 MB warning run
   costs a number, not a 600 MB buffer.
+- Host usage is a small in-memory list of session numbers. The `usage` mode
+  returns only the records for the requested agent and never reads a log file.
 - Host commands carry the inline host script. The server parses only the short
   `harold-agent <mode> ...` suffix and never tokenizes the script body.
 - Hard caps: 16 connections, 16 sessions per connection, 64 SFTP handles,

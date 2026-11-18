@@ -28,7 +28,7 @@ You need a machine you can reach with SSH that runs an ACP-compatible coding age
 Host requirements:
 
 - sshd with exec and SFTP
-- POSIX shell tools: `sh`, `bash`, `mkfifo`, `flock`, `nohup`, `tail`
+- POSIX shell tools: `sh`, `bash`, `mkfifo`, `flock` (optional), `nohup`, `tail`, `head`, `wc`, `awk`, `grep`, `sort`
 - an ACP-compatible agent CLI
 - `git` (for workspace and change review)
 

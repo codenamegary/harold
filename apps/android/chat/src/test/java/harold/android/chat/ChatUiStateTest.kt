@@ -9,6 +9,8 @@ import harold.android.chat.composer.ComposerConfigUi
 import harold.android.contracts.PermissionRequest
 import harold.android.contracts.PermissionStatus
 import harold.android.contracts.SessionState
+import harold.android.contracts.SessionUsage
+import harold.android.contracts.UsageCost
 import harold.android.live.AcpTranscriptState
 import harold.android.live.ContextUsage
 import harold.android.live.TranscriptAssistantRow
@@ -210,6 +212,28 @@ class ChatUiStateTest {
         assertEquals("", reset.composerText)
         assertNull(reset.composerError)
         assertFalse(reset.pickerVisible)
+    }
+
+    @Test
+    fun logUsageFillsTheHeaderUntilLiveUsageArrives() {
+        val logged = SessionUsage(
+            agentId = "cursor",
+            sessionId = "sess_01",
+            used = 1200,
+            size = 200000,
+            cost = UsageCost(0.02, "USD"),
+        )
+        val expected = ContextUsage(
+            used = 1200,
+            size = 200000,
+            cost = harold.android.live.UsageCost(0.02, "USD"),
+        )
+        val state = ChatUiState(logUsage = logged)
+
+        assertEquals(expected, state.contextUsage)
+
+        val live = ContextUsage(used = 1400, size = 200000)
+        assertEquals(live, state.copy(transcript = AcpTranscriptState(usage = live)).contextUsage)
     }
 
     @Test

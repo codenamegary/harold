@@ -103,5 +103,21 @@ class HostLogsTest {
         )
         assertTrue(cleanupCommand.startsWith("export HAROLD_AGENT_SCRIPT='echo host-script"))
         assertTrue(cleanupCommand.endsWith(" harold-agent cleanup 'all-inactive'"))
+
+        val usageCommand = hostUsageCommand("echo host-script\n", "opencode")
+        assertTrue(usageCommand.endsWith(" harold-agent usage 'opencode'"))
+
+        val latestUsage = hostUsageCommand(
+            script = "echo host-script\n",
+            agentId = "opencode",
+            latest = true,
+            knownRunId = "20261117T142530Z-12345",
+            knownOffset = 4096,
+        )
+        assertTrue(
+            latestUsage.endsWith(
+                " harold-agent usage 'opencode' latest '20261117T142530Z-12345' 4096",
+            ),
+        )
     }
 }

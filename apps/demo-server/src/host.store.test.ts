@@ -106,6 +106,39 @@ describe("host.store", () => {
     store.recordOut("not-an-agent", 10)
   })
 
+  test("seeded usage is available without a live session", () => {
+    const store = createDemoHostStore()
+    const rows = lines(store.usage("opencode", false))
+
+    const usage = rows.filter((row) => row[0] === "usage")
+    expect(usage.length).toBeGreaterThan(0)
+    expect(usage[0]?.[1]).toBe("opencode")
+    expect(usage[0]?.[4]).toContain("ses_demo_opencode_0001")
+    expect(usage[0]?.[4]).toContain('"usage_update"')
+    expect(rows.some((row) => row[0] === "done" && row[1] === "opencode")).toBe(true)
+  })
+
+  test("recorded usage is returned by an incremental latest scan", () => {
+    const store = createDemoHostStore({ now: fixedNow("2026-11-17T14:25:30Z") })
+    const run = store.connect("opencode")
+    expect(run).not.toBeNull()
+
+    store.recordUsage("opencode", "ses_new", {
+      sessionId: "ses_new",
+      used: 12,
+      size: 1_000,
+      cost: { amount: 0.01, currency: "USD" },
+    })
+
+    const rows = lines(store.usage("opencode", true, run?.runId, 0))
+    const usage = rows.find(
+      (row) => row[0] === "usage" && row[4]?.includes("ses_new"),
+    )
+    expect(usage).toBeDefined()
+    expect(usage?.[2]).toBe(run?.runId)
+    expect(rows.some((row) => row[0] === "end" && row[2] === run?.runId)).toBe(true)
+  })
+
   test("run history is capped and never drops the active run", () => {
     const store = createDemoHostStore({
       now: fixedNow("2026-11-17T14:25:30Z"),

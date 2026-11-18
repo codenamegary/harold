@@ -276,6 +276,36 @@ internal fun hostCleanupCommand(
     " harold-agent cleanup " + SshSessionStore.shellQuote(policy.wireValue),
 )
 
+/**
+ * Prints usage records from one agent's logs. A full scan covers every run.
+ * The latest variant resumes the newest run at [knownOffset] when [knownRunId]
+ * still matches, so a refresh reads only bytes the previous scan missed.
+ */
+internal fun hostUsageCommand(
+    script: String,
+    agentId: String,
+    latest: Boolean = false,
+    knownRunId: String? = null,
+    knownOffset: Long? = null,
+): String {
+    val arguments = buildString {
+        append(" harold-agent usage ")
+        append(SshSessionStore.shellQuote(agentId))
+        if (latest) {
+            append(" latest")
+            if (!knownRunId.isNullOrBlank()) {
+                append(' ')
+                append(SshSessionStore.shellQuote(knownRunId))
+                if (knownOffset != null) {
+                    append(' ')
+                    append(knownOffset)
+                }
+            }
+        }
+    }
+    return hostScriptCommand(script, arguments)
+}
+
 private fun hostScriptCommand(script: String, arguments: String): String = buildString {
     append("export HAROLD_AGENT_SCRIPT=")
     append(SshSessionStore.shellQuote(script))

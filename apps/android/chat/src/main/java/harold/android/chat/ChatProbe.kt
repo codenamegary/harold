@@ -328,6 +328,11 @@ internal fun chatProbeFacts(state: ChatUiState): Map<String, String> {    val ac
                 .toString(),
         "usage" to usage?.let(::formatContextUsage).orEmpty(),
         "usageCost" to usage?.cost?.let(::formatUsageCost).orEmpty(),
+        "usageSource" to when {
+            state.transcript.usage != null -> "live"
+            state.logUsage != null -> "logs"
+            else -> "none"
+        },
         "changesBadgeCount" to state.changesBadgeCount.toString(),
         "elicitationPending" to (active != null).toString(),
         "elicitationRequestId" to active?.requestId.orEmpty(),
