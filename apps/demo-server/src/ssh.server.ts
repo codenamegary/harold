@@ -2,7 +2,7 @@ import { Server } from "ssh2"
 import { createAcpAgentRunner, createAgentSessionStore, createInitializeResult } from "./acp.agent"
 import { isHostScriptCommand, routeExecCommand } from "./exec.router"
 import { createVirtualGit } from "./git.virtual"
-import { createDemoHostStore } from "./host.store"
+import { createDemoHostStore, parseUsageMessage } from "./host.store"
 import { DEMO_HOME, seedVfsAndRepos } from "./seed.data"
 import { DEFAULT_MAX_SFTP_HANDLES, attachSftpHandlers } from "./sftp.handlers"
 import { createVfsStore } from "./vfs.store"
@@ -173,6 +173,10 @@ export const createDemoSshServer = (options: DemoSshServerOptions): DemoSshServe
                 }
                 if (hostConnect) {
                   host.recordOut(outcome.agentId, byteLength(line))
+                  const usage = parseUsageMessage(msg)
+                  if (usage) {
+                    host.recordUsage(outcome.agentId, usage.sessionId, usage.usage)
+                  }
                 }
               },
             })

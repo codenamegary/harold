@@ -119,7 +119,8 @@ interface HostApi : WorkspaceApi,
     AgentAuthApi,
     AttachmentApi,
     GitApi,
-    HostLogsApi
+    HostLogsApi,
+    HostUsageApi
 
 private fun unsupported(what: String): UnsupportedOperationException =
     UnsupportedOperationException(what)

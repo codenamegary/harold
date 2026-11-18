@@ -216,6 +216,35 @@ const routeHostCommand = (
     }
   }
 
+  if (invocation.mode === "usage") {
+    if (!first || !KNOWN_AGENT_IDS.has(first)) {
+      return {
+        kind: "result",
+        exitCode: 127,
+        stdout: "",
+        stderr: `harold-agent: unknown agent: ${(first ?? "").slice(0, 64)}\n`,
+      }
+    }
+    const mode = invocation.args[1]
+    if (mode && mode !== "latest") {
+      return {
+        kind: "result",
+        exitCode: 2,
+        stdout: "",
+        stderr: `harold-agent: unknown usage mode: ${mode.slice(0, 64)}\n`,
+      }
+    }
+    const knownRunId = invocation.args[2]
+    const rawOffset = invocation.args[3]
+    const knownOffset = rawOffset && /^\d+$/.test(rawOffset) ? Number(rawOffset) : undefined
+    return {
+      kind: "result",
+      exitCode: 0,
+      stdout: host.usage(first, mode === "latest", knownRunId, knownOffset),
+      stderr: "",
+    }
+  }
+
   return {
     kind: "result",
     exitCode: 2,

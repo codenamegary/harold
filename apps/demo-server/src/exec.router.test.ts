@@ -121,6 +121,22 @@ describe("exec.router", () => {
     expect(bad).toMatchObject({ kind: "result", exitCode: 2 })
   })
 
+  test("host usage returns seeded records for one agent", () => {
+    const { deps } = setup()
+
+    const usage = routeExecCommand(hostCommand("usage", "opencode"), deps)
+    expect(usage.kind).toBe("result")
+    if (usage.kind === "result") {
+      expect(usage.exitCode).toBe(0)
+      expect(usage.stdout).toContain("usage\topencode\t")
+      expect(usage.stdout).toContain("ses_demo_opencode_0001")
+      expect(usage.stdout).toContain("done\topencode")
+    }
+
+    const bad = routeExecCommand(hostCommand("usage", "not-an-agent"), deps)
+    expect(bad).toMatchObject({ kind: "result", exitCode: 127 })
+  })
+
   test("rejects unknown host modes and agents without touching the VFS", () => {
     const { deps } = setup()
 

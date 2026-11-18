@@ -202,6 +202,81 @@ class HostLogScriptTest {
         assertEquals("cleanup\t0\t0", runScript("cleanup", "all-inactive").trim())
     }
 
+    @Test
+    fun usageReportsOnlyRealUsageUpdates() {
+        val first = usageLine("ses_1", used = 100)
+        val second = usageLine("ses_2", used = 200)
+        fakeRun(
+            OLD_RUN,
+            out = first + "\n" + agentChunk("usage_update") + "\n" + second + "\n",
+            err = "",
+        )
+
+        val lines = runScript("usage", AGENT).lineSequence().filter { it.isNotBlank() }.toList()
+
+        val usage = lines.filter { it.startsWith("usage\t") }
+        assertEquals(2, usage.size)
+        assertTrue(usage[0].contains(first))
+        assertTrue(usage[1].contains(second))
+        assertFalse(lines.any { line -> line.contains("agent_message_chunk") })
+        assertTrue(lines.contains("done\t$AGENT"))
+        assertTrue(lines.any { line -> line.startsWith("end\t$AGENT\t$OLD_RUN\t") })
+    }
+
+    @Test
+    fun usageLatestScansOnlyTheNewestRun() {
+        val old = usageLine("ses_old", used = 1)
+        val new = usageLine("ses_new", used = 2)
+        fakeRun(OLD_RUN, out = old + "\n", err = "")
+        fakeRun(NEWEST_RUN, out = new + "\n", err = "")
+
+        val lines = runScript("usage", AGENT, "latest")
+            .lineSequence()
+            .filter { it.isNotBlank() }
+            .toList()
+
+        assertEquals(1, lines.count { it.startsWith("usage\t") })
+        assertTrue(lines.single { it.startsWith("usage\t") }.contains(new))
+        assertTrue(lines.contains("end\t$AGENT\t$NEWEST_RUN\t${new.toByteArray().size + 1}"))
+        assertFalse(lines.any { it.contains(OLD_RUN) })
+    }
+
+    @Test
+    fun usageResumesFromTheReportedOffsetAndSkipsAPartialLine() {
+        val first = usageLine("ses_1", used = 1)
+        val second = usageLine("ses_1", used = 2)
+        fakeRun(OLD_RUN, out = first + "\n" + second, err = "")
+
+        val firstScan = runScript("usage", AGENT, "latest")
+            .lineSequence()
+            .filter { it.isNotBlank() }
+            .toList()
+        assertEquals(1, firstScan.count { it.startsWith("usage\t") })
+        assertTrue(firstScan.single { it.startsWith("usage\t") }.contains(first))
+        val resume = firstScan
+            .single { it.startsWith("end\t") }
+            .split('\t')
+            .last()
+            .toInt()
+        assertEquals(first.toByteArray().size + 1, resume)
+
+        Files.writeString(runOut(OLD_RUN), first + "\n" + second + "\n")
+
+        val secondScan = runScript("usage", AGENT, "latest", OLD_RUN, resume.toString())
+            .lineSequence()
+            .filter { it.isNotBlank() }
+            .toList()
+        assertEquals(1, secondScan.count { it.startsWith("usage\t") })
+        assertTrue(secondScan.single { it.startsWith("usage\t") }.contains(second))
+        assertTrue(secondScan.single { it.startsWith("end\t") }.endsWith("\t${first.toByteArray().size + 1 + second.toByteArray().size + 1}"))
+    }
+
+    private fun usageLine(sessionId: String, used: Long): String =
+        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"$sessionId","update":{"sessionUpdate":"usage_update","used":$used,"size":1000}}}"""
+
+    private fun agentChunk(text: String): String =
+        """{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"ses_1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"$text"}}}}"""
+
     private fun startHost(): Process {
         val process = ProcessBuilder(
             "sh",

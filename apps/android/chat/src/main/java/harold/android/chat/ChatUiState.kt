@@ -6,11 +6,13 @@ import harold.android.contracts.AgentId
 import harold.android.contracts.AvailableCommand
 import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
+import harold.android.contracts.SessionUsage
 import harold.android.contracts.catalogSessionKey
 import harold.android.live.AcpTranscriptState
 import harold.android.live.ContextUsage
 import harold.android.live.Elicitation
 import harold.android.live.StreamExtension
+import harold.android.live.UsageCost
 import harold.android.live.emptyAcpTranscript
 import harold.android.stream.SessionStatus
 import harold.android.stream.allowsPrompt
@@ -113,6 +115,8 @@ data class ChatUiState(
     val recentSessionsLoading: Boolean = false,
     val recentSessionsError: String? = null,
     val transcript: AcpTranscriptState = emptyAcpTranscript,
+    /** Latest usage found in the host logs. Live usage wins when present. */
+    val logUsage: SessionUsage? = null,
     /** Live ACP status of the watched session; gates the composer. */
     val sessionStatus: SessionStatus = SessionStatus.Ready,
     val composerText: String = "",
@@ -148,9 +152,9 @@ data class ChatUiState(
     val activeConnectionColorId: String = "",
     val activeConnectionIconId: String = "",
 ) {
-    /** Latest context window usage for the selected session, if the agent reports it. */
+    /** Latest context window usage for the selected session, live or from the host logs. */
     val contextUsage: ContextUsage?
-        get() = transcript.usage
+        get() = transcript.usage ?: logUsage?.toContextUsage()
 
     /** The one state the session dropdown renders. */
     val sessionMenuContent: SessionMenuContent
@@ -284,6 +288,7 @@ data class ChatUiState(
 internal data class SessionResetKeep(
     val selectedSession: SessionRow? = null,
     val transcript: AcpTranscriptState = emptyAcpTranscript,
+    val logUsage: SessionUsage? = null,
     val pendingPermissions: List<PermissionRequest> = emptyList(),
     val pendingElicitations: List<Elicitation> = emptyList(),
 )
@@ -306,6 +311,7 @@ internal fun ChatUiState.resetSessionScopedState(
     missingSessionFolderPath = null,
     sessionFolderCheckPending = false,
     transcript = keep.transcript,
+    logUsage = keep.logUsage,
     sessionStatus = SessionStatus.Ready,
     composerText = "",
     composerSubmitting = false,
@@ -327,4 +333,10 @@ internal fun ChatUiState.resetSessionScopedState(
     pickerVisible = false,
     changesAvailable = false,
     changesBadgeCount = 0,
+)
+
+internal fun SessionUsage.toContextUsage(): ContextUsage = ContextUsage(
+    used = used,
+    size = size,
+    cost = cost?.let { value -> UsageCost(amount = value.amount, currency = value.currency) },
 )

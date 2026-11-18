@@ -2,13 +2,14 @@
 # One idempotent host entry point for a persistent ACP agent.
 #
 # The app sends this file inline in the SSH exec command, so nothing is
-# installed on the host. The same file runs in five roles:
+# installed on the host. The same file runs in six roles:
 #
 #   connect  Start the detached host if needed, then attach this SSH channel.
 #   host     Own the agent's stdin FIFO and stdout log, detached from SSH.
 #   stop     Stop the host and its agent.
 #   logs     List every run for every agent.
 #   cleanup  Delete whole inactive run directories.
+#   usage    Print ACP usage updates without reading whole logs into memory.
 #
 # Usage:
 #   harold-agent.sh connect <agent-id> <shell-command> [offset]
@@ -16,6 +17,7 @@
 #   harold-agent.sh stop <agent-id>
 #   harold-agent.sh logs
 #   harold-agent.sh cleanup [all-inactive]
+#   harold-agent.sh usage <agent-id> [latest [run-id] [offset]]
 #
 # offset is a byte position in the active run's out.jsonl:
 #   0   replay the whole log
@@ -53,8 +55,9 @@ case "$mode" in
         ;;
     logs) ;;
     cleanup) ;;
+    usage) ;;
     *)
-        echo "usage: harold-agent.sh <connect|host|stop|logs|cleanup> <agent-id> [command] [offset]" >&2
+        echo "usage: harold-agent.sh <connect|host|stop|logs|cleanup|usage> <agent-id> [command] [offset]" >&2
         exit 2
         ;;
 esac
@@ -524,6 +527,116 @@ cleanup_logs() {
     printf 'cleanup\t%s\t%s\n' "$_deleted_runs" "$_removed_bytes"
 }
 
+scan_usage_run() {
+    _sur_agent=$1
+    _sur_run=$2
+    _sur_offset=$3
+    _sur_out=$logs/$_sur_run/out.jsonl
+    [ -f "$_sur_out" ] || return 0
+
+    _sur_size=$(wc -c < "$_sur_out" | tr -d '[:space:]')
+    case "$_sur_size" in
+        ''|*[!0-9]*) return 0 ;;
+    esac
+
+    case "$_sur_offset" in
+        ''|*[!0-9]*) _sur_offset=0 ;;
+    esac
+    if [ "$_sur_offset" -gt "$_sur_size" ]; then
+        _sur_offset=0
+    fi
+
+    _sur_len=$((_sur_size - _sur_offset))
+    if [ "$_sur_len" -gt 0 ]; then
+        # Read only the new byte range. head stops at the size sampled above,
+        # so bytes appended during the scan stay for the next call. awk keeps
+        # one line, not the file, and holds the last line back until it knows
+        # the line ended with a newline.
+        tail -c +$((_sur_offset + 1)) "$_sur_out" \
+            | head -c "$_sur_len" \
+            | LC_ALL=C awk -v agent="$_sur_agent" -v run="$_sur_run" \
+                -v base="$_sur_offset" -v size="$_sur_len" '
+                function emit(line, start) {
+                    if (line !~ /"method"[[:space:]]*:[[:space:]]*"session\/update"/) return
+                    if (line !~ /"sessionUpdate"[[:space:]]*:[[:space:]]*"usage_update"/) return
+                    printf "usage\t%s\t%s\t%d\t%s\n", agent, run, start + base, line
+                }
+                BEGIN { total = 0; have = 0 }
+                {
+                    if (have) emit(prev, prev_start)
+                    prev = $0
+                    prev_start = total
+                    total += length($0) + 1
+                    have = 1
+                }
+                END {
+                    if (have) {
+                        if (total <= size) {
+                            emit(prev, prev_start)
+                            safe = base + total
+                        } else {
+                            # The trailing line has no newline yet. Resume at
+                            # its start so the next call reads it whole.
+                            safe = base + prev_start
+                        }
+                    } else {
+                        safe = base
+                    }
+                    printf "end\t%s\t%s\t%d\n", agent, run, safe
+                }
+            '
+    else
+        printf 'end\t%s\t%s\t%d\n' "$_sur_agent" "$_sur_run" "$_sur_offset"
+    fi
+}
+
+list_usage() {
+    _usage_agent=${1:-}
+    _usage_mode=${2:-full}
+    _usage_known_run=${3:-}
+    _usage_known_offset=${4:-0}
+
+    if [ -z "$_usage_agent" ]; then
+        echo "harold-agent: usage needs an agent id" >&2
+        return 2
+    fi
+    case "$_usage_agent" in
+        */*|*' '*) echo "harold-agent: invalid agent id: $_usage_agent" >&2; return 2 ;;
+    esac
+
+    _usage_logs=$base/$_usage_agent/logs
+    if [ ! -d "$_usage_logs" ]; then
+        [ "$_usage_mode" = "latest" ] || printf 'done\t%s\n' "$_usage_agent"
+        return 0
+    fi
+
+    logs=$_usage_logs
+    active_file=$logs/active
+
+    case "$_usage_mode" in
+        latest)
+            _usage_run=$(newest_run_id 2>/dev/null) || return 0
+            if [ "$_usage_known_run" != "$_usage_run" ]; then
+                _usage_known_offset=0
+            fi
+            scan_usage_run "$_usage_agent" "$_usage_run" "$_usage_known_offset"
+            ;;
+        full|'')
+            for _usage_run_dir in "$_usage_logs"/*; do
+                [ -d "$_usage_run_dir" ] || continue
+                _usage_run=${_usage_run_dir##*/}
+                valid_run_id "$_usage_run" || continue
+                scan_usage_run "$_usage_agent" "$_usage_run" 0
+            done
+            printf 'done\t%s\n' "$_usage_agent"
+            ;;
+        *)
+            echo "harold-agent: unknown usage mode: $_usage_mode" >&2
+            return 2
+            ;;
+    esac
+}
+
 case "$mode" in
     host)
         run_host
@@ -540,5 +653,8 @@ case "$mode" in
         ;;
     cleanup)
         cleanup_logs "${2:-all-inactive}"
+        ;;
+    usage)
+        list_usage "${2:-}" "${3:-full}" "${4:-}" "${5:-0}"
         ;;
 esac

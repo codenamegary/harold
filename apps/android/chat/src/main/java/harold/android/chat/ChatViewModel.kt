@@ -26,6 +26,7 @@ import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
+import harold.android.contracts.SessionUsage
 import harold.android.contracts.Workspace
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseConfigOptions
@@ -59,6 +60,7 @@ import harold.android.navigation.Navigator
 import harold.android.navigation.SessionPreferences
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
+import harold.android.network.HostUsageApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.SessionFolderProbe
 import harold.android.network.SessionFolderState
@@ -118,6 +120,7 @@ class ChatViewModel @Inject constructor(
     private val connections: Connections? = null,
     private val sessionAttention: SessionAttentionMarks? = null,
     private val permissionNotifier: PermissionAttentionNotifier? = null,
+    private val hostUsage: HostUsageApi? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -176,6 +179,7 @@ class ChatViewModel @Inject constructor(
     private val titlePulledSessionIds = mutableSetOf<String>()
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
+    private var usageRefreshJob: Job? = null
     private var changesBadgeJob: Job? = null
     private var changesBadgeKey: String? = null
     private var pendingModelApply: PendingModelApply? = null
@@ -239,6 +243,7 @@ class ChatViewModel @Inject constructor(
                 }
                 if (state.status is StreamStatus.Live) {
                     refreshLiveCapabilities()
+                    refreshSelectedUsage()
                 }
             }
         }
@@ -258,7 +263,10 @@ class ChatViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            sessionOwner.promptCompletions.collect { pullSelectedSessionTitle() }
+            sessionOwner.promptCompletions.collect {
+                pullSelectedSessionTitle()
+                scheduleUsageRefresh()
+            }
         }
 
         viewModelScope.launch {
@@ -1272,6 +1280,7 @@ class ChatViewModel @Inject constructor(
                     connectionId = originToRemove,
                     repository = connectionRepository,
                 )
+                hostUsage?.forgetConnection(originToRemove)
                 settleAfterForget(
                     removedConnectionId = originToRemove,
                     remains = remains,
@@ -1402,6 +1411,7 @@ class ChatViewModel @Inject constructor(
             else -> emptyAcpTranscript
         }
         val origin = row.connectionId.ifEmpty { activeOrigin.orEmpty() }
+        val cachedUsage = cachedUsageFor(row)
         val checkFolder = !unavailable &&
             row.sessionId.isNotEmpty() &&
             row.connectionReachable &&
@@ -1412,6 +1422,7 @@ class ChatViewModel @Inject constructor(
                 SessionResetKeep(
                     selectedSession = row.copy(needsAttention = false),
                     transcript = remembered,
+                    logUsage = cachedUsage,
                     pendingPermissions = listOfNotNull(restored?.request),
                     pendingElicitations = listOfNotNull(restored?.elicitation),
                 ),
@@ -1422,6 +1433,7 @@ class ChatViewModel @Inject constructor(
             )
         }
         agentAuth.resetFor(row.agentId)
+        refreshUsage(row)
         if (checkFolder && sessionFolderProbe.probe(origin, row.cwd) == SessionFolderState.Missing) {
             _uiState.update { current ->
                 current.copy(
@@ -1694,6 +1706,45 @@ class ChatViewModel @Inject constructor(
         return titles[key]
     }
 
+    private fun cachedUsageFor(row: SessionRow): SessionUsage? {
+        val origin = row.connectionId.ifEmpty { activeOrigin.orEmpty() }
+        if (origin.isEmpty() || row.sessionId.isEmpty()) {
+            return null
+        }
+        return hostUsage?.cachedSessionUsage(origin, row.agentId, row.sessionId)
+    }
+
+    private fun refreshUsage(row: SessionRow, delayMillis: Long = 0) {
+        val usageApi = hostUsage ?: return
+        val origin = row.connectionId.ifEmpty { activeOrigin.orEmpty() }
+        if (origin.isEmpty() || row.sessionId.isEmpty()) {
+            return
+        }
+        usageRefreshJob?.cancel()
+        usageRefreshJob = viewModelScope.launch {
+            if (delayMillis > 0) {
+                delay(delayMillis)
+            }
+            usageApi.refreshSessionUsage(origin, row.agentId, row.sessionId)
+                .onSuccess { usage ->
+                    val selected = _uiState.value.selectedSession
+                    if (selected?.id == row.id) {
+                        _uiState.update { current -> current.copy(logUsage = usage) }
+                    }
+                }
+        }
+    }
+
+    private fun scheduleUsageRefresh() {
+        _uiState.value.selectedSession?.let { row ->
+            refreshUsage(row, delayMillis = USAGE_REFRESH_DELAY_MILLIS)
+        }
+    }
+
+    private fun refreshSelectedUsage() {
+        _uiState.value.selectedSession?.let(::refreshUsage)
+    }
+
     /**
      * A selected session must always be the watched session. Reachability only
      * gates the composer, it does not clear the target: the owner can resume
@@ -1960,7 +2011,12 @@ class ChatViewModel @Inject constructor(
             ?: catalog.firstOrNull { session -> session.sessionId == savedId }
             ?: return
         if (_uiState.value.selectedSession?.id == row.id) {
-            _uiState.update { current -> current.copy(selectedSession = row) }
+            _uiState.update { current ->
+                current.copy(
+                    selectedSession = row,
+                    logUsage = cachedUsageFor(row),
+                )
+            }
             if (row.connectionReachable &&
                 _uiState.value.missingSessionFolderPath == null &&
                 !_uiState.value.sessionFolderCheckPending
@@ -1971,6 +2027,7 @@ class ChatViewModel @Inject constructor(
                 }
                 sessionOwner.watch(row.agentId, row.sessionId)
             }
+            refreshUsage(row)
             refreshChangesBadge()
             return
         }
@@ -1996,6 +2053,10 @@ class ChatViewModel @Inject constructor(
 
     private fun dropSession(row: SessionRow) {
         sessionOwner.forget(row.agentId, row.sessionId)
+        val origin = row.connectionId.ifEmpty { activeOrigin.orEmpty() }
+        if (origin.isNotEmpty()) {
+            hostUsage?.forgetSession(origin, row.agentId, row.sessionId)
+        }
         catalog = catalog.filterNot { item -> item.id == row.id }
         val selectedWasDeleted = _uiState.value.selectedSession?.id == row.id
         if (selectedWasDeleted) {
@@ -2258,6 +2319,7 @@ class ChatViewModel @Inject constructor(
         const val RECENT_SESSIONS_LIMIT = 5
         const val NEW_SESSION_NAME = "New session"
         const val PICKER_REFRESH_DELAY_MS = 250L
+        const val USAGE_REFRESH_DELAY_MILLIS = 350L
         const val MODEL_SYNC_TIMEOUT_MS = 3_000L
         const val MODEL_SYNC_LIVE_TIMEOUT_MS = 30_000L
 

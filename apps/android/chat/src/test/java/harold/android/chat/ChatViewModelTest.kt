@@ -27,6 +27,7 @@ import harold.android.contracts.SelectOption
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.SessionState
+import harold.android.contracts.SessionUsage
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
@@ -49,6 +50,7 @@ import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
+import harold.android.network.HostUsageApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.SessionFolderProbe
 import harold.android.network.SessionFolderState
@@ -575,6 +577,54 @@ class ChatViewModelTest {
             "Fix the auth flow",
             viewModel.uiState.value.recentSessions.first { row -> row.sessionId == "sess_02" }.name,
         )
+    }
+
+    @Test
+    fun cachedLogUsageShowsImmediatelyAndRefreshReplacesIt() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val hostUsage = ChatFakeHostUsage(
+            cached = logUsage(used = 100),
+            gate = gate,
+        )
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            hostUsage = hostUsage,
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(100L, viewModel.uiState.value.contextUsage?.used)
+
+        hostUsage.refreshResult = logUsage(used = 200)
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(200L, viewModel.uiState.value.contextUsage?.used)
+        assertEquals("cursor", hostUsage.refreshCalls.single().second)
+        assertEquals("sess_02", hostUsage.refreshCalls.single().third)
+    }
+
+    @Test
+    fun promptCompletionRefreshesLogUsageAfterTheTurnEnds() = runTest(dispatcher) {
+        val hostUsage = ChatFakeHostUsage(cached = logUsage(used = 100))
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            hostUsage = hostUsage,
+        )
+
+        advanceUntilIdle()
+        assertEquals(1, hostUsage.refreshCalls.size)
+
+        hostUsage.refreshResult = logUsage(used = 300)
+        sessionOwner.completePrompt()
+        advanceUntilIdle()
+
+        assertEquals(2, hostUsage.refreshCalls.size)
+        assertEquals(300L, viewModel.uiState.value.contextUsage?.used)
     }
 
     @Test
@@ -2285,6 +2335,7 @@ class ChatViewModelTest {
         connections: harold.android.session.Connections? = null,
         sessionAttention: harold.android.foreground.SessionAttentionMarks? = null,
         permissionNotifier: harold.android.foreground.PermissionAttentionNotifier? = null,
+        hostUsage: HostUsageApi? = null,
         sessionFolderProbe: SessionFolderProbe = SessionFolderProbe { _, _ ->
             SessionFolderState.Available
         },
@@ -2312,6 +2363,7 @@ class ChatViewModelTest {
         connections = connections,
         sessionAttention = sessionAttention,
         permissionNotifier = permissionNotifier,
+        hostUsage = hostUsage,
     )
 
     private fun activeGateway(): FakeConnectionGateway =
@@ -2938,6 +2990,40 @@ private fun savedConnection(
     iconId = "mark",
     ssh = sshConfig(connectionId),
 )
+
+private fun logUsage(used: Long): SessionUsage = SessionUsage(
+    agentId = "cursor",
+    sessionId = "sess_02",
+    used = used,
+    size = 200000,
+    cost = UsageCost(0.01, "USD"),
+    lastRunId = "20261117T100000Z-1",
+    lastOffset = used,
+)
+
+private class ChatFakeHostUsage(
+    private val cached: SessionUsage? = null,
+    private val gate: CompletableDeferred<Unit>? = null,
+) : HostUsageApi {
+    var refreshResult: SessionUsage? = cached
+    val refreshCalls = mutableListOf<Triple<String, String, String>>()
+
+    override fun cachedSessionUsage(
+        connectionId: String,
+        agentId: String,
+        sessionId: String,
+    ): SessionUsage? = cached
+
+    override suspend fun refreshSessionUsage(
+        connectionId: String,
+        agentId: String,
+        sessionId: String,
+    ): Result<SessionUsage?> {
+        refreshCalls += Triple(connectionId, agentId, sessionId)
+        gate?.await()
+        return Result.success(refreshResult)
+    }
+}
 
 private fun session(
     id: String,

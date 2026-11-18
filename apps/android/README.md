@@ -125,6 +125,13 @@ all-inactive`. The app's Connection settings section shows total, per-agent,
 and per-run sizes and warns above 512 MB; it never deletes on its own.
 Log directories are `700` and log files are `600`.
 
+The `usage` mode prints ACP `usage_update` records from one agent's
+`out.jsonl` files. It streams one line at a time, filters on both the
+`session/update` method and the `usage_update` kind, and reports the byte
+offset where the next scan should resume. The app keeps the latest value per
+session in memory. The first scan for an agent reads every run. Later
+refreshes read only bytes appended to the newest run.
+
 Session history stays with the agent. Harold reads it with ACP `session/list`
 and compiles the per-agent lists in memory; it does not write session files
 to the host. Older releases created `sessions/<agent>/<sessionId>.json`; those
@@ -132,8 +139,9 @@ files are ignored and safe to delete.
 
 No compiled Harold binary, daemon, or extra port runs on the host. The host
 script is held in memory for the lifetime of the host process. The host needs
-standard shell tools only: `sh`, `bash`, `mkfifo`, `flock`, `nohup`, and
-`tail`. Runtime state under `run/` can be deleted when no host is running.
+standard shell tools only: `sh`, `bash`, `mkfifo`, `flock` (optional),
+`nohup`, `tail`, `head`, `wc`, `awk`, `grep`, and `sort`. Runtime state under
+`run/` can be deleted when no host is running.
 
 ## Agent settings
 
