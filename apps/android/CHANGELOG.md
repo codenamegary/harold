@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.6.0](https://github.com/codenamegary/harold/compare/harold-android-v4.5.0...harold-android-v4.6.0) (2026-11-18)
+
+
+### Features
+
+* **chat:** group thinking and tool activity ([#529](https://github.com/codenamegary/harold/issues/529)) ([826b70d](https://github.com/codenamegary/harold/commit/826b70d096ad5f1d19ce9729a7c715a51ec8588d))
+* **chat:** restore context usage from host logs ([#527](https://github.com/codenamegary/harold/issues/527)) ([f5ef4e8](https://github.com/codenamegary/harold/commit/f5ef4e8dfb72f1498ba7ef59aa3b6c7da668bfed))
+
 ## [4.5.0](https://github.com/codenamegary/harold/compare/harold-android-v4.4.0...harold-android-v4.5.0) (2026-11-17)
 
 
