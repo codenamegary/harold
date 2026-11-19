@@ -12,6 +12,7 @@ import harold.android.transport.ssh.SshExecChannel
 import harold.android.transport.ssh.SshException
 import harold.android.transport.ssh.isExecutable
 import harold.android.transport.ssh.runCommand
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +26,14 @@ class SshAgentProcessLauncher @Inject constructor(
     private val connections: HostConnections,
 ) : AgentProcessLauncher {
     private val hostScript: String by lazy { hostAgentScript() }
+
+    /**
+     * One identity for this app process. The host uses it to pick the single
+     * client that may answer agent-to-client requests. A new app process gets
+     * a new id; its next `session/load` takes ownership and replays pending
+     * questions from the old one.
+     */
+    private val clientId: String = UUID.randomUUID().toString()
 
     override suspend fun launchableAgents(
         connectionId: String,
@@ -64,6 +73,7 @@ class SshAgentProcessLauncher @Inject constructor(
                     agentId = agentId,
                     command = launch.command,
                     offset = LIVE_OFFSET,
+                    clientId = clientId,
                 ),
             )
             SshAgentProcessChannel(exec, connection, launch.label)
@@ -245,6 +255,7 @@ internal fun hostAgentCommand(
     agentId: String,
     command: String,
     offset: Int,
+    clientId: String = "",
 ): String {
     val arguments = buildString {
         append(" harold-agent ")
@@ -258,6 +269,10 @@ internal fun hostAgentCommand(
         if (mode == "connect") {
             append(' ')
             append(offset)
+            if (clientId.isNotBlank()) {
+                append(' ')
+                append(SshSessionStore.shellQuote(clientId))
+            }
         }
     }
     return hostScriptCommand(script, arguments)
