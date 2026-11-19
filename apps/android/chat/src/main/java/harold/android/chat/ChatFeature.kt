@@ -24,6 +24,7 @@ import harold.android.navigation.CreateSession
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
 import harold.android.navigation.Sessions
+import harold.android.navigation.WorkspaceChooser
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
@@ -184,6 +185,18 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onAgentChanged = viewModel::onAgentChanged,
                 onSubmit = viewModel::submit,
                 onNewWorkspaceClick = viewModel::openNewWorkspace,
+                onAllWorkspacesClick = viewModel::openWorkspaceChooser,
+            )
+        }
+
+        scope.entry<WorkspaceChooser> {
+            val viewModel: WorkspaceChooserViewModel = hiltViewModel()
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            WorkspaceChooserScreen(
+                uiState = uiState,
+                onBack = { navigator.goBack() },
+                onSearchChanged = viewModel::onSearchChanged,
+                onWorkspaceSelected = viewModel::select,
             )
         }
     }

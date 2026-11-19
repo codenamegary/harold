@@ -12,6 +12,7 @@ import harold.android.process.AgentProcessChannel
 import harold.android.process.AgentProcessLauncher
 import harold.android.process.AgentSessionGoneException
 import harold.android.process.SessionFileService
+import harold.android.process.initialSessionTitle
 import java.io.Closeable
 import java.io.IOException
 import java.io.OutputStream
@@ -202,15 +203,16 @@ class AgentProcess internal constructor(
         val configOptions = (responseObject?.get("configOptions") as? JsonArray)
             ?.map { element -> element }
             .orEmpty()
-        val now = Instant.now().toString()
+        val now = Instant.now()
+        val title = initialSessionTitle(cwd = cwd, now = now)
         catalog.upsert(
             connectionId = connectionId,
             session = AcpSessionInfo(
                 agentId = agentId,
                 sessionId = sessionId,
                 cwd = cwd,
-                title = NEW_SESSION_TITLE,
-                updatedAt = now,
+                title = title,
+                updatedAt = now.toString(),
             ),
         )
         sessions.remove(sessionKey(connectionId, sessionId))?.close()
@@ -220,7 +222,7 @@ class AgentProcess internal constructor(
             sessionId = sessionId,
             cwd = cwd,
             created = true,
-            initialTitle = NEW_SESSION_TITLE,
+            initialTitle = title,
             initialConfigOptions = configOptions,
             process = this,
             catalog = catalog,
@@ -232,8 +234,8 @@ class AgentProcess internal constructor(
             agentId = agentId,
             sessionId = sessionId,
             cwd = cwd,
-            title = NEW_SESSION_TITLE,
-            updatedAt = now,
+            title = title,
+            updatedAt = now.toString(),
             configOptions = configOptions,
         )
     }
@@ -505,10 +507,8 @@ class AgentProcess internal constructor(
         val session = candidates.firstOrNull { candidate -> candidate.isPrompting }
             ?: candidates.firstOrNull { candidate -> candidate.hasWork() }
             ?: candidates.firstOrNull()
-            ?: throw AcpRemoteException(
-                code = -32602,
-                detail = "Unknown session: ${sessionId ?: "(none)"}",
-                data = null,
+            ?: throw AcpRequestDroppedException(
+                "This client does not host session ${sessionId ?: "(none)"}.",
             )
         touch()
         return when (method) {
@@ -632,8 +632,6 @@ class AgentProcess internal constructor(
     }
 
     companion object {
-        const val NEW_SESSION_TITLE: String = "New session"
-
         private const val INITIALIZE_TIMEOUT_MILLIS = 60_000L
         private const val HOST_INIT_WAIT_MILLIS = 1_500L
         private const val HOST_INIT_ID = "harold-host-init"

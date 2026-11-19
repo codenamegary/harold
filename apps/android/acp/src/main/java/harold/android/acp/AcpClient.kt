@@ -33,6 +33,14 @@ class AcpRemoteException(
 
 class AcpClosedException(message: String) : Exception(message)
 
+/**
+ * This client does not own the request. ACP clients on a shared host all see
+ * the same agent output, but only one client may answer an agent-to-client
+ * request. Dropping it without a JSON-RPC error keeps the owner's request
+ * alive; an error would make the agent treat the question as dismissed.
+ */
+class AcpRequestDroppedException(message: String) : Exception(message)
+
 interface AcpClientHandler {
     /** Agent notifications, for example `session/update`. */
     suspend fun onNotification(method: String, params: JsonElement)
@@ -188,6 +196,8 @@ class AcpClient(
                             put("id", responseId)
                             put("result", handler.onRequest(id, method, params))
                         }
+                    } catch (_: AcpRequestDroppedException) {
+                        return@launch
                     } catch (error: Throwable) {
                         buildJsonObject {
                             put("jsonrpc", "2.0")

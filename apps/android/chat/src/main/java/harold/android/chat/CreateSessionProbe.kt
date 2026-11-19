@@ -105,6 +105,7 @@ internal fun createSessionProbeFacts(state: CreateSessionUiState): Map<String, S
         "submitEnabled" to createSessionSubmitEnabled(state).toString(),
         "submitting" to state.submitting.toString(),
         "error" to state.error.orEmpty(),
+        "notice" to state.notice?.name.orEmpty(),
     )
 }
 

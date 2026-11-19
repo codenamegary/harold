@@ -40,13 +40,18 @@ interface WorkspaceApi {
     ): Result<Workspace>
 
     /**
-     * Forgets the workspace bookmark and hides its folder from session
-     * directory hints. The folder itself is untouched.
+     * Forgets the workspace bookmark. The folder itself is untouched.
      */
     suspend fun deleteWorkspace(
         connectionId: String,
         path: String,
     ): Result<Unit> = Result.failure(unsupported("workspace removal is not supported"))
+
+    /** Records that the user started a session in this saved workspace. */
+    suspend fun touchWorkspace(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = Result.success(Unit)
 }
 
 /** Agent catalog and settings surface for one saved connection. */

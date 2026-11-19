@@ -42,6 +42,12 @@ interface UserRepository {
         body: CreateWorkspaceBody,
     ): Result<Workspace>
 
+    /** Records that the user started a session in this saved workspace. */
+    suspend fun touchWorkspace(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = Result.success(Unit)
+
     suspend fun listSessions(
         connectionId: String,
         cwd: String? = null,

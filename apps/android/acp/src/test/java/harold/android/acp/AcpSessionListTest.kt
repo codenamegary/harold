@@ -282,6 +282,20 @@ class AcpSessionListTest {
     }
 
     @Test
+    fun markUnavailableFallsBackToTheSessionIdForTheTitle() {
+        val catalog = AcpSessionCatalog()
+
+        catalog.markUnavailable(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessionId = "sess_gone",
+            cwd = "/repo",
+        )
+
+        assertEquals("sess_gone", catalog.find("conn", "opencode", "sess_gone")?.title)
+    }
+
+    @Test
     fun folderScopedRefreshKeepsSessionsInOtherFolders() {
         val catalog = AcpSessionCatalog()
         val inFolder = session("opencode", "sess_1", "2026-11-01T00:00:00Z")
@@ -296,7 +310,7 @@ class AcpSessionListTest {
     }
 
     @Test
-    fun processExitKeepsRowsWithoutMarkingThemOffline() {
+    fun processExitKeepsRowsWithoutMarkingThemStale() {
         val catalog = AcpSessionCatalog()
         catalog.replaceAgent(
             connectionId = "conn",
@@ -316,7 +330,7 @@ class AcpSessionListTest {
     }
 
     @Test
-    fun aSuccessfulListDropsRowsTheAgentNoLongerReports() {
+    fun aSuccessfulFinalListDropsRowsTheAgentNoLongerReports() {
         val catalog = AcpSessionCatalog()
         catalog.replaceAgent(
             connectionId = "conn",
@@ -327,6 +341,7 @@ class AcpSessionListTest {
             ),
         )
         catalog.removeAgent("conn", "opencode")
+        assertEquals(false, catalog.snapshot("conn", "opencode")?.stale)
 
         catalog.replaceAgent(
             connectionId = "conn",

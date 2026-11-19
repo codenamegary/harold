@@ -67,8 +67,16 @@
     <string name="chat_sessions_refresh_failed">Could not refresh sessions. Tap to retry.</string>
     <string name="chat_session_stale">Offline</string>
     <string name="create_session_new_workspace">New workspace</string>
+    <string name="create_session_all_workspaces">All workspaces…</string>
     <string name="create_session_start">Start Session</string>
     <string name="create_session_starting">Starting…</string>
+    <string name="create_session_remembered_workspace_missing">Your last workspace is no longer saved. Choose a workspace.</string>
+    <string name="create_session_preferred_workspace_missing">That session\'s folder is not a saved workspace. Choose a saved workspace.</string>
+    <string name="workspace_chooser_title">All workspaces</string>
+    <string name="workspace_chooser_search_label">Search workspaces</string>
+    <string name="workspace_chooser_empty">No workspaces</string>
+    <string name="workspace_chooser_loading">Loading workspaces</string>
+    <string name="workspace_chooser_back_content_description">Go back from workspaces</string>
     <string name="sessions_title">Sessions</string>
     <string name="sessions_search_label">Search sessions</string>
     <string name="sessions_refreshing_connection">Refreshing %1$s</string>

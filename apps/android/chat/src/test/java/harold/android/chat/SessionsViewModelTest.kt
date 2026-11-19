@@ -86,6 +86,75 @@ class SessionsViewModelTest {
     }
 
     @Test
+    fun searchDoesNotScanTheCatalogAgain() = runTest {
+        val sessionRepository = TestSessionRepository(
+            OriginSessionRepository(
+                sessionsByOrigin = mapOf(
+                    ACTIVE.connectionId to listOf(
+                        session("sess_01", "Alpha", "2026-08-03T00:00:00.000Z"),
+                    ),
+                ),
+            ),
+        )
+        val refresher = SessionCatalogRefresher(sessionRepository)
+        val viewModel = viewModel(
+            sessionRepository = sessionRepository,
+            sessionRefresher = refresher,
+        )
+        val scans = sessionRepository.refreshCalls
+
+        viewModel.onSearchChanged("alp")
+
+        assertEquals(scans, sessionRepository.refreshCalls)
+    }
+
+    @Test
+    fun aSecondOpenInsideTheTriggerWindowReusesTheCatalog() = runTest {
+        val sessionRepository = TestSessionRepository(
+            OriginSessionRepository(
+                sessionsByOrigin = mapOf(
+                    ACTIVE.connectionId to listOf(
+                        session("sess_01", "Alpha", "2026-08-03T00:00:00.000Z"),
+                    ),
+                ),
+            ),
+        )
+        val refresher = SessionCatalogRefresher(sessionRepository)
+        refresher.nowMillis = { 1_000L }
+
+        viewModel(sessionRepository = sessionRepository, sessionRefresher = refresher)
+        val scans = sessionRepository.refreshCalls
+        viewModel(sessionRepository = sessionRepository, sessionRefresher = refresher)
+
+        assertEquals(scans, sessionRepository.refreshCalls)
+    }
+
+    @Test
+    fun reloadForcesANewScan() = runTest {
+        val sessionRepository = TestSessionRepository(
+            OriginSessionRepository(
+                sessionsByOrigin = mapOf(
+                    ACTIVE.connectionId to listOf(
+                        session("sess_01", "Alpha", "2026-08-03T00:00:00.000Z"),
+                    ),
+                ),
+            ),
+        )
+        val refresher = SessionCatalogRefresher(sessionRepository)
+        refresher.nowMillis = { 1_000L }
+        val viewModel = viewModel(
+            sessionRepository = sessionRepository,
+            sessionRefresher = refresher,
+        )
+        val scans = sessionRepository.refreshCalls
+
+        viewModel.reload()
+        advanceUntilIdle()
+
+        assertEquals(scans + 1, sessionRepository.refreshCalls)
+    }
+
+    @Test
     fun selectTellsChatAndLeavesTheList() = runTest {
         val commands = RecordingSessionCommands()
         val navigator = testNavigator()
@@ -316,6 +385,7 @@ class SessionsViewModelTest {
         sessionRepository: SessionRepository = TestSessionRepository(repository),
         sessionOwner: SessionsFakeSessionOwner = SessionsFakeSessionOwner(),
         savedConnections: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
+        sessionRefresher: SessionCatalogRefresher = SessionCatalogRefresher(sessionRepository),
     ): SessionsViewModel = SessionsViewModel(
         connectionGateway = FakeConnectionGateway(ACTIVE),
         sessionRepository = sessionRepository,
@@ -323,6 +393,7 @@ class SessionsViewModelTest {
         navigator = navigator,
         sessionOwner = sessionOwner,
         connectionRepository = savedConnections,
+        sessionRefresher = sessionRefresher,
     )
 
     @Test

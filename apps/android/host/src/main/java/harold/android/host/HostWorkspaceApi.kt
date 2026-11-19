@@ -23,7 +23,6 @@ import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
-import harold.android.network.SessionDirectoryProvider
 import harold.android.network.WorkspaceApi
 import harold.android.network.hostLoginInstructions
 import harold.android.process.AgentAuthRequiredException
@@ -31,7 +30,6 @@ import harold.android.process.AgentLaunchException
 import harold.android.transport.ssh.SshConnection
 import harold.android.transport.ssh.SshException
 import harold.android.transport.ssh.runCommand
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,41 +37,16 @@ import javax.inject.Singleton
 @Singleton
 class HostWorkspaceApi @Inject constructor(
     private val connections: HostConnections,
-    private val sessionDirectories: SessionDirectoryProvider,
 ) : WorkspaceApi, AttachmentApi, GitApi {
     override suspend fun listWorkspaces(
         connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> = hostCall {
         connections.useConnection(connectionId) { connection, store ->
-            val now = Instant.now().toString()
-            val workspaces = linkedMapOf<String, Workspace>()
-            store.workspaces().forEach { workspace ->
-                workspaces[workspace.path] = workspaceOf(connection, workspace)
-            }
-            // Session folders are hints from the last ACP session/list. They
-            // are memory-only; a cold app simply shows the saved workspaces
-            // until the next chat refresh. Hidden paths were deleted by the
-            // user and stay out of the list.
-            val hidden = store.hiddenWorkspaces()
-            sessionDirectories.sessionDirectories(connectionId)
-                .distinct()
-                .filterNot { cwd -> cwd in hidden }
-                .forEach { cwd ->
-                    if (cwd !in workspaces) {
-                        workspaces[cwd] = workspaceOf(
-                            connection = connection,
-                            workspace = HostWorkspace(
-                                id = SshSessionStore.stableId(cwd),
-                                name = cwd.substringAfterLast('/').ifBlank { cwd },
-                                path = cwd,
-                                createdAt = now,
-                                lastUsedAt = now,
-                            ),
-                        )
-                    }
-                }
-            val items = if (limit > 0) workspaces.values.take(limit) else workspaces.values.toList()
+            val workspaces = store.workspaces()
+                .distinctBy { workspace -> workspace.path }
+                .map { workspace -> workspaceOf(connection, workspace) }
+            val items = if (limit > 0) workspaces.take(limit) else workspaces
             WorkspaceCollection(
                 items = items,
                 page = PageInfo(limit = limit, count = items.size),
@@ -150,6 +123,12 @@ class HostWorkspaceApi @Inject constructor(
     override suspend fun deleteWorkspace(connectionId: String, path: String): Result<Unit> = hostCall {
         connections.useConnection(connectionId) { _, store ->
             store.forgetWorkspace(path)
+        }
+    }
+
+    override suspend fun touchWorkspace(connectionId: String, path: String): Result<Unit> = hostCall {
+        connections.useConnection(connectionId) { _, store ->
+            store.touchWorkspace(path)
         }
     }
 

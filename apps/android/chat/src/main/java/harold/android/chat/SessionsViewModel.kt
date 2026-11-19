@@ -48,6 +48,7 @@ class SessionsViewModel @Inject constructor(
     private val sessionOwner: SessionOwner,
     private val connectionRepository: ConnectionRepository,
     private val sessionAttention: SessionAttentionMarks? = null,
+    private val sessionRefresher: SessionCatalogRefresher = SessionCatalogRefresher(sessionRepository),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionsUiState())
     val uiState: StateFlow<SessionsUiState> = _uiState.asStateFlow()
@@ -79,7 +80,7 @@ class SessionsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            load()
+            load(SessionRefreshTrigger.SessionsScreenOpened)
         }
         viewModelScope.launch {
             sessionOwner.sessionTitles.collect(::applyTitles)
@@ -106,7 +107,7 @@ class SessionsViewModel @Inject constructor(
 
     fun reload() {
         viewModelScope.launch {
-            load()
+            load(SessionRefreshTrigger.Retry)
         }
     }
 
@@ -141,7 +142,7 @@ class SessionsViewModel @Inject constructor(
         }
     }
 
-    private suspend fun load() {
+    private suspend fun load(trigger: SessionRefreshTrigger) {
         _uiState.update { current -> current.copy(loading = true, error = null) }
 
         val saved = connectionRepository.list()
@@ -168,11 +169,13 @@ class SessionsViewModel @Inject constructor(
         origins.forEach { connectionId ->
             workingOrigins.add(connectionId)
             publishProgress()
-            sessionRepository.refresh(connectionId).fold(
-                onSuccess = {
+            sessionRefresher.refresh(connectionId, trigger).fold(
+                onSuccess = { outcome ->
                     anySuccess = true
-                    unreachableOrigins.remove(connectionId)
-                    unreachableErrors.remove(connectionId)
+                    if (outcome.refreshed) {
+                        unreachableOrigins.remove(connectionId)
+                        unreachableErrors.remove(connectionId)
+                    }
                 },
                 onFailure = { error ->
                     lastError = error

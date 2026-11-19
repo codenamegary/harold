@@ -33,7 +33,7 @@ data class AgentSessionSnapshot(
 )
 
 /** Read-only view of the sessions the live ACP runtime currently knows. */
-interface SessionCatalogReader : SessionDirectoryProvider {
+interface SessionCatalogReader {
     /** Every agent snapshot, ordered by connection and agent id. */
     fun observeSnapshots(): Flow<List<AgentSessionSnapshot>>
 

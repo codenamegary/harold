@@ -27,6 +27,7 @@ class CreateSessionProbeTest {
         assertEquals("true", facts["submitEnabled"])
         assertEquals("false", facts["submitting"])
         assertEquals("", facts["error"])
+        assertEquals("", facts["notice"])
     }
 
     @Test

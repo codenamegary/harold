@@ -12,12 +12,18 @@
 #   usage    Print ACP usage updates without reading whole logs into memory.
 #
 # Usage:
-#   harold-agent.sh connect <agent-id> <shell-command> [offset]
+#   harold-agent.sh connect <agent-id> <shell-command> [offset] [client-id]
 #   harold-agent.sh host <agent-id> <shell-command>
 #   harold-agent.sh stop <agent-id>
 #   harold-agent.sh logs
 #   harold-agent.sh cleanup [all-inactive]
 #   harold-agent.sh usage <agent-id> [latest [run-id] [offset]]
+#
+# client-id identifies the app process. The host gives each ACP session one
+# owner client and routes agent-to-client requests only to that owner. A
+# client that cannot answer drops the request instead of replying with an
+# error. Pending requests stay on disk until the owner answers, so a
+# reconnect can replay them.
 #
 # offset is a byte position in the active run's out.jsonl:
 #   0   replay the whole log
@@ -26,9 +32,18 @@
 #
 # State, under ${HAROLD_RUN_DIR:-$HOME/.harold/run}/<agent-id>:
 #   logs/active            active run id, written atomically
-#   logs/<run-id>/out.jsonl agent stdout, one ACP JSON-RPC message per line
+#   logs/<run-id>/out.jsonl agent output, one ACP message per line
 #   logs/<run-id>/err.log   agent stderr
-#   in        FIFO, agent stdin
+#   in        FIFO, client input (client-id<TAB>JSON when protocol is 2)
+#   agent.in  FIFO, agent stdin
+#   out.pipe  FIFO, agent stdout to the router
+#   clients/<client>/route.jsonl  requests owned by that attached client
+#   owners/<session-key>   owner client for one ACP session
+#   pending/<session-key>/<request-id>  unanswered client requests
+#   pending/by-id/<request-id>          owner and session for one request
+#   newreq/<request-id>    client waiting for a session/new response
+#   last-owner             most recently active owner client
+#   protocol  host protocol version, 2 when request routing is available
 #   ready     present once the host initialize response is in the active run
 #   status    why the host exited
 #   host.pid  detached host process
@@ -45,6 +60,7 @@ mode=${1:-}
 agent_id=${2:-}
 command=${3:-}
 offset=${4:-0}
+client_id=${5:-}
 
 case "$mode" in
     connect|host|stop)
@@ -57,7 +73,7 @@ case "$mode" in
     cleanup) ;;
     usage) ;;
     *)
-        echo "usage: harold-agent.sh <connect|host|stop|logs|cleanup|usage> <agent-id> [command] [offset]" >&2
+        echo "usage: harold-agent.sh <connect|host|stop|logs|cleanup|usage> <agent-id> [command] [offset] [client-id]" >&2
         exit 2
         ;;
 esac
@@ -67,11 +83,22 @@ dir=$base/$agent_id
 logs=$dir/logs
 active_file=$logs/active
 fifo=$dir/in
+agent_fifo=$dir/agent.in
+out_pipe=$dir/out.pipe
 lock=$dir/in.lock
 host_pid_file=$dir/host.pid
 agent_pid_file=$dir/agent.pid
 ready=$dir/ready
 status=$dir/status
+protocol_file=$dir/protocol
+clients_dir=$dir/clients
+owners_dir=$dir/owners
+pending_dir=$dir/pending
+pending_by_id=$dir/pending/by-id
+new_request_dir=$dir/newreq
+last_owner_file=$dir/last-owner
+tab=$(printf '\t')
+sep=$(printf '\037')
 
 valid_run_id() {
     _valid_id=${1:-}
@@ -214,6 +241,247 @@ start_host() {
     return 1
 }
 
+safe_name() {
+    printf '%s' "${1:-}" | sed 's/[^A-Za-z0-9_.-]/_/g'
+}
+
+# Extracts the routing fields from one JSON-RPC line. Mode `input` keeps the
+# method position for every client message. Mode `request` emits only for an
+# agent-to-client request. Mode `response` emits only for an agent response.
+# Only a top-level id makes a message a request: the method key appears before
+# params in ACP messages, so a nested id after it is ignored.
+parse_fields() {
+    printf '%s\n' "${2:-}" | awk -v mode="$1" -v sep="$sep" '
+        function value(line, name,   p, rest, i, n, parts) {
+            p = index(line, "\"" name "\"")
+            if (p == 0) return ""
+            rest = substr(line, p + length(name) + 2)
+            sub(/^[ \t]*:[ \t]*/, "", rest)
+            if (substr(rest, 1, 1) == "\"") {
+                rest = substr(rest, 2)
+                i = index(rest, "\"")
+                if (i == 0) return ""
+                return substr(rest, 1, i - 1)
+            }
+            n = split(rest, parts, /[,} \t\r\n]/)
+            return parts[1]
+        }
+        {
+            if (mode == "response") {
+                if (index($0, "\"method\"") != 0) exit
+                printf "%s%s%s\n", value($0, "id"), sep, value($0, "sessionId")
+                exit
+            }
+            mpos = index($0, "\"method\"")
+            ipos = index($0, "\"id\"")
+            if (mode == "input") {
+                if (mpos == 0) {
+                    printf "%s%s%s%s%s\n", "", sep, value($0, "id"), sep, value($0, "sessionId")
+                    exit
+                }
+                if (ipos == 0 || ipos > mpos) {
+                    printf "%s%s%s%s\n", value($0, "method"), sep, "", sep
+                    exit
+                }
+                printf "%s%s%s%s%s\n", value($0, "method"), sep, value($0, "id"), sep, value($0, "sessionId")
+                exit
+            }
+            if (mpos == 0 || ipos == 0 || ipos > mpos) exit
+            method = value($0, "method")
+            id = value($0, "id")
+            if (method == "" || id == "") exit
+            printf "%s%s%s%s%s\n", method, sep, id, sep, value($0, "sessionId")
+        }
+    '
+}
+
+# Makes client the owner of session and replays every unanswered request.
+set_owner() {
+    _so_client=$1
+    _so_session=$2
+    _so_key=$(safe_name "$_so_session")
+    [ -n "$_so_key" ] || return 0
+    printf '%s\n' "$_so_client" > "$owners_dir/$_so_key"
+    printf '%s\n' "$_so_client" > "$last_owner_file"
+    flush_pending "$_so_client" "$_so_key"
+}
+
+# Replays stored requests to an attached owner. The pending files stay until
+# the owner actually answers, so a client that dies mid-question can reconnect
+# and see it again.
+flush_pending() {
+    _fp_client=$1
+    _fp_key=$2
+    [ -d "$pending_dir/$_fp_key" ] || return 0
+    [ -d "$clients_dir/$_fp_client" ] || return 0
+    for _fp_file in "$pending_dir/$_fp_key"/*; do
+        [ -f "$_fp_file" ] || continue
+        _fp_req=${_fp_file##*/}
+        cat "$_fp_file" >> "$clients_dir/$_fp_client/route.jsonl" || continue
+        printf '%s\037%s\037%s\n' "$_fp_client" "$_fp_key" "$_fp_req" \
+            > "$pending_by_id/$_fp_req"
+    done
+}
+
+# Indexes one answer with the client that owns the request.
+accept_client_response() {
+    _ac_client=$1
+    _ac_id=$2
+    _ac_key=$(safe_name "$_ac_id")
+    [ -f "$pending_by_id/$_ac_key" ] || return 0
+    _ac_index=$(cat "$pending_by_id/$_ac_key" 2>/dev/null) || return 0
+    _ac_owner=${_ac_index%%"$sep"*}
+    [ -z "$_ac_owner" ] || [ "$_ac_owner" = "$_ac_client" ]
+}
+
+clear_pending_response() {
+    _cr_key=$(safe_name "$1")
+    [ -f "$pending_by_id/$_cr_key" ] || return 0
+    _cr_index=$(cat "$pending_by_id/$_cr_key" 2>/dev/null) || return 0
+    _cr_rest=${_cr_index#*"$sep"}
+    _cr_session=${_cr_rest%%"$sep"*}
+    _cr_request=${_cr_rest#*"$sep"}
+    rm -f "$pending_by_id/$_cr_key"
+    [ -n "$_cr_session" ] && [ -n "$_cr_request" ] || return 0
+    rm -f "$pending_dir/$_cr_session/$_cr_request"
+}
+
+# Records the owner of a session created by session/new. The response id is the
+# only link between the creating client and the agent's new session id.
+record_new_session() {
+    _rn_id=$1
+    _rn_session=$2
+    _rn_key=$(safe_name "$_rn_id")
+    [ -f "$new_request_dir/$_rn_key" ] || return 0
+    _rn_owner=$(cat "$new_request_dir/$_rn_key" 2>/dev/null) || _rn_owner=
+    rm -f "$new_request_dir/$_rn_key"
+    [ -n "$_rn_owner" ] || return 0
+    [ -n "$_rn_session" ] || return 0
+    _rn_key=$(safe_name "$_rn_session")
+    [ -n "$_rn_key" ] || return 0
+    printf '%s\n' "$_rn_owner" > "$owners_dir/$_rn_key"
+    printf '%s\n' "$_rn_owner" > "$last_owner_file"
+}
+
+# Stores an agent-to-client request and sends it to its owner when connected.
+handle_agent_request() {
+    _hr_method=$1
+    _hr_id=$2
+    _hr_session=$3
+    _hr_line=$4
+    _hr_key=$(safe_name "$_hr_id")
+    [ -n "$_hr_key" ] || return 0
+    _hr_skey=$(safe_name "$_hr_session")
+    if [ -n "$_hr_skey" ]; then
+        _hr_owner=$(cat "$owners_dir/$_hr_skey" 2>/dev/null) || _hr_owner=
+        mkdir -p "$pending_dir/$_hr_skey"
+        printf '%s\n' "$_hr_line" > "$pending_dir/$_hr_skey/$_hr_key"
+        printf '%s\037%s\037%s\n' "$_hr_owner" "$_hr_skey" "$_hr_key" \
+            > "$pending_by_id/$_hr_key"
+        if [ -n "$_hr_owner" ] && [ -d "$clients_dir/$_hr_owner" ]; then
+            printf '%s\n' "$_hr_line" >> "$clients_dir/$_hr_owner/route.jsonl"
+        fi
+        return 0
+    fi
+
+    # A request without a session belongs to whoever is active right now.
+    _hr_owner=$(cat "$last_owner_file" 2>/dev/null) || _hr_owner=
+    mkdir -p "$pending_dir/global"
+    printf '%s\n' "$_hr_line" > "$pending_dir/global/$_hr_key"
+    printf '%s\037global\037%s\n' "$_hr_owner" "$_hr_key" > "$pending_by_id/$_hr_key"
+    if [ -n "$_hr_owner" ] && [ -d "$clients_dir/$_hr_owner" ]; then
+        printf '%s\n' "$_hr_line" >> "$clients_dir/$_hr_owner/route.jsonl"
+    fi
+}
+
+# Fills in session ownership from client input. The host is the only writer of
+# agent stdin, so it can route by owner and drop answers from other clients.
+read_client_input() {
+    while IFS= read -r raw; do
+        [ -z "$raw" ] && continue
+        case "$raw" in
+            *"$tab"*)
+                _rc_client=${raw%%"$tab"*}
+                _rc_line=${raw#*"$tab"}
+                ;;
+            *)
+                _rc_client=legacy
+                _rc_line=$raw
+                ;;
+        esac
+        [ -n "$_rc_client" ] || _rc_client=legacy
+        _rc_fields=$(parse_fields input "$_rc_line")
+        IFS=$sep
+        set -- $_rc_fields
+        IFS=$tab
+        _rc_method=${1:-}
+        _rc_id=${2:-}
+        _rc_session=${3:-}
+        IFS=' '
+        case "$_rc_method" in
+            session/new)
+                if [ -n "$_rc_id" ]; then
+                    _rc_key=$(safe_name "$_rc_id")
+                    [ -n "$_rc_key" ] &&
+                        printf '%s\n' "$_rc_client" > "$new_request_dir/$_rc_key"
+                fi
+                ;;
+            session/load|session/resume|session/prompt)
+                if [ -n "$_rc_session" ]; then
+                    set_owner "$_rc_client" "$_rc_session"
+                fi
+                ;;
+            '')
+                if [ -n "$_rc_id" ] && ! accept_client_response "$_rc_client" "$_rc_id"; then
+                    continue
+                fi
+                ;;
+        esac
+        printf '%s\n' "$_rc_line" > "$agent_fifo" || continue
+        if [ "$_rc_method" = "" ] && [ -n "$_rc_id" ]; then
+            clear_pending_response "$_rc_id"
+        fi
+    done
+}
+
+# Copies agent output to out.jsonl and diverts agent-to-client requests to the
+# owner's route file. A request never enters the shared log, so no other client
+# can answer it.
+route_agent_output() {
+    while IFS= read -r _ra_line; do
+        [ -z "$_ra_line" ] && continue
+        case "$_ra_line" in
+            *'"method"'*)
+                _ra_prefix=${_ra_line%%\"method\"*}
+                case "$_ra_prefix" in
+                    *'"id"'*)
+                        _ra_fields=$(parse_fields request "$_ra_line")
+                        if [ -n "$_ra_fields" ]; then
+                            IFS=$sep
+                            set -- $_ra_fields
+                            IFS=' '
+                            handle_agent_request "${1:-}" "${2:-}" "${3:-}" "$_ra_line"
+                            continue
+                        fi
+                        ;;
+                esac
+                printf '%s\n' "$_ra_line" >> "$out"
+                ;;
+            *'"id"'*)
+                _ra_fields=$(parse_fields response "$_ra_line")
+                IFS=$sep
+                set -- $_ra_fields
+                IFS=' '
+                printf '%s\n' "$_ra_line" >> "$out"
+                record_new_session "${1:-}" "${2:-}"
+                ;;
+            *)
+                printf '%s\n' "$_ra_line" >> "$out"
+                ;;
+        esac
+    done
+}
+
 run_host() {
     if [ -z "$command" ]; then
         echo "harold-agent: missing command for host" >&2
@@ -232,7 +500,9 @@ run_host() {
     fi
 
     echo $$ > "$host_pid_file"
-    rm -f "$ready" "$status" "$fifo"
+    rm -f "$ready" "$status" "$fifo" "$agent_fifo" "$out_pipe" "$protocol_file"
+    rm -rf "$clients_dir" "$owners_dir" "$pending_dir" "$new_request_dir"
+    rm -f "$last_owner_file"
 
     run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
     run_dir=$logs/$run_id
@@ -248,6 +518,10 @@ run_host() {
     : > "$err" || exit 1
     chmod 600 "$out" "$err" 2>/dev/null || true
 
+    mkdir -p "$clients_dir" "$owners_dir" "$pending_by_id" "$new_request_dir" || exit 1
+    chmod 700 "$clients_dir" "$owners_dir" "$pending_dir" "$new_request_dir" 2>/dev/null || true
+    printf '2\n' > "$protocol_file" || exit 1
+
     # `active` is the only pointer to the live run. Write it before the agent
     # starts so a reconnect can always find this process's logs.
     printf '%s\n' "$run_id" > "$active_tmp" || exit 1
@@ -255,12 +529,15 @@ run_host() {
 
     agent_pid=
     holder_pid=
+    client_holder_pid=
+    input_pid=
+    router_pid=
     init_writer_pid=
 
     cleanup() {
         code=$?
         trap - EXIT
-        rm -f "$ready"
+        rm -f "$ready" "$protocol_file"
         if [ -n "${active_tmp:-}" ]; then
             rm -f "$active_tmp"
         fi
@@ -271,23 +548,35 @@ run_host() {
             kill "$agent_pid" 2>/dev/null || true
             wait "$agent_pid" 2>/dev/null || true
         fi
-        if [ -n "${holder_pid:-}" ] && kill -0 "$holder_pid" 2>/dev/null; then
-            kill "$holder_pid" 2>/dev/null || true
-        fi
+        for _cleanup_pid in "${router_pid:-}" "${input_pid:-}" \
+            "${client_holder_pid:-}" "${holder_pid:-}"; do
+            if [ -n "$_cleanup_pid" ] && kill -0 "$_cleanup_pid" 2>/dev/null; then
+                kill "$_cleanup_pid" 2>/dev/null || true
+            fi
+        done
         exit "$code"
     }
     trap cleanup EXIT
     trap 'exit 143' TERM INT
 
-    mkfifo -m 600 "$fifo" || exit 1
+    mkfifo -m 600 "$fifo" "$agent_fifo" "$out_pipe" || exit 1
 
-    # A FIFO reader sees EOF when every writer closes. This holder keeps one
-    # writer open so the agent survives while no phone is attached.
+    # The host is the only agent stdin writer. Client input goes through a
+    # router so ownership and pending requests are known before each write.
+    read_client_input < "$fifo" &
+    input_pid=$!
+    # A FIFO reader sees EOF when every writer closes. These holders keep one
+    # writer open so both loops survive while no phone is attached.
     sleep 2147483647 > "$fifo" 8>&- &
+    client_holder_pid=$!
+    sleep 2147483647 > "$agent_fifo" 8>&- &
     holder_pid=$!
 
+    route_agent_output < "$out_pipe" &
+    router_pid=$!
+
     # The agent's stdio belongs to this detached process, not to sshd.
-    bash -lc "$command" < "$fifo" >> "$out" 2>> "$err" 8>&- &
+    bash -lc "$command" < "$agent_fifo" > "$out_pipe" 2>> "$err" 8>&- &
     agent_pid=$!
     echo "$agent_pid" > "$agent_pid_file"
 
@@ -299,7 +588,7 @@ run_host() {
         meta=
     fi
     init='{"jsonrpc":"2.0","id":"harold-host-init","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":true,"writeTextFile":true},"terminal":true,"elicitation":{"form":{}}'"$meta"'},"clientInfo":{"name":"Harold Android","version":"android"}}}'
-    ( printf '%s\n' "$init" > "$fifo" ) 8>&- &
+    ( printf '%s\n' "$init" > "$agent_fifo" ) 8>&- &
     init_writer_pid=$!
 
     n=0
@@ -366,6 +655,12 @@ attach() {
     out=$(run_out "$run_id")
     err=$(run_err "$run_id")
 
+    protocol_version=$(cat "$protocol_file" 2>/dev/null) || protocol_version=
+    attach_id=$(safe_name "$client_id")
+    [ -n "$attach_id" ] || attach_id=client
+    attach_id="${attach_id}-$$"
+    client_dir=
+
     case "$offset" in
         -1)
             offset=$(wc -c < "$out")
@@ -375,6 +670,19 @@ attach() {
             ;;
     esac
 
+    # Protocol 2 routes agent-to-client requests per client. An older host
+    # keeps the shared fan-out and the app falls back to dropping requests it
+    # cannot answer.
+    if [ "$protocol_version" = "2" ]; then
+        client_dir=$clients_dir/$attach_id
+        mkdir -p "$client_dir" || exit 1
+        : > "$client_dir/route.jsonl" || exit 1
+        tail -c +1 -f "$client_dir/route.jsonl" &
+        route_tail_pid=$!
+    else
+        route_tail_pid=
+    fi
+
     # A reconnecting client starts at a byte offset, which would skip the
     # initialize response. Replay that one line first so every client has it.
     if [ "$offset" -gt 0 ]; then
@@ -382,7 +690,7 @@ attach() {
     fi
 
     # stdout: replay from the byte offset, then follow the append-only log.
-    # This is the fan-out. Every client reads the same file.
+    # Every client also gets its own owner-routed request stream.
     tail -c +$((offset + 1)) -f "$out" &
     tail_pid=$!
 
@@ -406,8 +714,14 @@ attach() {
         if [ -n "${tail_pid:-}" ] && kill -0 "$tail_pid" 2>/dev/null; then
             kill "$tail_pid" 2>/dev/null || true
         fi
+        if [ -n "${route_tail_pid:-}" ] && kill -0 "$route_tail_pid" 2>/dev/null; then
+            kill "$route_tail_pid" 2>/dev/null || true
+        fi
         if [ -n "${watchdog_pid:-}" ] && kill -0 "$watchdog_pid" 2>/dev/null; then
             kill "$watchdog_pid" 2>/dev/null || true
+        fi
+        if [ -n "${client_dir:-}" ]; then
+            rm -rf "$client_dir"
         fi
         rm -f "$tmp"
         exit "$code"
@@ -417,10 +731,15 @@ attach() {
 
     # stdin: read complete lines only. A client that disconnects mid-line
     # leaves no partial JSON in the FIFO. Each write is serialized so two
-    # clients cannot interleave their bytes.
+    # clients cannot interleave their bytes. Protocol 2 prefixes the client id
+    # so the host can give every session one owner.
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        printf '%s\n' "$line" > "$tmp" || break
+        if [ -n "$client_dir" ]; then
+            printf '%s\t%s\n' "$attach_id" "$line" > "$tmp" || break
+        else
+            printf '%s\n' "$line" > "$tmp" || break
+        fi
         if ! flock "$lock" sh -c 'cat "$1" > "$2"' sh "$tmp" "$fifo"; then
             break
         fi

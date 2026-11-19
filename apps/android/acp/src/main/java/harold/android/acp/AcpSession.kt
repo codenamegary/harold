@@ -120,7 +120,11 @@ class AcpSession internal constructor(
 
     fun hasSubscribers(): Boolean = subscribers.isNotEmpty()
 
-    fun hasWork(): Boolean = hasSubscribers() || prompting.get()
+    fun hasWork(): Boolean =
+        hasSubscribers() ||
+            prompting.get() ||
+            pendingPermissions.isNotEmpty() ||
+            pendingElicitations.isNotEmpty()
 
     /**
      * Registers a bounded subscriber channel and starts the attach sequence
@@ -490,46 +494,56 @@ class AcpSession internal constructor(
     }
 
     internal suspend fun awaitPermission(id: String, params: JsonElement): JsonElement {
-        val pending = PendingInput(params = params)
-        pendingPermissions[id] = pending
-        _status.value = SessionStatus.AwaitingPermission
-        emitFrame(
-            PermissionRequest(
-                requestId = id,
-                agentId = agentId,
-                sessionId = sessionId,
-                params = params,
-            ),
-        )
+        val existing = pendingPermissions[id]
+        val pending = existing ?: PendingInput(params = params).also { created ->
+            pendingPermissions[id] = created
+        }
+        if (existing == null) {
+            _status.value = SessionStatus.AwaitingPermission
+            emitFrame(
+                PermissionRequest(
+                    requestId = id,
+                    agentId = agentId,
+                    sessionId = sessionId,
+                    params = params,
+                ),
+            )
+        }
         return try {
             withTimeout(PERMISSION_TIMEOUT_MILLIS) { pending.result.await() }
         } finally {
-            pendingPermissions.remove(id)
+            pendingPermissions.remove(id, pending)
+            clearSeenRequest(id)
             settleStatusAfterReply()
         }
     }
 
     internal suspend fun awaitElicitation(id: String, params: JsonElement): JsonElement {
-        val pending = PendingInput(params = params)
-        pendingElicitations[id] = pending
-        val elicitationId = params.string("elicitationId")
-        if (elicitationId != null) {
-            urlElicitationRequests[elicitationId] = id
+        val existing = pendingElicitations[id]
+        val pending = existing ?: PendingInput(params = params).also { created ->
+            pendingElicitations[id] = created
+            val elicitationId = params.string("elicitationId")
+            if (elicitationId != null) {
+                urlElicitationRequests[elicitationId] = id
+            }
         }
-        _status.value = SessionStatus.AwaitingAnswer
-        emitFrame(
-            ElicitationRequest(
-                requestId = id,
-                agentId = agentId,
-                sessionId = sessionId,
-                params = params,
-                expiresAt = Instant.now().plusSeconds(300).toString(),
-            ),
-        )
+        if (existing == null) {
+            _status.value = SessionStatus.AwaitingAnswer
+            emitFrame(
+                ElicitationRequest(
+                    requestId = id,
+                    agentId = agentId,
+                    sessionId = sessionId,
+                    params = params,
+                    expiresAt = Instant.now().plusSeconds(300).toString(),
+                ),
+            )
+        }
         return try {
             withTimeout(ELICITATION_TIMEOUT_MILLIS) { pending.result.await() }
         } finally {
-            pendingElicitations.remove(id)
+            pendingElicitations.remove(id, pending)
+            clearSeenRequest(id)
             settleStatusAfterReply()
         }
     }
@@ -571,7 +585,7 @@ class AcpSession internal constructor(
             ),
         )
         closeSubscribers(reason)
-        cancelPendingRequests()
+        abandonPendingRequests()
         terminals.close()
     }
 
@@ -586,7 +600,7 @@ class AcpSession internal constructor(
         _status.value = SessionStatus.Offline
         process.removeSession(this)
         closeSubscribers(null)
-        cancelPendingRequests()
+        abandonPendingRequests()
         terminals.close()
         closed.complete(null)
     }
@@ -624,8 +638,28 @@ class AcpSession internal constructor(
         urlElicitationRequests.clear()
     }
 
+    /**
+     * Teardown is not the user declining. Complete the waiting coroutines with
+     * a dropped-request signal so [AcpClient] writes no response, and leave the
+     * host's pending request available for the next owner.
+     */
+    private fun abandonPendingRequests() {
+        val dropped = AcpRequestDroppedException(
+            "The session closed before the request was answered.",
+        )
+        pendingPermissions.values.forEach { pending ->
+            pending.result.completeExceptionally(dropped)
+        }
+        pendingPermissions.clear()
+        pendingElicitations.values.forEach { pending ->
+            pending.result.completeExceptionally(dropped)
+        }
+        pendingElicitations.clear()
+        urlElicitationRequests.clear()
+    }
+
     private fun settleStatusAfterReply() {
-        if (process.isDead) {
+        if (isClosed || process.isDead) {
             _status.value = SessionStatus.Offline
             return
         }
@@ -639,10 +673,18 @@ class AcpSession internal constructor(
     /**
      * Best-effort delivery that never blocks the shared agent-process
      * notification loop. A subscriber whose 256-message buffer is full is
-     * disconnected so its owner reconnects and replays the session.
+     * disconnected so its owner reconnects and replays the session. Requests
+     * are delivered once per subscriber; a replay after reattach fills in a
+     * subscriber that missed the original frame.
      */
     private fun emitFrame(message: SessionStreamServerMessage) {
+        val requestId = message.requestIdOrNull()
         subscribers.entries.toList().forEach { (id, subscriber) ->
+            // Mark before send: the collector can resume from trySend and
+            // trigger a replay before this loop reaches the next statement.
+            if (requestId != null && !subscriber.seenRequests.add(requestId)) {
+                return@forEach
+            }
             val result = subscriber.channel.trySend(message)
             if (result.isSuccess || result.isClosed) {
                 return@forEach
@@ -652,6 +694,10 @@ class AcpSession internal constructor(
                 subscriber.closed.complete(STREAM_FELL_BEHIND)
             }
         }
+    }
+
+    private fun clearSeenRequest(requestId: String) {
+        subscribers.values.forEach { subscriber -> subscriber.seenRequests.remove(requestId) }
     }
 
     private suspend fun contentBlock(reference: AttachmentReference): JsonObject =
@@ -687,6 +733,7 @@ class AcpSession internal constructor(
     private class Subscriber(
         val channel: Channel<SessionStreamServerMessage>,
         val closed: CompletableDeferred<String?>,
+        val seenRequests: MutableSet<String> = ConcurrentHashMap.newKeySet(),
     )
 
     companion object {
@@ -720,3 +767,10 @@ class AcpSessionSubscription internal constructor(
 
 private fun JsonElement.string(key: String): String? =
     ((this as? JsonObject)?.get(key) as? JsonPrimitive)?.content
+
+private fun SessionStreamServerMessage.requestIdOrNull(): String? =
+    when (this) {
+        is PermissionRequest -> requestId
+        is ElicitationRequest -> requestId
+        else -> null
+    }

@@ -299,9 +299,6 @@ private class FakeSessionCatalog : SessionCatalogReader {
     ): CatalogSession? = sessions(connectionId)
         .firstOrNull { session -> session.agentId == agentId && session.sessionId == sessionId }
 
-    override fun sessionDirectories(connectionId: String): List<String> =
-        sessions(connectionId).map { session -> session.cwd }.distinct()
-
     fun replace(
         connectionId: String,
         agentId: AgentId,
