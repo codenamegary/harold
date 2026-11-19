@@ -32,6 +32,10 @@ class TestSessionRepository(
     /** Runs before each network refresh so tests can hold one open. */
     var beforeRefresh: (suspend (String) -> Unit)? = null
 
+    /** How many times the view model actually asked the network for a scan. */
+    var refreshCalls: Int = 0
+        private set
+
     override fun observeSessions(): Flow<List<SessionListItem>> = sessions
 
     override fun observeSessions(connectionId: String): Flow<List<SessionListItem>> =
@@ -53,6 +57,7 @@ class TestSessionRepository(
         }
 
     override suspend fun refresh(connectionId: String): Result<SessionCatalog> {
+        refreshCalls += 1
         beforeRefresh?.invoke(connectionId)
         val listed = network.listSessions(connectionId)
         if (listed.isFailure) {

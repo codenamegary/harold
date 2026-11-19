@@ -53,6 +53,11 @@ data class AgentOption(
     val displayName: String,
 )
 
+enum class CreateSessionNotice {
+    RememberedWorkspaceMissing,
+    PreferredWorkspaceMissing,
+}
+
 data class CreateSessionUiState(
     val workspaces: List<WorkspaceRow> = emptyList(),
     val agents: List<AgentOption> = emptyList(),
@@ -60,6 +65,7 @@ data class CreateSessionUiState(
     val selectedAgentId: AgentId? = null,
     val submitting: Boolean = false,
     val error: String? = null,
+    val notice: CreateSessionNotice? = null,
 )
 
 data class PermissionUiState(

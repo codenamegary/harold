@@ -116,7 +116,6 @@ Everything Harold keeps on the host lives under `~/.harold/`:
 ~/.harold/
   agents.json        shared agent config (written over SFTP, atomic temp + rename)
   workspaces.json    remembered workspace folders
-  hidden-workspaces.json  workspace paths deleted from the list
   uploads/<sessionId>/...             attachment uploads
   run/<agent>/       runtime state for detached ACP hosts
     logs/active      active run id, written atomically before ready

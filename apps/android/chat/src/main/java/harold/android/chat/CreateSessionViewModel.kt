@@ -6,13 +6,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
-import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
 import harold.android.database.session.AgentRepository
 import harold.android.database.session.CachedAgent
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
+import harold.android.navigation.ChosenCreateSessionWorkspace
 import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.LastSessionSelection
 import harold.android.navigation.Navigator
@@ -52,7 +52,11 @@ class CreateSessionViewModel @Inject constructor(
     private var pendingCreatedWorkspace: CreatedWorkspaceResult? = null
     private var rememberedSelection: LastSessionSelection? = null
     private var preferredWorkspace: PreferredCreateSessionWorkspace? = null
+    private var preferredRowId: String? = null
     private var preferredAgentId: AgentId? = null
+    private var preferredRequested = false
+    private var pendingChosenWorkspace: ChosenCreateSessionWorkspace? = null
+    private var noticeDismissed = false
 
     init {
         viewModelScope.launch {
@@ -61,6 +65,7 @@ class CreateSessionViewModel @Inject constructor(
             // otherwise the first workspace wins before the value arrives.
             rememberedSelection = sessionPreferences.loadLastSessionSelection()
             preferredWorkspace = navigator.consumePreferredCreateSessionWorkspace()
+            preferredRequested = preferredWorkspace != null
             preferredAgentId = preferredWorkspace?.agentId
             observeWorkspaces()
             refreshWorkspaces()
@@ -68,23 +73,32 @@ class CreateSessionViewModel @Inject constructor(
         viewModelScope.launch {
             navigator.workspaceCreated.collect(::selectCreatedWorkspace)
         }
+        viewModelScope.launch {
+            navigator.chosenCreateSessionWorkspace.collect(::selectChosenWorkspace)
+        }
     }
 
     fun openNewWorkspace() {
-        val selectedOrigin = _uiState.value.workspaces
-            .firstOrNull { row -> row.id == _uiState.value.selectedWorkspaceId }
-            ?.connectionId
-            .orEmpty()
-        navigator.openAddWorkspace(preferredConnectionId = selectedOrigin)
+        val state = _uiState.value
+        val selected = state.workspaces.firstOrNull { row -> row.id == state.selectedWorkspaceId }
+        navigator.openAddWorkspace(preferredConnectionId = selected?.connectionId.orEmpty())
+    }
+
+    fun openWorkspaceChooser() {
+        navigator.openWorkspaceChooser()
     }
 
     fun onWorkspaceChanged(workspaceId: String) {
-        val workspace = _uiState.value.workspaces.firstOrNull { row -> row.id == workspaceId }
+        noticeDismissed = true
+        pendingChosenWorkspace = null
+        val state = _uiState.value
+        val workspace = state.workspaces.firstOrNull { row -> row.id == workspaceId }
         if (workspace == null || workspace.connectionId.isEmpty()) {
             _uiState.update { current ->
                 current.copy(
                     selectedWorkspaceId = workspaceId,
                     error = null,
+                    notice = null,
                 )
             }
             return
@@ -141,6 +155,9 @@ class CreateSessionViewModel @Inject constructor(
 
             result.fold(
                 onSuccess = { created ->
+                    // Record the pick on the host so the recent list reflects
+                    // real use. A failed touch must never block the session.
+                    userRepository.touchWorkspace(origin, workspace.path)
                     sessionCommands.emit(
                         SessionCommand.Created(
                             response = created,
@@ -185,31 +202,16 @@ class CreateSessionViewModel @Inject constructor(
     }
 
     private fun applyCachedWorkspaces(cached: List<CachedWorkspace>) {
-        val origins = targetOrigins()
-        val savedByOrigin = savedConnections.associateBy { connection -> connection.connectionId }
-        val scoped = savedConnections.isNotEmpty()
-        val rows = cached
-            .filter { workspace -> workspace.connectionId in origins }
-            .mapNotNull { cachedWorkspace ->
-                val workspace = cachedWorkspace.workspace
-                if (workspace.state != WorkspaceState.Available) {
-                    return@mapNotNull null
-                }
-                val connection = savedByOrigin[cachedWorkspace.connectionId]
-                workspace.toWorkspaceRow().copy(
-                    id = if (scoped) {
-                        "${cachedWorkspace.connectionId}|${workspace.id}"
-                    } else {
-                        workspace.id
-                    },
-                    connectionId = cachedWorkspace.connectionId,
-                    connectionName = connection?.name.orEmpty(),
-                    connectionColorId = connection?.colorId.orEmpty(),
-                    connectionIconId = connection?.iconId.orEmpty(),
-                )
-            }
+        val rows = workspaceRows(
+            cached = cached,
+            origins = targetOrigins(),
+            savedConnections = savedConnections,
+        )
 
         val current = _uiState.value
+        val chosenRow = pendingChosenWorkspace?.let { chosen ->
+            findWorkspace(rows, chosen.connectionId, chosen.workspaceId)
+        }
         val pendingId = pendingCreatedWorkspace?.let { created ->
             workspaceId(created.connectionId, created.workspaceId)
         }
@@ -221,15 +223,47 @@ class CreateSessionViewModel @Inject constructor(
                     (preferred.connectionId.isEmpty() || row.connectionId == preferred.connectionId)
             }
         }
-        val rememberedRow = rememberedSelection?.let { remembered ->
-            val rememberedId = workspaceId(remembered.connectionId, remembered.workspaceId)
-            rows.firstOrNull { row -> row.id == rememberedId }
-        }
         val defaultRow = rows.firstOrNull { row ->
             row.connectionId == defaultWorkspaceOrigin() &&
                 row.path == defaultWorkspacePath()
         }
-        val selected = pendingRow ?: explicitRow ?: preferredRow ?: rememberedRow ?: defaultRow ?: rows.firstOrNull()
+        val rememberedRow = rememberedSelection?.let { remembered ->
+            val rememberedId = workspaceId(remembered.connectionId, remembered.workspaceId)
+            rows.firstOrNull { row -> row.id == rememberedId }
+        }
+        val singleSavedRow = rows.singleOrNull()
+        val selected = chosenRow
+            ?: pendingRow
+            ?: explicitRow
+            ?: preferredRow
+            ?: defaultRow
+            ?: rememberedRow
+            ?: singleSavedRow
+
+        // A path or id that is no longer saved must never be replaced by
+        // another saved path without telling the user.
+        val missingPreferred = preferredWorkspace != null && preferredRow == null
+        val missingRemembered = rememberedSelection != null && rememberedRow == null
+        if (preferredRow != null) {
+            preferredRowId = preferredRow.id
+            preferredWorkspace = null
+        } else if (missingPreferred) {
+            // Keep the requested path pending so the notice survives later
+            // cache emissions, and select it if the folder is saved later.
+            preferredAgentId = null
+        }
+        val missingNotice = when {
+            missingPreferred -> CreateSessionNotice.PreferredWorkspaceMissing
+            preferredRequested -> null
+            missingRemembered -> CreateSessionNotice.RememberedWorkspaceMissing
+            else -> null
+        }
+        val notice = when {
+            noticeDismissed -> null
+            current.notice == missingNotice -> current.notice
+            else -> missingNotice
+        }
+
         val agentsForSelection = selected != null && selected.connectionId == agentsOrigin
 
         _uiState.update { state ->
@@ -238,6 +272,7 @@ class CreateSessionViewModel @Inject constructor(
                 selectedWorkspaceId = selected?.id.orEmpty(),
                 agents = if (agentsForSelection) state.agents else emptyList(),
                 selectedAgentId = if (agentsForSelection) state.selectedAgentId else null,
+                notice = notice,
             )
         }
         if (selected != null && selected.connectionId.isNotEmpty() && !agentsForSelection) {
@@ -246,12 +281,37 @@ class CreateSessionViewModel @Inject constructor(
         if (selected != null && selected.id == pendingId) {
             pendingCreatedWorkspace = null
         }
-        if (preferredRow != null) {
-            preferredWorkspace = null
+        if (chosenRow != null) {
+            pendingChosenWorkspace = null
+        }
+    }
+
+    private fun selectChosenWorkspace(result: ChosenCreateSessionWorkspace) {
+        noticeDismissed = true
+        val workspace = findWorkspace(_uiState.value.workspaces, result.connectionId, result.workspaceId)
+        if (workspace == null) {
+            // The chooser can report before Room publishes the row. Keep the
+            // result and let the next cache emission select it.
+            pendingChosenWorkspace = result
+            return
+        }
+        pendingChosenWorkspace = null
+        selectWorkspace(workspace)
+    }
+
+    private fun findWorkspace(
+        rows: List<WorkspaceRow>,
+        connectionId: String,
+        workspaceId: String,
+    ): WorkspaceRow? {
+        val scopedId = workspaceId(connectionId, workspaceId)
+        return rows.firstOrNull { row -> row.id == scopedId } ?: rows.firstOrNull { row ->
+            row.connectionId == connectionId && row.id == workspaceId
         }
     }
 
     private fun selectCreatedWorkspace(result: CreatedWorkspaceResult) {
+        noticeDismissed = true
         pendingCreatedWorkspace = result
         val targetId = workspaceId(result.connectionId, result.workspaceId)
         val workspace = _uiState.value.workspaces.firstOrNull { row ->
@@ -272,6 +332,7 @@ class CreateSessionViewModel @Inject constructor(
             current.copy(
                 selectedWorkspaceId = workspace.id,
                 error = null,
+                notice = null,
                 agents = if (sameOrigin) current.agents else emptyList(),
                 selectedAgentId = if (sameOrigin) current.selectedAgentId else null,
             )
@@ -289,11 +350,11 @@ class CreateSessionViewModel @Inject constructor(
         }
 
     private fun workspaceId(connectionId: String, workspaceId: String): String =
-        if (savedConnections.isNotEmpty()) {
-            "$connectionId|$workspaceId"
-        } else {
-            workspaceId
-        }
+        scopedWorkspaceId(
+            connectionId = connectionId,
+            workspaceId = workspaceId,
+            scoped = savedConnections.isNotEmpty(),
+        )
 
     private fun loadAgents(workspace: WorkspaceRow) {
         val origin = workspace.connectionId.ifEmpty { return }
@@ -333,18 +394,22 @@ class CreateSessionViewModel @Inject constructor(
         val agents = cachedAgents
             .filter { agent -> agent.enabled }
             .map { agent -> AgentOption(id = agent.agentId, displayName = agent.displayName) }
+        val current = _uiState.value
+        val workspace = selectedWorkspace()
+        val preferredAgent = preferredAgentId
+            ?.takeIf { workspace?.id == preferredRowId }
+            ?.takeIf { preferred -> agents.any { agent -> agent.id == preferred } }
         val rememberedAgent = rememberedAgentForSelectedWorkspace()
             ?.takeIf { remembered -> agents.any { agent -> agent.id == remembered } }
-        val preferredAgent = preferredAgentId
-            ?.takeIf { preferred -> agents.any { agent -> agent.id == preferred } }
-        val current = _uiState.value
         val selectedAgent = current.selectedAgentId
             ?.takeIf { selected -> agents.any { agent -> agent.id == selected } }
             ?: preferredAgent
             ?: rememberedAgent
             ?: defaultAgentForSelectedWorkspace(agents)
+            ?: lastUsedAgentForSelectedConnection()
+                ?.takeIf { lastUsed -> agents.any { agent -> agent.id == lastUsed } }
             ?: agents.firstOrNull()?.id
-        if (preferredAgent != null && selectedAgent == preferredAgent) {
+        if (agents.isNotEmpty()) {
             preferredAgentId = null
         }
         _uiState.update { state ->
@@ -360,15 +425,10 @@ class CreateSessionViewModel @Inject constructor(
      * Device-local default workspace: the saved connection whose default the
      * user picked in connection settings, matched by host path.
      */
-    private fun defaultWorkspacePath(): String? {
-        val origin = _uiState.value.workspaces
-            .firstOrNull { row -> row.connectionId == defaultWorkspaceOrigin() }
-            ?.connectionId
-            ?: return null
-        return savedConnections
-            .find { connection -> connection.connectionId == origin }
+    private fun defaultWorkspacePath(): String? =
+        savedConnections
+            .find { connection -> connection.connectionId == defaultWorkspaceOrigin() }
             ?.defaultWorkspacePath
-    }
 
     private fun defaultWorkspaceOrigin(): String? =
         savedConnections
@@ -376,10 +436,7 @@ class CreateSessionViewModel @Inject constructor(
             ?.connectionId
 
     private fun defaultAgentForSelectedWorkspace(agents: List<AgentOption>): AgentId? {
-        val origin = _uiState.value.workspaces
-            .firstOrNull { row -> row.id == _uiState.value.selectedWorkspaceId }
-            ?.connectionId
-            ?: return null
+        val origin = selectedWorkspace()?.connectionId ?: return null
         val default = savedConnections
             .find { connection -> connection.connectionId == origin }
             ?.defaultAgentId
@@ -389,11 +446,20 @@ class CreateSessionViewModel @Inject constructor(
 
     private fun rememberedAgentForSelectedWorkspace(): AgentId? {
         val remembered = rememberedSelection ?: return null
-        val selected = _uiState.value.workspaces
-            .firstOrNull { row -> row.id == _uiState.value.selectedWorkspaceId }
-            ?: return null
+        val selected = selectedWorkspace() ?: return null
         val rememberedId = workspaceId(remembered.connectionId, remembered.workspaceId)
         return remembered.agentId.takeIf { selected.id == rememberedId }
+    }
+
+    private fun lastUsedAgentForSelectedConnection(): AgentId? {
+        val remembered = rememberedSelection ?: return null
+        val selected = selectedWorkspace() ?: return null
+        return remembered.agentId.takeIf { selected.connectionId == remembered.connectionId }
+    }
+
+    private fun selectedWorkspace(): WorkspaceRow? {
+        val state = _uiState.value
+        return state.workspaces.firstOrNull { row -> row.id == state.selectedWorkspaceId }
     }
 
     private suspend fun agentNeedsLogin(connectionId: String, agentId: AgentId): Boolean =

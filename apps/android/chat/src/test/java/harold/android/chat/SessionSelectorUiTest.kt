@@ -1,5 +1,6 @@
 package harold.android.chat
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -89,6 +90,37 @@ class SessionSelectorUiTest {
 
         composeTestRule.onNodeWithTag("session_menu_row_cursor:sess_01").assertIsDisplayed().performClick()
         assertEquals("sess_01", selected)
+    }
+
+    @Test
+    fun sessionMenuRowClickStaysBoundToTheIdAfterTheOrderChanges() {
+        var clicked: String? = null
+        val rows = mutableStateOf(
+            listOf(
+                sampleSession,
+                sampleSession.copy(sessionId = "sess_02", name = "Beta"),
+            ),
+        )
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        pickerVisible = true,
+                        recentSessions = rows.value,
+                    ),
+                    onSessionClick = { clicked = it.id },
+                )
+            }
+        }
+
+        composeTestRule.runOnIdle {
+            rows.value = rows.value.reversed()
+        }
+        composeTestRule.onNodeWithTag("session_menu_row_cursor:sess_01")
+            .assertIsDisplayed()
+            .performClick()
+
+        assertEquals("cursor:sess_01", clicked)
     }
 
     @Test

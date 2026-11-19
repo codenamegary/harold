@@ -65,6 +65,8 @@ import harold.android.network.SessionConfigApi
 import harold.android.network.SessionFolderProbe
 import harold.android.network.SessionFolderState
 import harold.android.network.apiErrorMessage
+import harold.android.process.initialSessionTitle
+import harold.android.process.isInitialSessionTitle
 import harold.android.credentials.SavedConnection
 import harold.android.session.ConnectionHealth
 import harold.android.session.ConnectionStatus
@@ -121,6 +123,7 @@ class ChatViewModel @Inject constructor(
     private val sessionAttention: SessionAttentionMarks? = null,
     private val permissionNotifier: PermissionAttentionNotifier? = null,
     private val hostUsage: HostUsageApi? = null,
+    private val sessionRefresher: SessionCatalogRefresher = SessionCatalogRefresher(sessionRepository),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -166,6 +169,7 @@ class ChatViewModel @Inject constructor(
     private var activeOrigin: String? = null
     private var metadataLoaded = false
     private val unreachableOrigins = mutableSetOf<String>()
+    private val linkStatuses = mutableMapOf<String, ConnectionStatus>()
     private val refreshMutex = Mutex()
     private var pickerRefreshJob: Job? = null
     private var restoreJob: Job? = null
@@ -176,6 +180,11 @@ class ChatViewModel @Inject constructor(
     private var openElicitationSheetOnArrival: Boolean = false
     private var attachmentLocalIdCounter: Int = 0
     private var catalog: List<SessionRow> = emptyList()
+    /**
+     * The row ids the open picker is pinned to. While it is non-null, updates
+     * resolve current row content by id but cannot reorder or add rows.
+     */
+    private var pickerSessionIds: List<String>? = null
     private val titlePulledSessionIds = mutableSetOf<String>()
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
@@ -311,7 +320,13 @@ class ChatViewModel @Inject constructor(
                                 sessionOwner.watch(selected.agentId, selected.sessionId)
                             }
                     }
-                    refreshCatalog()
+                    refreshCatalog(
+                        if (metadataLoaded) {
+                            SessionRefreshTrigger.ConnectionChanged
+                        } else {
+                            SessionRefreshTrigger.AppStart
+                        },
+                    )
                 } else {
                     sessionForegroundCoordinator?.setConnectionId(null)
                     sessionOwner.watch(null, null)
@@ -370,7 +385,7 @@ class ChatViewModel @Inject constructor(
         val origin = selectedOrActiveOrigin() ?: return
         sessionForegroundCoordinator?.setConnectionId(origin)
         viewModelScope.launch {
-            refreshCatalog()
+            refreshCatalog(SessionRefreshTrigger.Foreground)
         }
     }
 
@@ -474,11 +489,17 @@ class ChatViewModel @Inject constructor(
      * painted, and repeated opens share the one in-flight scan.
      */
     fun showPicker() {
-        _uiState.update { current ->
-            current.copy(
+        val current = _uiState.value
+        if (!current.pickerVisible) {
+            pickerSessionIds = current.recentSessions
+                .takeIf { rows -> rows.isNotEmpty() }
+                ?.map { row -> row.id }
+        }
+        _uiState.update { state ->
+            state.copy(
                 pickerVisible = true,
-                recentSessionsLoading = current.recentSessionsLoading ||
-                    current.recentSessions.isEmpty(),
+                recentSessionsLoading = state.recentSessionsLoading ||
+                    state.recentSessions.isEmpty(),
             )
         }
         if (_uiState.value.isRefreshing || pickerRefreshJob?.isActive == true) {
@@ -487,7 +508,7 @@ class ChatViewModel @Inject constructor(
         pickerRefreshJob = viewModelScope.launch {
             try {
                 delay(PICKER_REFRESH_DELAY_MS)
-                refreshCatalog()
+                refreshCatalog(SessionRefreshTrigger.PickerOpened)
             } finally {
                 _uiState.update { current -> current.copy(recentSessionsLoading = false) }
             }
@@ -495,14 +516,16 @@ class ChatViewModel @Inject constructor(
     }
 
     fun hidePicker() {
+        pickerSessionIds = null
         _uiState.update { current -> current.copy(pickerVisible = false) }
+        publishRecentSessions()
     }
 
     fun retryRecentSessions() {
         _uiState.update { current -> current.copy(recentSessionsLoading = true) }
         viewModelScope.launch {
             try {
-                refreshCatalog()
+                refreshCatalog(SessionRefreshTrigger.Retry)
             } finally {
                 _uiState.update { current -> current.copy(recentSessionsLoading = false) }
             }
@@ -657,7 +680,7 @@ class ChatViewModel @Inject constructor(
         markModelApplyPending(row)
         activateSession(row)
         startModelSync()
-        refreshCatalog()
+        refreshCatalog(SessionRefreshTrigger.SessionCreated)
     }
 
     /**
@@ -665,6 +688,7 @@ class ChatViewModel @Inject constructor(
      * row with no session id, and create the session once login succeeds.
      */
     private suspend fun openPendingSession(workspace: WorkspaceRow, agentId: AgentId) {
+        pickerSessionIds = null
         if (voiceDictationController.state.visible) {
             syncVoiceDictationState(voiceDictationController.cancel())
         }
@@ -680,6 +704,7 @@ class ChatViewModel @Inject constructor(
         agentAuth.resetFor(agentId)
         sessionOwner.watch(agentId, null)
         syncActiveSessionsFromUiState()
+        publishRecentSessions()
         agentAuth.hydrate(agentId)
         clearChangesBadge()
     }
@@ -1280,6 +1305,7 @@ class ChatViewModel @Inject constructor(
                     connectionId = originToRemove,
                     repository = connectionRepository,
                 )
+                sessionRefresher.forget(originToRemove)
                 hostUsage?.forgetConnection(originToRemove)
                 settleAfterForget(
                     removedConnectionId = originToRemove,
@@ -1305,7 +1331,7 @@ class ChatViewModel @Inject constructor(
                     )
                 }
                 if (remains) {
-                    refreshCatalog()
+                    refreshCatalog(SessionRefreshTrigger.ConnectionChanged)
                 } else {
                     activeSessionTracker?.replaceAll(emptyList())
                     sessionForegroundCoordinator?.onSessionsChanged()
@@ -1371,6 +1397,7 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun activateSession(row: SessionRow) {
+        pickerSessionIds = null
         openElicitationSheetOnArrival = false
         if (voiceDictationController.state.visible) {
             syncVoiceDictationState(voiceDictationController.cancel())
@@ -1644,13 +1671,14 @@ class ChatViewModel @Inject constructor(
     /**
      * `session/list` is the only title source for agents that never push
      * `session_info_update`. Pull it once per session when a turn completes
-     * and the header still shows a placeholder.
+     * and the header still shows a placeholder or generated initial title.
      */
     private suspend fun pullSelectedSessionTitle() {
         val selected = _uiState.value.selectedSession ?: return
         val placeholderName = selected.name.isBlank() ||
             selected.name == selected.sessionId ||
-            selected.name == NEW_SESSION_NAME
+            selected.name == NEW_SESSION_NAME ||
+            isInitialSessionTitle(selected.name)
         if (selected.sessionId.isEmpty() || !placeholderName) {
             return
         }
@@ -1772,12 +1800,27 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun onHaroldLinks(links: List<ConnectionHealth>) {
+        val previousStatuses = linkStatuses.toMap()
+        val newlyConnected = links
+            .filter { link ->
+                val previous = previousStatuses[link.connectionId]
+                link.status == ConnectionStatus.Connected &&
+                    previous != null &&
+                    previous != ConnectionStatus.Connected &&
+                    previous != ConnectionStatus.Connecting
+            }
+            .map { link -> link.connectionId }
+        linkStatuses.clear()
+        linkStatuses.putAll(links.associate { link -> link.connectionId to link.status })
+
         val byOrigin = links.associateBy { link -> link.connectionId }
         fun reachableFor(row: SessionRow): Boolean {
             val link = byOrigin[row.connectionId] ?: return row.connectionReachable
             return when (link.status) {
                 ConnectionStatus.Connected -> true
-                ConnectionStatus.Unreachable -> false
+                // One failed health check is not proof the session is gone.
+                // Keep the last known reachability until a refresh confirms it.
+                ConnectionStatus.Unreachable,
                 // Closed means the link was parked, for example while the
                 // photo picker had the app in the background. It is not a
                 // reachability failure. Keep the last state until the link
@@ -1798,9 +1841,15 @@ class ChatViewModel @Inject constructor(
         }
         publishRecentSessions()
         syncWatch()
+
+        if (newlyConnected.isNotEmpty()) {
+            viewModelScope.launch {
+                refreshCatalog(SessionRefreshTrigger.ConnectionChanged)
+            }
+        }
     }
 
-    private suspend fun refreshCatalog() = refreshMutex.withLock {
+    private suspend fun refreshCatalog(trigger: SessionRefreshTrigger) = refreshMutex.withLock {
         loadConnectionMetadata()
         publishLiveSessions()
 
@@ -1830,13 +1879,16 @@ class ChatViewModel @Inject constructor(
         var refreshError: String? = null
         var lastError: Throwable? = null
         origins.forEach { connectionId ->
-            val refreshResult = sessionRepository.refresh(connectionId)
+            val refreshResult = sessionRefresher.refresh(connectionId, trigger)
             refreshResult.fold(
-                onSuccess = { catalog ->
+                onSuccess = { outcome ->
+                    val catalog = outcome.catalog
                     applyWorkspaces(catalog.workspaces)
                     applyAgents(catalog.agents)
                     anySuccess = true
-                    unreachableOrigins.remove(connectionId)
+                    if (outcome.refreshed) {
+                        unreachableOrigins.remove(connectionId)
+                    }
                     if (!catalog.authoritative) {
                         allAuthoritative = false
                         refreshError = refreshError
@@ -1930,6 +1982,7 @@ class ChatViewModel @Inject constructor(
         val scopedToHarold = savedConnections.isNotEmpty()
         val haroldByOrigin = savedConnections.associateBy { connection -> connection.connectionId }
         val pushedTitles = sessionOwner.sessionTitles.value
+        val previousReachability = catalog.associate { row -> row.id to row.connectionReachable }
         val visibleSessions = if (origins.isEmpty()) {
             liveSessions
         } else {
@@ -1938,12 +1991,16 @@ class ChatViewModel @Inject constructor(
         val rows = visibleSessions
             .map { listed ->
                 val connection = haroldByOrigin[listed.connectionId]
-                val row = listed.toSessionRow().copy(
+                val base = listed.toSessionRow().copy(
                     connectionId = if (scopedToHarold) listed.connectionId else "",
                     connectionName = connection?.name.orEmpty(),
                     connectionColorId = connection?.colorId.orEmpty(),
                     connectionIconId = connection?.iconId.orEmpty(),
-                    connectionReachable = listed.connectionId !in unreachableOrigins,
+                )
+                val row = base.copy(
+                    // A failed refresh or a dead process is not proof a row is
+                    // offline. Keep the last confirmed reachability.
+                    connectionReachable = previousReachability[base.id] ?: base.connectionReachable,
                 )
                 titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row
             }
@@ -1992,9 +2049,30 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun publishRecentSessions() {
-        val recent = catalog
-            .sortedByDescending { row -> row.updatedAt }
-            .take(RECENT_SESSIONS_LIMIT)
+        val pickerVisible = _uiState.value.pickerVisible
+        if (!pickerVisible) {
+            pickerSessionIds = null
+        }
+        val recent = if (pickerVisible) {
+            val ids = pickerSessionIds ?: catalog
+                .sortedByDescending { row -> row.updatedAt }
+                .take(RECENT_SESSIONS_LIMIT)
+                .map { row -> row.id }
+                .takeIf { visible -> visible.isNotEmpty() }
+            if (ids == null) {
+                emptyList()
+            } else {
+                if (pickerSessionIds == null) {
+                    pickerSessionIds = ids
+                }
+                val byId = catalog.associateBy { row -> row.id }
+                ids.mapNotNull { id -> byId[id] }
+            }
+        } else {
+            catalog
+                .sortedByDescending { row -> row.updatedAt }
+                .take(RECENT_SESSIONS_LIMIT)
+        }
         _uiState.update { current -> current.copy(recentSessions = recent) }
     }
 
@@ -2052,6 +2130,7 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun dropSession(row: SessionRow) {
+        pickerSessionIds = null
         sessionOwner.forget(row.agentId, row.sessionId)
         val origin = row.connectionId.ifEmpty { activeOrigin.orEmpty() }
         if (origin.isNotEmpty()) {
@@ -2281,7 +2360,7 @@ class ChatViewModel @Inject constructor(
     private fun pendingSessionRow(workspace: WorkspaceRow, agentId: AgentId): SessionRow =
         SessionRow(
             sessionId = "",
-            name = NEW_SESSION_NAME,
+            name = initialSessionTitle(workspace.path),
             cwd = workspace.path,
             workspaceId = workspace.id,
             workspaceLabel = workspace.name,

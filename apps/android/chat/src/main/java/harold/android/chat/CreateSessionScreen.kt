@@ -41,6 +41,9 @@ import harold.android.ui.debug.probeTag
 
 private val MIN_TOUCH_TARGET = 48.dp
 
+/** The dropdown mirrors the session picker: five recent rows, then the rest. */
+private const val RECENT_WORKSPACE_LIMIT = 5
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateSessionScreen(
@@ -50,6 +53,7 @@ fun CreateSessionScreen(
     onAgentChanged: (harold.android.contracts.AgentId) -> Unit,
     onSubmit: () -> Unit,
     onNewWorkspaceClick: () -> Unit = {},
+    onAllWorkspacesClick: () -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -85,7 +89,23 @@ fun CreateSessionScreen(
                 selectedWorkspaceId = createState.selectedWorkspaceId,
                 onWorkspaceChanged = onWorkspaceChanged,
                 onNewWorkspaceClick = onNewWorkspaceClick,
+                onAllWorkspacesClick = onAllWorkspacesClick,
             )
+
+            val notice = when (createState.notice) {
+                CreateSessionNotice.RememberedWorkspaceMissing ->
+                    stringResource(R.string.create_session_remembered_workspace_missing)
+                CreateSessionNotice.PreferredWorkspaceMissing ->
+                    stringResource(R.string.create_session_preferred_workspace_missing)
+                null -> null
+            }
+            if (notice != null) {
+                Text(
+                    text = notice,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.probeTag("create_session_notice"),
+                )
+            }
 
             AgentDropdown(
                 agents = createState.agents,
@@ -125,9 +145,14 @@ private fun WorkspaceDropdown(
     selectedWorkspaceId: String,
     onWorkspaceChanged: (String) -> Unit,
     onNewWorkspaceClick: () -> Unit = {},
+    onAllWorkspacesClick: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedWorkspace = workspaces.firstOrNull { workspace -> workspace.id == selectedWorkspaceId }
+    val labeled = remember(workspaces) {
+        disambiguateWorkspaceLabels(workspaces.sortedWith(recentWorkspaceOrder))
+    }
+    // The field resolves the selection from every row; only the menu is capped.
+    val selectedWorkspace = labeled.firstOrNull { workspace -> workspace.id == selectedWorkspaceId }
     val selectedLabel = selectedWorkspace?.pickerLabel() ?: "Choose workspace"
     val showSelectedBadge = selectedWorkspace != null &&
         (
@@ -191,70 +216,99 @@ private fun WorkspaceDropdown(
                 modifier = Modifier.probeTag("create_session_new_workspace"),
             )
 
-            if (workspaces.isNotEmpty()) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
-            }
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
 
-            workspaces.forEach { workspace ->
-                val hasBadge = workspace.connectionColorId.isNotEmpty() ||
-                    workspace.connectionIconId.isNotEmpty() ||
-                    workspace.connectionName.isNotEmpty()
-                val isSelected = workspace.id == selectedWorkspaceId
-                DropdownMenuItem(
-                    leadingIcon = if (hasBadge) {
-                        {
-                            HaroldBadge(
-                                colorId = workspace.connectionColorId,
-                                iconId = workspace.connectionIconId,
-                                size = 22.dp,
-                                modifier = Modifier.testTag("create_session_workspace_option_badge_${workspace.id}"),
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                    text = {
-                        Column {
-                            Text(
-                                text = workspace.pickerLabel(),
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (workspace.path.isNotBlank()) {
-                                Text(
-                                    text = workspace.path,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    },
-                    trailingIcon = if (isSelected) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    } else {
-                        null
-                    },
+            labeled.take(RECENT_WORKSPACE_LIMIT).forEach { workspace ->
+                WorkspaceOption(
+                    workspace = workspace,
+                    selected = workspace.id == selectedWorkspaceId,
                     onClick = {
                         onWorkspaceChanged(workspace.id)
                         expanded = false
                     },
-                    modifier = Modifier.probeTag(createSessionWorkspaceOptionTag(workspace.id)),
                 )
             }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.create_session_all_workspaces),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onAllWorkspacesClick()
+                },
+                modifier = Modifier.probeTag("create_session_all_workspaces"),
+            )
         }
     }
+}
+
+@Composable
+private fun WorkspaceOption(
+    workspace: WorkspaceRow,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val hasBadge = workspace.connectionColorId.isNotEmpty() ||
+        workspace.connectionIconId.isNotEmpty() ||
+        workspace.connectionName.isNotEmpty()
+    DropdownMenuItem(
+        leadingIcon = if (hasBadge) {
+            {
+                HaroldBadge(
+                    colorId = workspace.connectionColorId,
+                    iconId = workspace.connectionIconId,
+                    size = 22.dp,
+                    modifier = Modifier.testTag("create_session_workspace_option_badge_${workspace.id}"),
+                )
+            }
+        } else {
+            null
+        },
+        text = {
+            Column {
+                Text(
+                    text = workspace.pickerLabel(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (workspace.path.isNotBlank()) {
+                    Text(
+                        text = workspace.path,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        trailingIcon = if (selected) {
+            {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        } else {
+            null
+        },
+        onClick = onClick,
+        modifier = Modifier.probeTag(createSessionWorkspaceOptionTag(workspace.id)),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

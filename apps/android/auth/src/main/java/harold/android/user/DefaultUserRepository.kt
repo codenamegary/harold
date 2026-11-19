@@ -44,6 +44,11 @@ class DefaultUserRepository @Inject constructor(
         body: CreateWorkspaceBody,
     ) = workspaceApi.createWorkspace(connectionId, body)
 
+    override suspend fun touchWorkspace(
+        connectionId: String,
+        path: String,
+    ) = workspaceApi.touchWorkspace(connectionId, path)
+
     override suspend fun listSessions(
         connectionId: String,
         cwd: String?,

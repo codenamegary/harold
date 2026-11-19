@@ -15,12 +15,12 @@ import kotlinx.coroutines.flow.map
 /**
  * The session lists the live ACP processes have reported. This is a memory-only
  * view: agents own session history, the app just compiles their `session/list`
- * answers here so the UI, workspace hints, and opening a session's working
- * directory do not need a second catalog in Room.
+ * answers here so the UI and opening a session's working directory do not need
+ * a second catalog in Room.
  *
  * Each snapshot is owned by one `(connection, agent)` pair. Listing an agent
- * replaces only that agent's rows. Process death marks that agent's rows stale
- * for the saved connections that shared the process.
+ * replaces only that agent's rows. Process death keeps that agent's rows until
+ * a successful `session/list` confirms which sessions still exist.
  */
 @Singleton
 class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
@@ -46,11 +46,6 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
         _snapshots.value
             .filter { snapshot -> snapshot.connectionId == connectionId }
             .flatMap { snapshot -> snapshot.sessions }
-
-    override fun sessionDirectories(connectionId: String): List<String> =
-        sessions(connectionId)
-            .map { session -> session.cwd }
-            .distinct()
 
     override fun find(
         connectionId: String,
@@ -163,7 +158,7 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
                     agentId = agentId,
                     sessionId = sessionId,
                     cwd = cwd.orEmpty(),
-                    title = title ?: "New session",
+                    title = title ?: sessionId,
                     updatedAt = Instant.now().toString(),
                     unavailable = true,
                 )
@@ -258,8 +253,9 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
 
     /**
      * A process exit does not prove the agent lost its sessions. Keep the rows
-     * and mark the snapshot stale. The next successful `session/list` clears
-     * the flag and drops rows the agent no longer reports.
+     * and leave them marked reachable. The next successful `session/list` is
+     * the confirmation point that clears the flag and drops rows the agent no
+     * longer reports.
      */
     fun removeAgent(connectionId: String, agentId: AgentId) {
         synchronized(lock) {
@@ -268,7 +264,7 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
             if (current.sessions.isEmpty()) {
                 byKey.remove(key)
             } else {
-                byKey[key] = current.copy(loading = false, error = null, stale = true)
+                byKey[key] = current.copy(loading = false, error = null)
             }
             publishLocked()
         }

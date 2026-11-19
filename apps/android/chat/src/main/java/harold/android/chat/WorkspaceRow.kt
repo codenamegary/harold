@@ -8,12 +8,21 @@ data class WorkspaceRow(
     val name: String,
     val path: String,
     val state: WorkspaceState,
+    /** Host workspace id. Unlike [id], this is never connection-scoped. */
+    val workspaceId: String = id,
+    val lastUsedAt: String = "",
     val connectionId: String = "",
     val connectionName: String = "",
     val connectionColorId: String = "",
     val connectionIconId: String = "",
+    val pickerSuffix: String = "",
 ) {
-    fun pickerLabel(): String = name
+    fun pickerLabel(): String =
+        if (pickerSuffix.isEmpty()) {
+            name
+        } else {
+            "$name ($pickerSuffix)"
+        }
 }
 
 fun Workspace.toWorkspaceRow(): WorkspaceRow =
@@ -22,4 +31,6 @@ fun Workspace.toWorkspaceRow(): WorkspaceRow =
         name = name,
         path = path,
         state = state,
+        workspaceId = id,
+        lastUsedAt = lastUsedAt,
     )

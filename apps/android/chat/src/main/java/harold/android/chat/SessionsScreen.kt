@@ -34,6 +34,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
@@ -51,6 +60,12 @@ import harold.android.ui.components.SwipeToDeleteListItem
 import harold.android.ui.components.haroldColorOption
 
 private val MIN_TOUCH_TARGET = 48.dp
+
+/** How many cached rows the all-sessions list composes at once. */
+private const val SESSION_PAGE_SIZE = 50
+
+/** Start the next window this many rows before the end of the current one. */
+private const val SESSION_PREFETCH_DISTANCE = 8
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,7 +133,45 @@ fun SessionsListContent(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     onConnectionFilter: (String?) -> Unit = {},
+    pageSize: Int = SESSION_PAGE_SIZE,
 ) {
+    // The catalog is already in memory. This window only decides how many of
+    // its rows are composed; it never asks an agent for another page.
+    var visibleCount by rememberSaveable(uiState.search, uiState.connectionFilter) {
+        mutableIntStateOf(pageSize)
+    }
+    var lastSearch by rememberSaveable { mutableStateOf(uiState.search) }
+    var lastFilter by rememberSaveable { mutableStateOf(uiState.connectionFilter) }
+    // The window resets before the old layout settles. Block the prefetch
+    // effect until the scroll-to-top has run, otherwise a search can refill
+    // the window from the pre-search scroll position.
+    var windowResetting by remember { mutableStateOf(false) }
+    val totalSessions = uiState.sessions.size
+    val liveTotal by rememberUpdatedState(totalSessions)
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            !windowResetting &&
+                visibleCount < liveTotal &&
+                lastVisible >= visibleCount - 1 - SESSION_PREFETCH_DISTANCE
+        }
+    }
+    LaunchedEffect(shouldLoadMore, visibleCount) {
+        if (shouldLoadMore) {
+            visibleCount = minOf(visibleCount + pageSize, liveTotal)
+        }
+    }
+    LaunchedEffect(uiState.search, uiState.connectionFilter) {
+        if (uiState.search != lastSearch || uiState.connectionFilter != lastFilter) {
+            lastSearch = uiState.search
+            lastFilter = uiState.connectionFilter
+            windowResetting = true
+            listState.scrollToItem(0)
+            windowResetting = false
+        }
+    }
+    val visibleSessions = uiState.sessions.take(visibleCount)
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -251,7 +304,7 @@ fun SessionsListContent(
                     contentPadding = PaddingValues(bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(uiState.sessions, key = { session -> session.id }) { session ->
+                    items(visibleSessions, key = { session -> session.id }) { session ->
                         SwipeToDeleteListItem(
                             rowTag = session.id,
                             deleteLabel = stringResource(R.string.sessions_delete),
