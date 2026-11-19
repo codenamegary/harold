@@ -507,10 +507,8 @@ class AgentProcess internal constructor(
         val session = candidates.firstOrNull { candidate -> candidate.isPrompting }
             ?: candidates.firstOrNull { candidate -> candidate.hasWork() }
             ?: candidates.firstOrNull()
-            ?: throw AcpRemoteException(
-                code = -32602,
-                detail = "Unknown session: ${sessionId ?: "(none)"}",
-                data = null,
+            ?: throw AcpRequestDroppedException(
+                "This client does not host session ${sessionId ?: "(none)"}.",
             )
         touch()
         return when (method) {

@@ -32,6 +32,20 @@ class HostAgentCommandTest {
     }
 
     @Test
+    fun connectPassesTheClientIdToTheHost() {
+        val command = hostAgentCommand(
+            script = "echo host-script\n",
+            mode = "connect",
+            agentId = "opencode",
+            command = "exec 'opencode' 'acp'",
+            offset = LIVE_OFFSET,
+            clientId = "client-a",
+        )
+
+        assertTrue(command.endsWith(" -1 'client-a'"))
+    }
+
+    @Test
     fun stopNeedsOnlyTheAgentId() {
         val command = hostAgentCommand(
             script = "echo host-script\n",
