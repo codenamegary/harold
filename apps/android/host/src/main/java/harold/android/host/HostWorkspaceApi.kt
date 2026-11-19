@@ -15,8 +15,6 @@ import harold.android.contracts.GitScope
 import harold.android.contracts.GitSummary
 import harold.android.contracts.GitWorktreeCollection
 import harold.android.contracts.PageInfo
-import harold.android.contracts.SessionFolder
-import harold.android.contracts.SessionFolderCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceSource
@@ -25,7 +23,6 @@ import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
-import harold.android.network.SessionDirectoryProvider
 import harold.android.network.WorkspaceApi
 import harold.android.network.hostLoginInstructions
 import harold.android.process.AgentAuthRequiredException
@@ -40,7 +37,6 @@ import javax.inject.Singleton
 @Singleton
 class HostWorkspaceApi @Inject constructor(
     private val connections: HostConnections,
-    private val sessionDirectories: SessionDirectoryProvider,
 ) : WorkspaceApi, AttachmentApi, GitApi {
     override suspend fun listWorkspaces(
         connectionId: String,
@@ -52,38 +48,6 @@ class HostWorkspaceApi @Inject constructor(
                 .map { workspace -> workspaceOf(connection, workspace) }
             val items = if (limit > 0) workspaces.take(limit) else workspaces
             WorkspaceCollection(
-                items = items,
-                page = PageInfo(limit = limit, count = items.size),
-            )
-        }
-    }
-
-    override suspend fun listRecentSessionFolders(
-        connectionId: String,
-        limit: Int,
-    ): Result<SessionFolderCollection> = hostCall {
-        connections.useConnection(connectionId) { connection, store ->
-            val selected = RecentSessionFolders.select(
-                hints = sessionDirectories.sessionFolderHints(connectionId),
-                savedPaths = store.workspaces().map { workspace -> workspace.path }.toSet(),
-                hiddenPaths = store.hiddenWorkspaces(),
-                limit = limit,
-            )
-            // A hint can outlive its folder, so stat after selection and keep
-            // only real directories. Saved workspaces skip this extra check
-            // because workspaceOf already reports them as missing.
-            val items = selected.mapNotNull { hint ->
-                if (connection.stat(hint.path)?.directory != true) {
-                    return@mapNotNull null
-                }
-                SessionFolder(
-                    id = SshSessionStore.sessionFolderId(hint.path),
-                    name = hint.path.substringAfterLast('/').ifBlank { hint.path },
-                    path = hint.path,
-                    lastUsedAt = hint.lastUsedAt,
-                )
-            }
-            SessionFolderCollection(
                 items = items,
                 page = PageInfo(limit = limit, count = items.size),
             )
@@ -159,6 +123,12 @@ class HostWorkspaceApi @Inject constructor(
     override suspend fun deleteWorkspace(connectionId: String, path: String): Result<Unit> = hostCall {
         connections.useConnection(connectionId) { _, store ->
             store.forgetWorkspace(path)
+        }
+    }
+
+    override suspend fun touchWorkspace(connectionId: String, path: String): Result<Unit> = hostCall {
+        connections.useConnection(connectionId) { _, store ->
+            store.touchWorkspace(path)
         }
     }
 

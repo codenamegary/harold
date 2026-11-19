@@ -19,6 +19,12 @@ data class CreatedWorkspaceResult(
     val connectionId: String = "",
 )
 
+/** A workspace picked from the full list for the new-session form. */
+data class ChosenCreateSessionWorkspace(
+    val connectionId: String,
+    val workspaceId: String,
+)
+
 /** A workspace row the new-session screen should select when it opens. */
 data class PreferredCreateSessionWorkspace(
     val connectionId: String = "",
@@ -43,6 +49,10 @@ class Navigator @Inject constructor() {
     private var preferredCreateSessionWorkspace: PreferredCreateSessionWorkspace? = null
     private val workspaceCreatedChannel = Channel<CreatedWorkspaceResult>(Channel.CONFLATED)
     val workspaceCreated: Flow<CreatedWorkspaceResult> = workspaceCreatedChannel.receiveAsFlow()
+    private val chosenCreateSessionWorkspaceChannel =
+        Channel<ChosenCreateSessionWorkspace>(Channel.CONFLATED)
+    val chosenCreateSessionWorkspace: Flow<ChosenCreateSessionWorkspace> =
+        chosenCreateSessionWorkspaceChannel.receiveAsFlow()
 
     /**
      * Saves the stack with the activity so it comes back after process death.
@@ -129,6 +139,14 @@ class Navigator @Inject constructor() {
         backStack.add(Workspaces)
     }
 
+    fun openWorkspaceChooser() {
+        if (backStack.isEmpty() || backStack.lastOrNull() == WorkspaceChooser) {
+            return
+        }
+        chosenCreateSessionWorkspaceChannel.tryReceive()
+        backStack.add(WorkspaceChooser)
+    }
+
     fun openAddWorkspace(preferredConnectionId: String = "") {
         preferredAddWorkspaceConnection = preferredConnectionId.takeIf { it.isNotEmpty() }
         workspaceCreatedChannel.tryReceive()
@@ -144,6 +162,12 @@ class Navigator @Inject constructor() {
     fun reportWorkspaceCreated(result: CreatedWorkspaceResult) {
         if (CreateSession in backStack) {
             workspaceCreatedChannel.trySend(result)
+        }
+    }
+
+    fun reportChosenCreateSessionWorkspace(result: ChosenCreateSessionWorkspace) {
+        if (CreateSession in backStack) {
+            chosenCreateSessionWorkspaceChannel.trySend(result)
         }
     }
 

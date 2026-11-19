@@ -175,7 +175,7 @@ class SshIntegrationTest {
             launcher = launcher,
         )
         hostAgents = HostAgentApi(connections, AgentAuthCache(), acpApi)
-        hostWorkspaces = HostWorkspaceApi(connections, catalog)
+        hostWorkspaces = HostWorkspaceApi(connections)
         hostLogs = HostLogsRepository(connections)
 
         // Start host state fresh: a previous run's agents.json would carry a
@@ -753,48 +753,29 @@ class SshIntegrationTest {
     }
 
     @Test
-    fun deletingWorkspaceHidesItsSessionDirectoryHint() = runBlocking {
-        val folder = tempDir.resolve("hint-workspace")
+    fun deletingWorkspaceForgetsItButLeavesTheFolder() = runBlocking {
+        val folder = tempDir.resolve("forgotten-workspace")
         Files.createDirectories(folder)
-        catalog.replaceAgent(
-            connectionId = connectionId,
-            agentId = "opencode",
-            sessions = listOf(
-                AcpSessionInfo(
-                    agentId = "opencode",
-                    sessionId = "session-1",
-                    cwd = folder.toString(),
-                    updatedAt = "2026-11-17T10:00:00Z",
-                ),
-            ),
-        )
-
-        // Session folders are hints, not saved workspaces.
-        val listed = hostWorkspaces.listWorkspaces(connectionId, limit = 100).getOrThrow()
-        assertFalse(listed.items.any { item -> item.path == folder.toString() })
-
-        val recent = hostWorkspaces.listRecentSessionFolders(connectionId, limit = 100).getOrThrow()
-        val hinted = recent.items.first { item -> item.path == folder.toString() }
-        assertEquals(SshSessionStore.sessionFolderId(folder.toString()), hinted.id)
-        assertTrue(hinted.id.startsWith("session:"))
-        assertFalse(hinted.id.startsWith("ws_"))
-
-        // Deleting a hint hides it until the user saves the folder again.
-        hostWorkspaces.deleteWorkspace(connectionId, folder.toString()).getOrThrow()
-        val hidden = hostWorkspaces.listRecentSessionFolders(connectionId, limit = 100).getOrThrow()
-        assertFalse(hidden.items.any { item -> item.path == folder.toString() })
-
-        // Adding the folder again clears the hidden tombstone and saves it.
         val saved = hostWorkspaces.createWorkspace(
             connectionId,
             CreateWorkspaceBody(source = WorkspaceSource.Folder, path = folder.toString()),
         ).getOrThrow()
         assertEquals(SshSessionStore.stableId(folder.toString()), saved.id)
-        val restored = hostWorkspaces.listWorkspaces(connectionId, limit = 100).getOrThrow()
-        assertTrue(restored.items.any { item -> item.path == folder.toString() })
-        val recentAfterSave = hostWorkspaces.listRecentSessionFolders(connectionId, limit = 100)
-            .getOrThrow()
-        assertFalse(recentAfterSave.items.any { item -> item.path == folder.toString() })
+
+        hostWorkspaces.deleteWorkspace(connectionId, folder.toString()).getOrThrow()
+
+        val afterDelete = hostWorkspaces.listWorkspaces(connectionId, limit = 100).getOrThrow()
+        assertFalse(afterDelete.items.any { item -> item.path == folder.toString() })
+        assertTrue(Files.isDirectory(folder))
+
+        // Saving the same folder again restores it as a workspace.
+        val restored = hostWorkspaces.createWorkspace(
+            connectionId,
+            CreateWorkspaceBody(source = WorkspaceSource.Folder, path = folder.toString()),
+        ).getOrThrow()
+        assertEquals(saved.id, restored.id)
+        val listed = hostWorkspaces.listWorkspaces(connectionId, limit = 100).getOrThrow()
+        assertTrue(listed.items.any { item -> item.path == folder.toString() })
     }
 
     private suspend fun attachSession(

@@ -60,10 +60,6 @@ enum class CreateSessionNotice {
 
 data class CreateSessionUiState(
     val workspaces: List<WorkspaceRow> = emptyList(),
-    val recentSessionFolders: List<WorkspaceRow> = emptyList(),
-    val recentSessionFoldersExpanded: Boolean = false,
-    val recentSessionFoldersLoading: Boolean = false,
-    val recentSessionFoldersError: String? = null,
     val agents: List<AgentOption> = emptyList(),
     val selectedWorkspaceId: String = "",
     val selectedAgentId: AgentId? = null,

@@ -1,5 +1,9 @@
 package harold.android.navigation
 
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -87,12 +91,45 @@ class NavigatorTest {
         before.start(hasConnection = true)
         before.openSessions()
         before.openCreateSession()
+        before.openWorkspaceChooser()
 
         val after = Navigator()
         after.restore(before.encode())
         after.start(hasConnection = false)
 
-        assertEquals(listOf(Chat, Sessions, CreateSession), after.backStack.toList())
+        assertEquals(
+            listOf(Chat, Sessions, CreateSession, WorkspaceChooser),
+            after.backStack.toList(),
+        )
+    }
+
+    @Test
+    fun workspaceChooserOpensOnTopOfCreateSession() {
+        val navigator = Navigator()
+        navigator.start(hasConnection = true)
+        navigator.openCreateSession()
+
+        navigator.openWorkspaceChooser()
+
+        assertEquals(listOf(Chat, CreateSession, WorkspaceChooser), navigator.backStack.toList())
+    }
+
+    @Test
+    fun reportingAChosenWorkspaceReachesTheFlowWhenCreateSessionIsOnTheStack() = runTest {
+        val navigator = Navigator()
+        navigator.start(hasConnection = true)
+        navigator.openCreateSession()
+        val chosen = ChosenCreateSessionWorkspace(
+            connectionId = "http://laptop.local:3847",
+            workspaceId = "ws_01",
+        )
+        val received = async(start = CoroutineStart.UNDISPATCHED) {
+            navigator.chosenCreateSessionWorkspace.first()
+        }
+
+        navigator.reportChosenCreateSessionWorkspace(chosen)
+
+        assertEquals(chosen, received.await())
     }
 
     @Test

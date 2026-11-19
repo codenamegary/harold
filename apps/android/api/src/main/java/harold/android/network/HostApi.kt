@@ -13,7 +13,6 @@ import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.HostLogs
 import harold.android.contracts.LogCleanupPolicy
 import harold.android.contracts.LogCleanupResult
-import harold.android.contracts.SessionFolderCollection
 import harold.android.contracts.UpdateAgentBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
@@ -24,16 +23,6 @@ interface WorkspaceApi {
         connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection>
-
-    /**
-     * Recent session working directories, as hints. Never merged into
-     * [listWorkspaces] and never persisted as saved workspaces.
-     */
-    suspend fun listRecentSessionFolders(
-        connectionId: String,
-        limit: Int = 10,
-    ): Result<SessionFolderCollection> =
-        Result.failure(unsupported("recent session folders are not supported"))
 
     suspend fun listFilesystemDirectories(
         connectionId: String,
@@ -51,13 +40,18 @@ interface WorkspaceApi {
     ): Result<Workspace>
 
     /**
-     * Forgets the workspace bookmark and hides its folder from session
-     * directory hints. The folder itself is untouched.
+     * Forgets the workspace bookmark. The folder itself is untouched.
      */
     suspend fun deleteWorkspace(
         connectionId: String,
         path: String,
     ): Result<Unit> = Result.failure(unsupported("workspace removal is not supported"))
+
+    /** Records that the user started a session in this saved workspace. */
+    suspend fun touchWorkspace(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> = Result.success(Unit)
 }
 
 /** Agent catalog and settings surface for one saved connection. */

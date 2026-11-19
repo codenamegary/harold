@@ -4,7 +4,6 @@ import harold.android.contracts.AgentId
 import harold.android.network.AgentSessionSnapshot
 import harold.android.network.CatalogSession
 import harold.android.network.SessionCatalogReader
-import harold.android.network.SessionDirectoryHint
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,8 +15,8 @@ import kotlinx.coroutines.flow.map
 /**
  * The session lists the live ACP processes have reported. This is a memory-only
  * view: agents own session history, the app just compiles their `session/list`
- * answers here so the UI, workspace hints, and opening a session's working
- * directory do not need a second catalog in Room.
+ * answers here so the UI and opening a session's working directory do not need
+ * a second catalog in Room.
  *
  * Each snapshot is owned by one `(connection, agent)` pair. Listing an agent
  * replaces only that agent's rows. Process death keeps that agent's rows until
@@ -47,20 +46,6 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
         _snapshots.value
             .filter { snapshot -> snapshot.connectionId == connectionId }
             .flatMap { snapshot -> snapshot.sessions }
-
-    override fun sessionDirectories(connectionId: String): List<String> =
-        sessions(connectionId)
-            .map { session -> session.cwd }
-            .distinct()
-
-    override fun sessionFolderHints(connectionId: String): List<SessionDirectoryHint> =
-        sessions(connectionId).map { session ->
-            SessionDirectoryHint(
-                path = session.cwd,
-                lastUsedAt = session.updatedAt,
-                unavailable = session.unavailable,
-            )
-        }
 
     override fun find(
         connectionId: String,

@@ -15,8 +15,6 @@ import harold.android.contracts.ItemCollection
 import harold.android.contracts.PageInfo
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
-import harold.android.contracts.SessionFolder
-import harold.android.contracts.SessionFolderCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.navigation.Navigator
@@ -41,7 +39,7 @@ internal class RecordingSessionCommands : SessionCommands {
 
 internal class RouteUserRepository(
     private val workspaces: List<Workspace> = emptyList(),
-    private val recentSessionFolders: List<SessionFolder> = emptyList(),
+    private val workspacesByConnection: Map<String, List<Workspace>> = emptyMap(),
     private val sessions: List<Session> = emptyList(),
     private val agents: List<AgentSettings> = emptyList(),
     private val createResult: Result<CreateSessionResponse> = Result.failure(
@@ -51,14 +49,10 @@ internal class RouteUserRepository(
     private val deleteResult: Result<Unit> = Result.success(Unit),
 ) : UserRepository {
     val deleted = mutableListOf<String>()
+    val touchedWorkspaces = mutableListOf<Pair<String, String>>()
 
     override suspend fun listWorkspaces(connectionId: String, limit: Int): Result<WorkspaceCollection> =
-        Result.success(page(workspaces))
-
-    override suspend fun listRecentSessionFolders(
-        connectionId: String,
-        limit: Int,
-    ): Result<SessionFolderCollection> = Result.success(page(recentSessionFolders))
+        Result.success(page(workspacesByConnection[connectionId] ?: workspaces))
 
     override suspend fun listFilesystemDirectories(
         connectionId: String,
@@ -76,6 +70,14 @@ internal class RouteUserRepository(
         connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = unsupported()
+
+    override suspend fun touchWorkspace(
+        connectionId: String,
+        path: String,
+    ): Result<Unit> {
+        touchedWorkspaces += connectionId to path
+        return Result.success(Unit)
+    }
 
     override suspend fun listSessions(
         connectionId: String,

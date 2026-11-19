@@ -23,6 +23,10 @@ data object Sessions : AppRoute
 @Serializable
 data object CreateSession : AppRoute
 
+/** The full saved-workspace list for the new-session flow. */
+@Serializable
+data object WorkspaceChooser : AppRoute
+
 @Serializable
 data object Workspaces : AppRoute
 

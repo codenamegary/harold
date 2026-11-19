@@ -6,14 +6,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
-import harold.android.contracts.SessionFolder
-import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
 import harold.android.database.session.AgentRepository
 import harold.android.database.session.CachedAgent
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
+import harold.android.navigation.ChosenCreateSessionWorkspace
 import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.LastSessionSelection
 import harold.android.navigation.Navigator
@@ -56,7 +55,7 @@ class CreateSessionViewModel @Inject constructor(
     private var preferredRowId: String? = null
     private var preferredAgentId: AgentId? = null
     private var preferredRequested = false
-    private var recentSessionFoldersLoaded = false
+    private var pendingChosenWorkspace: ChosenCreateSessionWorkspace? = null
     private var noticeDismissed = false
 
     init {
@@ -74,20 +73,26 @@ class CreateSessionViewModel @Inject constructor(
         viewModelScope.launch {
             navigator.workspaceCreated.collect(::selectCreatedWorkspace)
         }
+        viewModelScope.launch {
+            navigator.chosenCreateSessionWorkspace.collect(::selectChosenWorkspace)
+        }
     }
 
     fun openNewWorkspace() {
         val state = _uiState.value
         val selected = state.workspaces.firstOrNull { row -> row.id == state.selectedWorkspaceId }
-            ?: state.recentSessionFolders.firstOrNull { row -> row.id == state.selectedWorkspaceId }
         navigator.openAddWorkspace(preferredConnectionId = selected?.connectionId.orEmpty())
+    }
+
+    fun openWorkspaceChooser() {
+        navigator.openWorkspaceChooser()
     }
 
     fun onWorkspaceChanged(workspaceId: String) {
         noticeDismissed = true
+        pendingChosenWorkspace = null
         val state = _uiState.value
         val workspace = state.workspaces.firstOrNull { row -> row.id == workspaceId }
-            ?: state.recentSessionFolders.firstOrNull { row -> row.id == workspaceId }
         if (workspace == null || workspace.connectionId.isEmpty()) {
             _uiState.update { current ->
                 current.copy(
@@ -110,26 +115,11 @@ class CreateSessionViewModel @Inject constructor(
         }
     }
 
-    fun toggleRecentSessionFolders() {
-        val expanded = !_uiState.value.recentSessionFoldersExpanded
-        _uiState.update { current ->
-            current.copy(recentSessionFoldersExpanded = expanded)
-        }
-        if (expanded && !recentSessionFoldersLoaded) {
-            loadRecentSessionFolders()
-        }
-    }
-
-    fun retryRecentSessionFolders() {
-        loadRecentSessionFolders()
-    }
-
     fun submit() {
         val createState = _uiState.value
         val workspaceId = createState.selectedWorkspaceId
         val agentId = createState.selectedAgentId
         val workspace = createState.workspaces.firstOrNull { row -> row.id == workspaceId }
-            ?: createState.recentSessionFolders.firstOrNull { row -> row.id == workspaceId }
 
         if (workspaceId.isEmpty() || workspace == null) {
             _uiState.update { current -> current.copy(error = "Choose a workspace") }
@@ -165,6 +155,9 @@ class CreateSessionViewModel @Inject constructor(
 
             result.fold(
                 onSuccess = { created ->
+                    // Record the pick on the host so the recent list reflects
+                    // real use. A failed touch must never block the session.
+                    userRepository.touchWorkspace(origin, workspace.path)
                     sessionCommands.emit(
                         SessionCommand.Created(
                             response = created,
@@ -209,41 +202,21 @@ class CreateSessionViewModel @Inject constructor(
     }
 
     private fun applyCachedWorkspaces(cached: List<CachedWorkspace>) {
-        val origins = targetOrigins()
-        val savedByOrigin = savedConnections.associateBy { connection -> connection.connectionId }
-        val scoped = savedConnections.isNotEmpty()
-        val rows = disambiguateWorkspaceLabels(
-            cached
-                .filter { workspace -> workspace.connectionId in origins }
-                .mapNotNull { cachedWorkspace ->
-                    val workspace = cachedWorkspace.workspace
-                    if (workspace.state != WorkspaceState.Available) {
-                        return@mapNotNull null
-                    }
-                    val connection = savedByOrigin[cachedWorkspace.connectionId]
-                    workspace.toWorkspaceRow().copy(
-                        id = if (scoped) {
-                            "${cachedWorkspace.connectionId}|${workspace.id}"
-                        } else {
-                            workspace.id
-                        },
-                        connectionId = cachedWorkspace.connectionId,
-                        connectionName = connection?.name.orEmpty(),
-                        connectionColorId = connection?.colorId.orEmpty(),
-                        connectionIconId = connection?.iconId.orEmpty(),
-                    )
-                },
+        val rows = workspaceRows(
+            cached = cached,
+            origins = targetOrigins(),
+            savedConnections = savedConnections,
         )
 
         val current = _uiState.value
-        val (labeledRows, labeledRecentFolders) =
-            labelWorkspaces(rows, current.recentSessionFolders)
+        val chosenRow = pendingChosenWorkspace?.let { chosen ->
+            findWorkspace(rows, chosen.connectionId, chosen.workspaceId)
+        }
         val pendingId = pendingCreatedWorkspace?.let { created ->
             workspaceId(created.connectionId, created.workspaceId)
         }
         val pendingRow = pendingId?.let { id -> rows.firstOrNull { row -> row.id == id } }
         val explicitRow = rows.firstOrNull { row -> row.id == current.selectedWorkspaceId }
-            ?: current.recentSessionFolders.firstOrNull { row -> row.id == current.selectedWorkspaceId }
         val preferredRow = preferredWorkspace?.let { preferred ->
             rows.firstOrNull { row ->
                 row.path == preferred.path &&
@@ -259,7 +232,8 @@ class CreateSessionViewModel @Inject constructor(
             rows.firstOrNull { row -> row.id == rememberedId }
         }
         val singleSavedRow = rows.singleOrNull()
-        val selected = pendingRow
+        val selected = chosenRow
+            ?: pendingRow
             ?: explicitRow
             ?: preferredRow
             ?: defaultRow
@@ -294,8 +268,7 @@ class CreateSessionViewModel @Inject constructor(
 
         _uiState.update { state ->
             state.copy(
-                workspaces = labeledRows,
-                recentSessionFolders = labeledRecentFolders,
+                workspaces = rows,
                 selectedWorkspaceId = selected?.id.orEmpty(),
                 agents = if (agentsForSelection) state.agents else emptyList(),
                 selectedAgentId = if (agentsForSelection) state.selectedAgentId else null,
@@ -308,86 +281,33 @@ class CreateSessionViewModel @Inject constructor(
         if (selected != null && selected.id == pendingId) {
             pendingCreatedWorkspace = null
         }
+        if (chosenRow != null) {
+            pendingChosenWorkspace = null
+        }
     }
 
-    private fun loadRecentSessionFolders() {
-        if (_uiState.value.recentSessionFoldersLoading) {
+    private fun selectChosenWorkspace(result: ChosenCreateSessionWorkspace) {
+        noticeDismissed = true
+        val workspace = findWorkspace(_uiState.value.workspaces, result.connectionId, result.workspaceId)
+        if (workspace == null) {
+            // The chooser can report before Room publishes the row. Keep the
+            // result and let the next cache emission select it.
+            pendingChosenWorkspace = result
             return
         }
-        _uiState.update { current ->
-            current.copy(
-                recentSessionFoldersLoading = true,
-                recentSessionFoldersError = null,
-            )
-        }
-        viewModelScope.launch {
-            val rows = mutableListOf<WorkspaceRow>()
-            var failure: Throwable? = null
-            targetOrigins().forEach { connectionId ->
-                userRepository.listRecentSessionFolders(connectionId).fold(
-                    onSuccess = { collection ->
-                        rows += sessionFolderRows(connectionId, collection.items)
-                    },
-                    onFailure = { error ->
-                        failure = error
-                    },
-                )
-            }
-            recentSessionFoldersLoaded = failure == null
-            val current = _uiState.value
-            val (labeledWorkspaces, labeledFolders) = labelWorkspaces(
-                saved = current.workspaces,
-                hints = rows,
-            )
-            _uiState.update { state ->
-                state.copy(
-                    workspaces = labeledWorkspaces,
-                    recentSessionFolders = labeledFolders,
-                    recentSessionFoldersLoading = false,
-                    recentSessionFoldersError = failure?.let(::apiErrorMessage),
-                )
-            }
-        }
+        pendingChosenWorkspace = null
+        selectWorkspace(workspace)
     }
 
-    private fun sessionFolderRows(
+    private fun findWorkspace(
+        rows: List<WorkspaceRow>,
         connectionId: String,
-        folders: List<SessionFolder>,
-    ): List<WorkspaceRow> {
-        val connection = savedConnections.find { saved -> saved.connectionId == connectionId }
-        return folders.map { folder ->
-            WorkspaceRow(
-                id = sessionFolderRowId(connectionId, folder.id),
-                name = folder.name.ifBlank { folder.path.substringAfterLast('/').ifBlank { folder.path } },
-                path = folder.path,
-                state = WorkspaceState.Available,
-                connectionId = connectionId,
-                connectionName = connection?.name.orEmpty(),
-                connectionColorId = connection?.colorId.orEmpty(),
-                connectionIconId = connection?.iconId.orEmpty(),
-                source = WorkspaceSource.SessionFolder,
-            )
+        workspaceId: String,
+    ): WorkspaceRow? {
+        val scopedId = workspaceId(connectionId, workspaceId)
+        return rows.firstOrNull { row -> row.id == scopedId } ?: rows.firstOrNull { row ->
+            row.connectionId == connectionId && row.id == workspaceId
         }
-    }
-
-    private fun sessionFolderRowId(connectionId: String, folderId: String): String =
-        if (savedConnections.isNotEmpty()) {
-            "session:$connectionId|$folderId"
-        } else {
-            folderId.takeIf { id -> id.startsWith("session:") } ?: "session:$folderId"
-        }
-
-    /**
-     * Labels are computed across saved workspaces and hints together so a
-     * saved `harold` and a session-folder `harold` are distinguishable too.
-     */
-    private fun labelWorkspaces(
-        saved: List<WorkspaceRow>,
-        hints: List<WorkspaceRow>,
-    ): Pair<List<WorkspaceRow>, List<WorkspaceRow>> {
-        val labeled = disambiguateWorkspaceLabels(saved + hints)
-        return labeled.filter { row -> row.source == WorkspaceSource.Saved } to
-            labeled.filter { row -> row.source == WorkspaceSource.SessionFolder }
     }
 
     private fun selectCreatedWorkspace(result: CreatedWorkspaceResult) {
@@ -430,11 +350,11 @@ class CreateSessionViewModel @Inject constructor(
         }
 
     private fun workspaceId(connectionId: String, workspaceId: String): String =
-        if (savedConnections.isNotEmpty()) {
-            "$connectionId|$workspaceId"
-        } else {
-            workspaceId
-        }
+        scopedWorkspaceId(
+            connectionId = connectionId,
+            workspaceId = workspaceId,
+            scoped = savedConnections.isNotEmpty(),
+        )
 
     private fun loadAgents(workspace: WorkspaceRow) {
         val origin = workspace.connectionId.ifEmpty { return }
@@ -540,7 +460,6 @@ class CreateSessionViewModel @Inject constructor(
     private fun selectedWorkspace(): WorkspaceRow? {
         val state = _uiState.value
         return state.workspaces.firstOrNull { row -> row.id == state.selectedWorkspaceId }
-            ?: state.recentSessionFolders.firstOrNull { row -> row.id == state.selectedWorkspaceId }
     }
 
     private suspend fun agentNeedsLogin(connectionId: String, agentId: AgentId): Boolean =

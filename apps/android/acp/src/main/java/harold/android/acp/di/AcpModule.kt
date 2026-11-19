@@ -11,7 +11,6 @@ import harold.android.network.AcpAgentApi
 import harold.android.network.SessionCatalogReader
 import harold.android.network.SessionCommandApi
 import harold.android.network.SessionConfigApi
-import harold.android.network.SessionDirectoryProvider
 import harold.android.process.AgentProcessRestarter
 import harold.android.stream.SessionStreamFactory
 import javax.inject.Singleton
@@ -38,10 +37,6 @@ abstract class AcpModule {
     @Binds
     @Singleton
     abstract fun sessionCatalogReader(impl: AcpSessionCatalog): SessionCatalogReader
-
-    @Binds
-    @Singleton
-    abstract fun sessionDirectoryProvider(impl: AcpSessionCatalog): SessionDirectoryProvider
 
     @Binds
     @Singleton

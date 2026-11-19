@@ -9,8 +9,8 @@ enum class SessionFolderState {
 
 /**
  * Checks the host filesystem for a session working folder. A folder can be
- * missing even when no workspace row exists, because sessions may run in any
- * directory and deleted workspace hints are hidden from the workspace list.
+ * missing even when the host still knows the session, because sessions may run
+ * in any directory.
  */
 fun interface SessionFolderProbe {
     suspend fun probe(connectionId: String, path: String): SessionFolderState
