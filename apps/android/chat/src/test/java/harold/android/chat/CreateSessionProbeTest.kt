@@ -27,6 +27,9 @@ class CreateSessionProbeTest {
         assertEquals("true", facts["submitEnabled"])
         assertEquals("false", facts["submitting"])
         assertEquals("", facts["error"])
+        assertEquals("0", facts["recentFolderCount"])
+        assertEquals("false", facts["recentFoldersExpanded"])
+        assertEquals("", facts["notice"])
     }
 
     @Test
@@ -35,6 +38,26 @@ class CreateSessionProbeTest {
         assertFalse(createSessionSubmitEnabled(state().copy(selectedWorkspaceId = "gone")))
         assertFalse(createSessionSubmitEnabled(state().copy(submitting = true)))
         assertTrue(createSessionSubmitEnabled(state()))
+    }
+
+    @Test
+    fun submitIsEnabledForAnExplicitlySelectedSessionFolder() {
+        val hint = WorkspaceRow(
+            id = "session:/work/demo",
+            name = "demo",
+            path = "/work/demo",
+            state = WorkspaceState.Available,
+            source = WorkspaceSource.SessionFolder,
+        )
+
+        assertTrue(
+            createSessionSubmitEnabled(
+                state().copy(
+                    recentSessionFolders = listOf(hint),
+                    selectedWorkspaceId = hint.id,
+                ),
+            ),
+        )
     }
 
     @Test

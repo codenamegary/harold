@@ -4,6 +4,7 @@ import harold.android.contracts.AgentId
 import harold.android.network.AgentSessionSnapshot
 import harold.android.network.CatalogSession
 import harold.android.network.SessionCatalogReader
+import harold.android.network.SessionDirectoryHint
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,8 +20,8 @@ import kotlinx.coroutines.flow.map
  * directory do not need a second catalog in Room.
  *
  * Each snapshot is owned by one `(connection, agent)` pair. Listing an agent
- * replaces only that agent's rows. Process death marks that agent's rows stale
- * for the saved connections that shared the process.
+ * replaces only that agent's rows. Process death keeps that agent's rows until
+ * a successful `session/list` confirms which sessions still exist.
  */
 @Singleton
 class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
@@ -51,6 +52,15 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
         sessions(connectionId)
             .map { session -> session.cwd }
             .distinct()
+
+    override fun sessionFolderHints(connectionId: String): List<SessionDirectoryHint> =
+        sessions(connectionId).map { session ->
+            SessionDirectoryHint(
+                path = session.cwd,
+                lastUsedAt = session.updatedAt,
+                unavailable = session.unavailable,
+            )
+        }
 
     override fun find(
         connectionId: String,
@@ -163,7 +173,7 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
                     agentId = agentId,
                     sessionId = sessionId,
                     cwd = cwd.orEmpty(),
-                    title = title ?: "New session",
+                    title = title ?: sessionId,
                     updatedAt = Instant.now().toString(),
                     unavailable = true,
                 )
@@ -258,8 +268,9 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
 
     /**
      * A process exit does not prove the agent lost its sessions. Keep the rows
-     * and mark the snapshot stale. The next successful `session/list` clears
-     * the flag and drops rows the agent no longer reports.
+     * and leave them marked reachable. The next successful `session/list` is
+     * the confirmation point that clears the flag and drops rows the agent no
+     * longer reports.
      */
     fun removeAgent(connectionId: String, agentId: AgentId) {
         synchronized(lock) {
@@ -268,7 +279,7 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
             if (current.sessions.isEmpty()) {
                 byKey.remove(key)
             } else {
-                byKey[key] = current.copy(loading = false, error = null, stale = true)
+                byKey[key] = current.copy(loading = false, error = null)
             }
             publishLocked()
         }

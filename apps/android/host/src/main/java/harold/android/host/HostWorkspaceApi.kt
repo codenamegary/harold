@@ -15,6 +15,8 @@ import harold.android.contracts.GitScope
 import harold.android.contracts.GitSummary
 import harold.android.contracts.GitWorktreeCollection
 import harold.android.contracts.PageInfo
+import harold.android.contracts.SessionFolder
+import harold.android.contracts.SessionFolderCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceSource
@@ -31,7 +33,6 @@ import harold.android.process.AgentLaunchException
 import harold.android.transport.ssh.SshConnection
 import harold.android.transport.ssh.SshException
 import harold.android.transport.ssh.runCommand
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,35 +47,43 @@ class HostWorkspaceApi @Inject constructor(
         limit: Int,
     ): Result<WorkspaceCollection> = hostCall {
         connections.useConnection(connectionId) { connection, store ->
-            val now = Instant.now().toString()
-            val workspaces = linkedMapOf<String, Workspace>()
-            store.workspaces().forEach { workspace ->
-                workspaces[workspace.path] = workspaceOf(connection, workspace)
-            }
-            // Session folders are hints from the last ACP session/list. They
-            // are memory-only; a cold app simply shows the saved workspaces
-            // until the next chat refresh. Hidden paths were deleted by the
-            // user and stay out of the list.
-            val hidden = store.hiddenWorkspaces()
-            sessionDirectories.sessionDirectories(connectionId)
-                .distinct()
-                .filterNot { cwd -> cwd in hidden }
-                .forEach { cwd ->
-                    if (cwd !in workspaces) {
-                        workspaces[cwd] = workspaceOf(
-                            connection = connection,
-                            workspace = HostWorkspace(
-                                id = SshSessionStore.stableId(cwd),
-                                name = cwd.substringAfterLast('/').ifBlank { cwd },
-                                path = cwd,
-                                createdAt = now,
-                                lastUsedAt = now,
-                            ),
-                        )
-                    }
-                }
-            val items = if (limit > 0) workspaces.values.take(limit) else workspaces.values.toList()
+            val workspaces = store.workspaces()
+                .distinctBy { workspace -> workspace.path }
+                .map { workspace -> workspaceOf(connection, workspace) }
+            val items = if (limit > 0) workspaces.take(limit) else workspaces
             WorkspaceCollection(
+                items = items,
+                page = PageInfo(limit = limit, count = items.size),
+            )
+        }
+    }
+
+    override suspend fun listRecentSessionFolders(
+        connectionId: String,
+        limit: Int,
+    ): Result<SessionFolderCollection> = hostCall {
+        connections.useConnection(connectionId) { connection, store ->
+            val selected = RecentSessionFolders.select(
+                hints = sessionDirectories.sessionFolderHints(connectionId),
+                savedPaths = store.workspaces().map { workspace -> workspace.path }.toSet(),
+                hiddenPaths = store.hiddenWorkspaces(),
+                limit = limit,
+            )
+            // A hint can outlive its folder, so stat after selection and keep
+            // only real directories. Saved workspaces skip this extra check
+            // because workspaceOf already reports them as missing.
+            val items = selected.mapNotNull { hint ->
+                if (connection.stat(hint.path)?.directory != true) {
+                    return@mapNotNull null
+                }
+                SessionFolder(
+                    id = SshSessionStore.sessionFolderId(hint.path),
+                    name = hint.path.substringAfterLast('/').ifBlank { hint.path },
+                    path = hint.path,
+                    lastUsedAt = hint.lastUsedAt,
+                )
+            }
+            SessionFolderCollection(
                 items = items,
                 page = PageInfo(limit = limit, count = items.size),
             )

@@ -29,6 +29,11 @@ class DefaultUserRepository @Inject constructor(
         limit: Int,
     ) = workspaceApi.listWorkspaces(connectionId, limit)
 
+    override suspend fun listRecentSessionFolders(
+        connectionId: String,
+        limit: Int,
+    ) = workspaceApi.listRecentSessionFolders(connectionId, limit)
+
     override suspend fun listFilesystemDirectories(
         connectionId: String,
         root: String?,

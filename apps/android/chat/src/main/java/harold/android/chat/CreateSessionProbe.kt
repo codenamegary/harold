@@ -105,6 +105,9 @@ internal fun createSessionProbeFacts(state: CreateSessionUiState): Map<String, S
         "submitEnabled" to createSessionSubmitEnabled(state).toString(),
         "submitting" to state.submitting.toString(),
         "error" to state.error.orEmpty(),
+        "recentFolderCount" to state.recentSessionFolders.size.toString(),
+        "recentFoldersExpanded" to state.recentSessionFoldersExpanded.toString(),
+        "notice" to state.notice?.name.orEmpty(),
     )
 }
 
@@ -129,7 +132,10 @@ internal fun createSessionProbeSettled(state: CreateSessionUiState): Boolean = !
  */
 internal fun createSessionSubmitEnabled(state: CreateSessionUiState): Boolean =
     !state.submitting &&
-        state.workspaces.any { row -> row.id == state.selectedWorkspaceId } &&
+        (
+            state.workspaces.any { row -> row.id == state.selectedWorkspaceId } ||
+                state.recentSessionFolders.any { row -> row.id == state.selectedWorkspaceId }
+        ) &&
         state.agents.any { option -> option.id == state.selectedAgentId }
 
 internal class CreateSessionViewModelProbeHost(

@@ -13,6 +13,7 @@ import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.HostLogs
 import harold.android.contracts.LogCleanupPolicy
 import harold.android.contracts.LogCleanupResult
+import harold.android.contracts.SessionFolderCollection
 import harold.android.contracts.UpdateAgentBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
@@ -23,6 +24,16 @@ interface WorkspaceApi {
         connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection>
+
+    /**
+     * Recent session working directories, as hints. Never merged into
+     * [listWorkspaces] and never persisted as saved workspaces.
+     */
+    suspend fun listRecentSessionFolders(
+        connectionId: String,
+        limit: Int = 10,
+    ): Result<SessionFolderCollection> =
+        Result.failure(unsupported("recent session folders are not supported"))
 
     suspend fun listFilesystemDirectories(
         connectionId: String,

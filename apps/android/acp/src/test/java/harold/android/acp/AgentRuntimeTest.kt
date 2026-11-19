@@ -76,6 +76,21 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun newSessionsGetAFolderAndTimeTitle() = runBlocking {
+        withRuntimeAndCatalog { runtime, _, catalog ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/srv/projects/harold")
+                .getOrThrow()
+
+            assertTrue(created.title.startsWith("harold · "))
+            assertTrue(Regex("""^harold · \d{2}:\d{2}:\d{2}$""").matches(created.title))
+            assertEquals(
+                created.title,
+                catalog.find(FIRST_ROW, AGENT_ID, created.sessionId)?.title,
+            )
+        }
+    }
+
+    @Test
     fun repeatedAttachFailuresRestartTheWarmProcess() = runBlocking {
         withRuntime { runtime, launcher ->
             val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/one").getOrThrow()
@@ -633,7 +648,7 @@ class AgentRuntimeTest {
     }
 
     @Test
-    fun processDeathMarksOnlyThatAgentsRowsStale() = runBlocking {
+    fun processDeathKeepsRowsUntilAFinalSuccessfulListDropsThem() = runBlocking {
         val launcher = FakeLauncher(listOf("agent-a", "agent-b"))
         val catalog = AcpSessionCatalog()
         val runtime = AgentRuntime(
@@ -642,24 +657,31 @@ class AgentRuntimeTest {
             catalog = catalog,
         )
         try {
-            runtime.createSession(FIRST_ROW, "agent-a", "/tmp/a").getOrThrow()
-            runtime.createSession(FIRST_ROW, "agent-b", "/tmp/b").getOrThrow()
+            val createdA = runtime.createSession(FIRST_ROW, "agent-a", "/tmp/a").getOrThrow()
+            val createdB = runtime.createSession(FIRST_ROW, "agent-b", "/tmp/b").getOrThrow()
+            val sessionA = runtime.openSession(FIRST_ROW, "agent-a", createdA.sessionId).getOrThrow()
             assertEquals(2, catalog.snapshots().size)
 
             launcher.channels.first().kill()
+            awaitStatus(sessionA, SessionStatus.Offline)
+            delay(100)
 
-            withTimeout(10_000) {
-                while (catalog.snapshot(FIRST_ROW, "agent-a")?.stale != true) {
-                    delay(10)
-                }
-            }
             assertEquals(
                 listOf("agent-a", "agent-b"),
                 catalog.snapshots().map { snapshot -> snapshot.agentId },
             )
-            assertEquals(true, catalog.snapshot(FIRST_ROW, "agent-a")?.stale)
+            assertEquals(false, catalog.snapshot(FIRST_ROW, "agent-a")?.stale)
             assertEquals(false, catalog.snapshot(FIRST_ROW, "agent-b")?.stale)
             assertEquals(1, catalog.snapshot(FIRST_ROW, "agent-a")?.sessions?.size)
+
+            // Only a successful list is proof that a session is gone.
+            runtime.listSessions(FIRST_ROW).getOrThrow()
+
+            assertNull(catalog.find(FIRST_ROW, "agent-a", createdA.sessionId))
+            assertEquals(
+                createdB.sessionId,
+                catalog.find(FIRST_ROW, "agent-b", createdB.sessionId)?.sessionId,
+            )
         } finally {
             runtime.closeConnection(FIRST_ROW)
             launcher.close()

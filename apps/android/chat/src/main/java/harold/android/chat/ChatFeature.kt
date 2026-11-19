@@ -177,6 +177,8 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onAgentChanged = viewModel::onAgentChanged,
                 onSubmit = viewModel::submit,
                 onNewWorkspaceClick = viewModel::openNewWorkspace,
+                onRecentSessionFoldersToggle = viewModel::toggleRecentSessionFolders,
+                onRecentSessionFoldersRetry = viewModel::retryRecentSessionFolders,
             )
         }
     }

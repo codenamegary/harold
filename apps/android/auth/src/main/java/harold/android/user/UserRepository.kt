@@ -18,6 +18,7 @@ import harold.android.contracts.HostLogs
 import harold.android.contracts.LogCleanupPolicy
 import harold.android.contracts.LogCleanupResult
 import harold.android.contracts.SessionCollection
+import harold.android.contracts.SessionFolderCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 
@@ -26,6 +27,12 @@ interface UserRepository {
         connectionId: String,
         limit: Int = 100,
     ): Result<WorkspaceCollection>
+
+    suspend fun listRecentSessionFolders(
+        connectionId: String,
+        limit: Int = 10,
+    ): Result<SessionFolderCollection> =
+        Result.failure(unsupported("recent session folders are not supported"))
 
     suspend fun listFilesystemDirectories(
         connectionId: String,

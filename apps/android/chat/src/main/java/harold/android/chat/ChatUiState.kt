@@ -53,13 +53,23 @@ data class AgentOption(
     val displayName: String,
 )
 
+enum class CreateSessionNotice {
+    RememberedWorkspaceMissing,
+    PreferredWorkspaceMissing,
+}
+
 data class CreateSessionUiState(
     val workspaces: List<WorkspaceRow> = emptyList(),
+    val recentSessionFolders: List<WorkspaceRow> = emptyList(),
+    val recentSessionFoldersExpanded: Boolean = false,
+    val recentSessionFoldersLoading: Boolean = false,
+    val recentSessionFoldersError: String? = null,
     val agents: List<AgentOption> = emptyList(),
     val selectedWorkspaceId: String = "",
     val selectedAgentId: AgentId? = null,
     val submitting: Boolean = false,
     val error: String? = null,
+    val notice: CreateSessionNotice? = null,
 )
 
 data class PermissionUiState(

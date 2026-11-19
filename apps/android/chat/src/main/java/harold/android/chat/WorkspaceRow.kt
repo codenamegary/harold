@@ -3,6 +3,11 @@ package harold.android.chat
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 
+enum class WorkspaceSource {
+    Saved,
+    SessionFolder,
+}
+
 data class WorkspaceRow(
     val id: String,
     val name: String,
@@ -12,8 +17,15 @@ data class WorkspaceRow(
     val connectionName: String = "",
     val connectionColorId: String = "",
     val connectionIconId: String = "",
+    val source: WorkspaceSource = WorkspaceSource.Saved,
+    val pickerSuffix: String = "",
 ) {
-    fun pickerLabel(): String = name
+    fun pickerLabel(): String =
+        if (pickerSuffix.isEmpty()) {
+            name
+        } else {
+            "$name ($pickerSuffix)"
+        }
 }
 
 fun Workspace.toWorkspaceRow(): WorkspaceRow =

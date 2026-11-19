@@ -68,6 +68,14 @@
     <string name="create_session_new_workspace">New workspace</string>
     <string name="create_session_start">Start Session</string>
     <string name="create_session_starting">Starting…</string>
+    <string name="create_session_recent_folders">Recent session folders</string>
+    <string name="create_session_recent_folders_hint">Folders from recent sessions, not saved workspaces</string>
+    <string name="create_session_recent_folders_loading">Loading recent folders…</string>
+    <string name="create_session_recent_folders_empty">No recent session folders</string>
+    <string name="create_session_recent_folders_failed">Could not load recent folders. Tap to retry.</string>
+    <string name="create_session_session_folder_badge">session folder</string>
+    <string name="create_session_remembered_workspace_missing">Your last workspace is no longer saved. Choose a workspace.</string>
+    <string name="create_session_preferred_workspace_missing">That session\'s folder is not a saved workspace. Choose a saved workspace.</string>
     <string name="sessions_title">Sessions</string>
     <string name="sessions_search_label">Search sessions</string>
     <string name="sessions_refreshing_connection">Refreshing %1$s</string>

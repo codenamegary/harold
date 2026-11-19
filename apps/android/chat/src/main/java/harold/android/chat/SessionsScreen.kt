@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -139,12 +140,19 @@ fun SessionsListContent(
     var visibleCount by rememberSaveable(uiState.search, uiState.connectionFilter) {
         mutableIntStateOf(pageSize)
     }
+    var lastSearch by rememberSaveable { mutableStateOf(uiState.search) }
+    var lastFilter by rememberSaveable { mutableStateOf(uiState.connectionFilter) }
+    // The window resets before the old layout settles. Block the prefetch
+    // effect until the scroll-to-top has run, otherwise a search can refill
+    // the window from the pre-search scroll position.
+    var windowResetting by remember { mutableStateOf(false) }
     val totalSessions = uiState.sessions.size
     val liveTotal by rememberUpdatedState(totalSessions)
     val shouldLoadMore by remember {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            visibleCount < liveTotal &&
+            !windowResetting &&
+                visibleCount < liveTotal &&
                 lastVisible >= visibleCount - 1 - SESSION_PREFETCH_DISTANCE
         }
     }
@@ -154,7 +162,13 @@ fun SessionsListContent(
         }
     }
     LaunchedEffect(uiState.search, uiState.connectionFilter) {
-        listState.scrollToItem(0)
+        if (uiState.search != lastSearch || uiState.connectionFilter != lastFilter) {
+            lastSearch = uiState.search
+            lastFilter = uiState.connectionFilter
+            windowResetting = true
+            listState.scrollToItem(0)
+            windowResetting = false
+        }
     }
     val visibleSessions = uiState.sessions.take(visibleCount)
 

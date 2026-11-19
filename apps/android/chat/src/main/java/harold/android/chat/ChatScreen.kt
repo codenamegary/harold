@@ -60,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -715,14 +716,16 @@ fun ChatScreen(
 
                                     is SessionMenuContent.Rows -> {
                                         content.rows.forEach { session ->
-                                            SessionDropdownItem(
-                                                session = session,
-                                                selected = uiState.selectedSession?.id == session.id,
-                                                onClick = {
-                                                    onDismissSessionMenu()
-                                                    onSessionClick(session)
-                                                },
-                                            )
+                                            key(session.id) {
+                                                SessionDropdownItem(
+                                                    session = session,
+                                                    selected = uiState.selectedSession?.id == session.id,
+                                                    onClick = {
+                                                        onDismissSessionMenu()
+                                                        onSessionClick(session)
+                                                    },
+                                                )
+                                            }
                                         }
                                         if (content.refreshError != null) {
                                             SessionMenuRow(

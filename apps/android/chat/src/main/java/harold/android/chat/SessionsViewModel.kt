@@ -170,10 +170,12 @@ class SessionsViewModel @Inject constructor(
             workingOrigins.add(connectionId)
             publishProgress()
             sessionRefresher.refresh(connectionId, trigger).fold(
-                onSuccess = {
+                onSuccess = { outcome ->
                     anySuccess = true
-                    unreachableOrigins.remove(connectionId)
-                    unreachableErrors.remove(connectionId)
+                    if (outcome.refreshed) {
+                        unreachableOrigins.remove(connectionId)
+                        unreachableErrors.remove(connectionId)
+                    }
                 },
                 onFailure = { error ->
                     lastError = error

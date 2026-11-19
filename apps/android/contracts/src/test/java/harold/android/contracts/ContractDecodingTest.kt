@@ -31,6 +31,24 @@ class ContractDecodingTest {
     }
 
     @Test
+    fun decodesSessionFolder() {
+        val folder = HaroldJson.decodeFromString(
+            SessionFolder.serializer(),
+            """
+            {
+              "id": "session:deadbeef",
+              "name": "harold",
+              "path": "/home/user/sites/harold",
+              "lastUsedAt": "2026-08-05T01:00:00.000Z"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("session:deadbeef", folder.id)
+        assertEquals("/home/user/sites/harold", folder.path)
+    }
+
+    @Test
     fun rejectsWorkspaceWithUnknownKey() {
         assertThrowsSerialization {
             HaroldJson.decodeFromString(

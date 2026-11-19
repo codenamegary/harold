@@ -118,6 +118,41 @@ class SessionCatalogRefresherTest {
         assertTrue(refresher.refresh(connection, SessionRefreshTrigger.AppStart).isSuccess)
         assertEquals(2, repository.refreshes)
     }
+
+    @Test
+    fun failedRefreshDropsTheCachedSuccess() = runTest {
+        val repository = GatedSessionRepository()
+        val refresher = SessionCatalogRefresher(repository)
+        refresher.nowMillis = { 1_000L }
+        assertTrue(refresher.refresh(connection, SessionRefreshTrigger.AppStart).isSuccess)
+
+        repository.failNext = true
+        refresher.nowMillis = { 2_000L }
+        assertTrue(refresher.refresh(connection, SessionRefreshTrigger.ConnectionChanged).isFailure)
+
+        // The success from before the failure must not satisfy a TTL trigger.
+        refresher.nowMillis = { 3_000L }
+        val retried = refresher.refresh(connection, SessionRefreshTrigger.AppStart)
+
+        assertTrue(retried.isSuccess)
+        assertTrue(retried.getOrThrow().refreshed)
+        assertEquals(3, repository.refreshes)
+    }
+
+    @Test
+    fun forgetDropsCachedStateForARemovedConnection() = runTest {
+        val repository = GatedSessionRepository()
+        val refresher = SessionCatalogRefresher(repository)
+        refresher.nowMillis = { 1_000L }
+        refresher.refresh(connection, SessionRefreshTrigger.AppStart)
+
+        refresher.forget(connection)
+        refresher.nowMillis = { 2_000L }
+        val next = refresher.refresh(connection, SessionRefreshTrigger.AppStart).getOrThrow()
+
+        assertTrue(next.refreshed)
+        assertEquals(2, repository.refreshes)
+    }
 }
 
 private class GatedSessionRepository : SessionRepository {

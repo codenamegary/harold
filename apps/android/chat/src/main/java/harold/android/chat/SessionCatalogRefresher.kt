@@ -85,12 +85,29 @@ class SessionCatalogRefresher @Inject constructor(
     }
 
     private suspend fun scan(connectionId: String): Result<SessionRefreshOutcome> =
-        repository.refresh(connectionId).map { catalog ->
-            lastSuccessAt[connectionId] = nowMillis()
-            lastCatalog[connectionId] = catalog
-            successEpoch.merge(connectionId, 1L, Long::plus)
-            SessionRefreshOutcome(catalog = catalog, refreshed = true)
-        }
+        repository.refresh(connectionId).fold(
+            onSuccess = { catalog ->
+                lastSuccessAt[connectionId] = nowMillis()
+                lastCatalog[connectionId] = catalog
+                successEpoch.merge(connectionId, 1L, Long::plus)
+                Result.success(SessionRefreshOutcome(catalog = catalog, refreshed = true))
+            },
+            onFailure = { error ->
+                // A failed scan proves the last good catalog may be stale. Drop
+                // it so a later TTL trigger scans again instead of reporting an
+                // outage as a fresh success.
+                lastSuccessAt.remove(connectionId)
+                lastCatalog.remove(connectionId)
+                Result.failure(error)
+            },
+        )
+
+    /** Drops every cached scan for a connection the user removed. */
+    fun forget(connectionId: String) {
+        lastSuccessAt.remove(connectionId)
+        lastCatalog.remove(connectionId)
+        successEpoch.remove(connectionId)
+    }
 
     private fun lockFor(connectionId: String): Mutex =
         locks.computeIfAbsent(connectionId) { Mutex() }

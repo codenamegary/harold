@@ -9,6 +9,8 @@ import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.ItemCollection
 import harold.android.contracts.PageInfo
 import harold.android.contracts.SessionCollection
+import harold.android.contracts.SessionFolder
+import harold.android.contracts.SessionFolderCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
@@ -26,6 +28,7 @@ import harold.android.network.AgentApiException
 import harold.android.session.ActiveConnectionState
 import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeConnectionGateway
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -85,7 +88,9 @@ class CreateSessionViewModelTest {
         assertEquals(listOf("tide", "ink"), rows.map { row -> row.connectionColorId })
         assertEquals(listOf("bolt", "mark"), rows.map { row -> row.connectionIconId })
         assertTrue(rows[0].id != rows[1].id)
-        assertEquals(listOf("cursor"), viewModel.uiState.value.agents.map { agent -> agent.id })
+        // Two saved rows are not a default. The user has to choose.
+        assertEquals("", viewModel.uiState.value.selectedWorkspaceId)
+        assertTrue(viewModel.uiState.value.agents.isEmpty())
     }
 
     @Test
@@ -160,6 +165,7 @@ class CreateSessionViewModelTest {
             repository = repository,
             savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
         )
+        viewModel.onWorkspaceChanged("$LAPTOP|ws_laptop")
 
         assertEquals(listOf("claude", "opencode"), viewModel.uiState.value.agents.map { it.id })
         assertEquals("claude", viewModel.uiState.value.selectedAgentId)
@@ -330,6 +336,7 @@ class CreateSessionViewModelTest {
             workspaceRepository = workspaceRepository,
             savedConnections = savedConnections,
         )
+        viewModel.onWorkspaceChanged("$LAPTOP|ws_laptop")
 
         assertEquals("$LAPTOP|ws_laptop", viewModel.uiState.value.selectedWorkspaceId)
 
@@ -449,10 +456,13 @@ class CreateSessionViewModelTest {
     }
 
     @Test
-    fun missingRememberedWorkspaceFallsBackToTheFirstWorkspaceAndAgent() = runTest {
+    fun missingRememberedWorkspaceSelectsTheConnectionDefault() = runTest {
         val repository = FakeCreateRepository(
             workspaces = mapOf(
-                LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
+                LAPTOP to listOf(
+                    workspace("ws_default", WorkspaceState.Available, name = "default"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
             ),
             agents = mapOf(
                 LAPTOP to listOf(
@@ -471,12 +481,561 @@ class CreateSessionViewModelTest {
 
         val viewModel = viewModel(
             repository = repository,
+            savedConnections = saved(
+                savedConnection(
+                    LAPTOP,
+                    "laptop",
+                    "tide",
+                    "bolt",
+                    defaultWorkspacePath = "/tmp/ws_default",
+                ),
+            ),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("$LAPTOP|ws_default", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("codex", viewModel.uiState.value.selectedAgentId)
+        assertEquals(CreateSessionNotice.RememberedWorkspaceMissing, viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun missingRememberedWorkspaceWithoutADefaultLeavesTheSelectionEmpty() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_notes", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                connectionId = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "cursor",
+            ),
+        )
+
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("", viewModel.uiState.value.selectedWorkspaceId)
+        assertTrue(viewModel.uiState.value.agents.isEmpty())
+        assertEquals(CreateSessionNotice.RememberedWorkspaceMissing, viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun choosingASavedWorkspaceClearsTheMissingRememberedNotice() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_notes", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+        )
+        val workspaceRepository = TestWorkspaceRepository(repository)
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                connectionId = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "cursor",
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            workspaceRepository = workspaceRepository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        viewModel.onWorkspaceChanged("$LAPTOP|ws_other")
+        assertNull(viewModel.uiState.value.notice)
+
+        workspaceRepository.seed(LAPTOP, listOf(workspace("ws_other", WorkspaceState.Available, name = "other")))
+        assertNull(viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun aSingleSavedWorkspaceIsStillSelectedWhenTheRememberedWorkspaceIsMissing() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                connectionId = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "cursor",
+            ),
+        )
+
+        val viewModel = viewModel(
+            repository = repository,
             savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
             sessionPreferences = preferences,
         )
 
         assertEquals("$LAPTOP|ws_notes", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals(CreateSessionNotice.RememberedWorkspaceMissing, viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun preferredWorkspaceThatIsNotSavedIsIgnored() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_default", WorkspaceState.Available, name = "default"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = true),
+                ),
+            ),
+        )
+        val navigator = testNavigator()
+        navigator.openCreateSessionForWorkspace(
+            connectionId = LAPTOP,
+            path = "/home/u/harold-demo-workspaces/3847/harold",
+            agentId = "codex",
+        )
+
+        val viewModel = viewModel(
+            navigator = navigator,
+            repository = repository,
+            savedConnections = saved(
+                savedConnection(
+                    LAPTOP,
+                    "laptop",
+                    "tide",
+                    "bolt",
+                    defaultAgentId = "cursor",
+                    defaultWorkspacePath = "/tmp/ws_default",
+                ),
+            ),
+        )
+
+        assertEquals("$LAPTOP|ws_default", viewModel.uiState.value.selectedWorkspaceId)
         assertEquals("cursor", viewModel.uiState.value.selectedAgentId)
+        assertEquals(CreateSessionNotice.PreferredWorkspaceMissing, viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun missingPreferredWorkspaceIsNoticedWithoutSavedWorkspaces() = runTest {
+        val navigator = testNavigator()
+        navigator.openCreateSessionForWorkspace(
+            connectionId = LAPTOP,
+            path = "/home/u/harold-demo-workspaces/3847/harold",
+        )
+        val viewModel = viewModel(
+            navigator = navigator,
+            repository = FakeCreateRepository(
+                workspaces = emptyMap(),
+                agents = emptyMap(),
+            ),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        assertEquals("", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals(CreateSessionNotice.PreferredWorkspaceMissing, viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun missingPreferredWorkspaceNoticeSurvivesCacheEmissions() = runTest {
+        val missingPath = "/home/u/harold-demo-workspaces/3847/harold"
+        val navigator = testNavigator()
+        navigator.openCreateSessionForWorkspace(
+            connectionId = LAPTOP,
+            path = missingPath,
+        )
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_default", WorkspaceState.Available, name = "default")),
+            ),
+            agents = mapOf(LAPTOP to listOf(agent("cursor", enabled = true))),
+        )
+        val workspaceRepository = TestWorkspaceRepository(repository)
+        val viewModel = viewModel(
+            navigator = navigator,
+            repository = repository,
+            workspaceRepository = workspaceRepository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        assertEquals(CreateSessionNotice.PreferredWorkspaceMissing, viewModel.uiState.value.notice)
+
+        workspaceRepository.seed(
+            LAPTOP,
+            listOf(
+                workspace("ws_default", WorkspaceState.Available, name = "default"),
+                workspace("ws_other", WorkspaceState.Available, name = "other"),
+            ),
+        )
+
+        assertEquals("$LAPTOP|ws_default", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals(CreateSessionNotice.PreferredWorkspaceMissing, viewModel.uiState.value.notice)
+
+        // Saving the requested folder clears the notice even though the
+        // already-selected default keeps the explicit selection.
+        workspaceRepository.seed(
+            LAPTOP,
+            listOf(
+                workspace("ws_default", WorkspaceState.Available, name = "default"),
+                workspace("ws_other", WorkspaceState.Available, name = "other"),
+                workspace("ws_demo", WorkspaceState.Available, name = "harold", path = missingPath),
+            ),
+        )
+
+        assertNull(viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun missingRememberedWorkspaceIsNoticedWithoutSavedWorkspaces() = runTest {
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                connectionId = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "cursor",
+            ),
+        )
+        val viewModel = viewModel(
+            repository = FakeCreateRepository(
+                workspaces = emptyMap(),
+                agents = emptyMap(),
+            ),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals(CreateSessionNotice.RememberedWorkspaceMissing, viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun aMissingRememberedWorkspaceNeverSelectsASessionFolderHint() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_notes", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+            recentSessionFolders = mapOf(
+                LAPTOP to listOf(sessionFolder("/home/u/demo/harold")),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                connectionId = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "cursor",
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        viewModel.toggleRecentSessionFolders()
+
+        assertEquals(1, viewModel.uiState.value.recentSessionFolders.size)
+        assertEquals("", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals(CreateSessionNotice.RememberedWorkspaceMissing, viewModel.uiState.value.notice)
+    }
+
+    @Test
+    fun expandingRecentSessionFoldersLoadsHintsForEveryOrigin() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+            recentSessionFolders = mapOf(
+                LAPTOP to listOf(sessionFolder("/home/u/demo")),
+                DESKTOP to listOf(sessionFolder("/home/u/desktop-demo")),
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(
+                savedConnection(LAPTOP, "laptop", "tide", "bolt"),
+                savedConnection(DESKTOP, "desktop", "ink", "mark"),
+            ),
+        )
+
+        assertFalse(viewModel.uiState.value.recentSessionFoldersExpanded)
+        assertTrue(viewModel.uiState.value.recentSessionFolders.isEmpty())
+        assertTrue(repository.sessionFolderOrigins.isEmpty())
+
+        viewModel.toggleRecentSessionFolders()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.recentSessionFoldersExpanded)
+        assertEquals(listOf(LAPTOP, DESKTOP), repository.sessionFolderOrigins)
+        val hint = state.recentSessionFolders.first()
+        assertTrue(hint.id.startsWith("session:"))
+        assertEquals(WorkspaceSource.SessionFolder, hint.source)
+        assertEquals("demo", hint.name)
+        assertEquals("/home/u/demo", hint.path)
+        assertEquals(LAPTOP, hint.connectionId)
+        assertEquals("laptop", hint.connectionName)
+        val desktopHint = state.recentSessionFolders.last()
+        assertEquals(DESKTOP, desktopHint.connectionId)
+        assertEquals("desktop", desktopHint.connectionName)
+        // Loading hints does not change the saved-workspace default.
+        assertEquals("$LAPTOP|ws_laptop", state.selectedWorkspaceId)
+    }
+
+    @Test
+    fun savedWorkspaceAndHintWithTheSameNameGetDistinctLabels() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace(
+                        id = "ws_harold",
+                        state = WorkspaceState.Available,
+                        name = "harold",
+                        path = "/home/u/sites/harold",
+                    ),
+                ),
+            ),
+            agents = mapOf(LAPTOP to listOf(agent("cursor", enabled = true))),
+            recentSessionFolders = mapOf(
+                LAPTOP to listOf(sessionFolder("/home/u/harold-demo-workspaces/3847/harold")),
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        viewModel.toggleRecentSessionFolders()
+
+        val state = viewModel.uiState.value
+        assertEquals("harold (sites)", state.workspaces.single().pickerLabel())
+        assertEquals(
+            "harold (harold-demo-workspaces)",
+            state.recentSessionFolders.single().pickerLabel(),
+        )
+    }
+
+    @Test
+    fun expandingRecentSessionFoldersShowsLoadingUntilTheHostAnswers() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+            recentSessionFolders = mapOf(
+                LAPTOP to listOf(sessionFolder("/home/u/demo")),
+            ),
+        ).apply {
+            recentSessionFoldersGate = gate
+        }
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        viewModel.toggleRecentSessionFolders()
+
+        assertTrue(viewModel.uiState.value.recentSessionFoldersLoading)
+        assertTrue(viewModel.uiState.value.recentSessionFolders.isEmpty())
+
+        gate.complete(Unit)
+
+        assertFalse(viewModel.uiState.value.recentSessionFoldersLoading)
+        assertEquals(1, viewModel.uiState.value.recentSessionFolders.size)
+    }
+
+    @Test
+    fun explicitSessionFolderSelectionSurvivesSavedWorkspaceEmissions() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_laptop", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+            recentSessionFolders = mapOf(
+                LAPTOP to listOf(sessionFolder("/home/u/demo")),
+            ),
+        )
+        val workspaceRepository = TestWorkspaceRepository(repository)
+        val viewModel = viewModel(
+            repository = repository,
+            workspaceRepository = workspaceRepository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+        viewModel.toggleRecentSessionFolders()
+        val hint = viewModel.uiState.value.recentSessionFolders.single()
+
+        viewModel.onWorkspaceChanged(hint.id)
+
+        assertEquals(hint.id, viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals(listOf("cursor"), viewModel.uiState.value.agents.map { option -> option.id })
+
+        workspaceRepository.seed(
+            LAPTOP,
+            listOf(
+                workspace("ws_laptop", WorkspaceState.Available, name = "notes"),
+                workspace("ws_other", WorkspaceState.Available, name = "other"),
+                workspace("ws_new", WorkspaceState.Available, name = "new"),
+            ),
+        )
+
+        assertEquals(hint.id, viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals(1, viewModel.uiState.value.recentSessionFolders.size)
+        assertEquals(listOf("cursor"), viewModel.uiState.value.agents.map { option -> option.id })
+    }
+
+    @Test
+    fun failedRecentSessionFoldersCanBeRetried() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+            recentSessionFolders = mapOf(
+                LAPTOP to listOf(sessionFolder("/home/u/demo")),
+            ),
+            failRecentSessionFolders = setOf(LAPTOP),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        viewModel.toggleRecentSessionFolders()
+
+        assertTrue(viewModel.uiState.value.recentSessionFolders.isEmpty())
+        assertEquals("folders offline", viewModel.uiState.value.recentSessionFoldersError)
+
+        repository.recentSessionFolderFailures = emptySet()
+        viewModel.retryRecentSessionFolders()
+
+        assertEquals(1, viewModel.uiState.value.recentSessionFolders.size)
+        assertNull(viewModel.uiState.value.recentSessionFoldersError)
+    }
+
+    @Test
+    fun connectionDefaultAgentBeatsTheLastUsedAgent() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = true),
+                ),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                connectionId = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "codex",
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(
+                savedConnection(
+                    LAPTOP,
+                    "laptop",
+                    "tide",
+                    "bolt",
+                    defaultAgentId = "cursor",
+                ),
+            ),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("$LAPTOP|ws_notes", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("cursor", viewModel.uiState.value.selectedAgentId)
+    }
+
+    @Test
+    fun lastUsedAgentForTheConnectionIsUsedWhenTheWorkspaceDiffers() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = true),
+                ),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                connectionId = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "codex",
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("$LAPTOP|ws_notes", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("codex", viewModel.uiState.value.selectedAgentId)
+    }
+
+    @Test
+    fun firstEnabledAgentIsTheFinalAgentFallback() = runTest {
+        val repository = FakeCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("claude", enabled = false),
+                    agent("codex", enabled = true),
+                    agent("cursor", enabled = true),
+                ),
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
+        )
+
+        assertEquals("codex", viewModel.uiState.value.selectedAgentId)
     }
 
     @Test
@@ -675,10 +1234,15 @@ class CreateSessionViewModelTest {
         authStatus = authStatus,
     )
 
-    private fun workspace(id: String, state: WorkspaceState, name: String = id) = Workspace(
+    private fun workspace(
+        id: String,
+        state: WorkspaceState,
+        name: String = id,
+        path: String = "/tmp/$id",
+    ) = Workspace(
         id = id,
         name = name,
-        path = "/tmp/$id",
+        path = path,
         state = state,
         createdAt = "2026-08-01T00:00:00.000Z",
         lastUsedAt = "2026-08-01T00:00:00.000Z",
@@ -692,6 +1256,13 @@ class CreateSessionViewModelTest {
         path = null,
     )
 
+    private fun sessionFolder(path: String) = SessionFolder(
+        id = "session:$path",
+        name = path.substringAfterLast('/'),
+        path = path,
+        lastUsedAt = "2026-08-01T00:00:00.000Z",
+    )
+
     private companion object {
         val ACTIVE = ActiveConnectionState.Active("http://127.0.0.1:8787", "Pixel")
         const val LAPTOP = "http://laptop.local:3847"
@@ -699,7 +1270,14 @@ class CreateSessionViewModelTest {
     }
 }
 
-private fun savedConnection(origin: String, name: String, colorId: String, iconId: String) = SavedConnection(
+private fun savedConnection(
+    origin: String,
+    name: String,
+    colorId: String,
+    iconId: String,
+    defaultAgentId: String? = null,
+    defaultWorkspacePath: String? = null,
+) = SavedConnection(
     formatVersion = 3,
     connectionId = origin,
     deviceName = "Pixel",
@@ -713,6 +1291,8 @@ private fun savedConnection(origin: String, name: String, colorId: String, iconI
         auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
         hostKeyFingerprint = "SHA256:abc",
     ),
+    defaultAgentId = defaultAgentId,
+    defaultWorkspacePath = defaultWorkspacePath,
 )
 
 private suspend fun saved(vararg connections: SavedConnection): ConnectionRepository {
@@ -726,6 +1306,8 @@ private class FakeCreateRepository(
     private val agents: Map<String, List<AgentSettings>>,
     private val failAgents: Set<String> = emptySet(),
     private val failWorkspaces: Set<String> = emptySet(),
+    private val recentSessionFolders: Map<String, List<SessionFolder>> = emptyMap(),
+    failRecentSessionFolders: Set<String> = emptySet(),
     private val createResult: Result<CreateSessionResponse> = Result.success(
         CreateSessionResponse(
             agentId = "cursor",
@@ -738,6 +1320,9 @@ private class FakeCreateRepository(
     ),
 ) : harold.android.user.UserRepository {
     val createdOrigins = mutableListOf<String>()
+    val sessionFolderOrigins = mutableListOf<String>()
+    var recentSessionFolderFailures: Set<String> = failRecentSessionFolders
+    var recentSessionFoldersGate: CompletableDeferred<Unit>? = null
 
     override suspend fun listWorkspaces(connectionId: String, limit: Int): Result<ItemCollection<Workspace>> {
         if (connectionId in failWorkspaces) {
@@ -747,6 +1332,24 @@ private class FakeCreateRepository(
             ItemCollection(
                 items = workspaces[connectionId].orEmpty(),
                 page = PageInfo(limit = limit, count = workspaces[connectionId].orEmpty().size),
+            ),
+        )
+    }
+
+    override suspend fun listRecentSessionFolders(
+        connectionId: String,
+        limit: Int,
+    ): Result<SessionFolderCollection> {
+        sessionFolderOrigins += connectionId
+        recentSessionFoldersGate?.await()
+        if (connectionId in recentSessionFolderFailures) {
+            return Result.failure(IllegalStateException("folders offline"))
+        }
+        val folders = recentSessionFolders[connectionId].orEmpty()
+        return Result.success(
+            ItemCollection(
+                items = folders,
+                page = PageInfo(limit = limit, count = folders.size),
             ),
         )
     }

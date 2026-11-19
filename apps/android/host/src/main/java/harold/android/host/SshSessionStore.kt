@@ -161,6 +161,9 @@ class SshSessionStore(
         fun stableId(path: String): String =
             "ws_" + path.hashCode().toUInt().toString(16)
 
+        fun sessionFolderId(path: String): String =
+            "session:" + path.hashCode().toUInt().toString(16)
+
         fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
     }
 }
