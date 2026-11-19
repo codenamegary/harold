@@ -440,6 +440,10 @@ class AgentRuntimeTest {
             firstCollector.cancel()
             first.close()
 
+            val agent = launcher.agents.single()
+            val sessionLoadGate = CompletableDeferred<Unit>()
+            agent.sessionLoadGate = sessionLoadGate
+
             val reopened = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
             val seen = mutableListOf<SessionStatus>()
             val statusCollector = launch(start = CoroutineStart.UNDISPATCHED) {
@@ -453,8 +457,34 @@ class AgentRuntimeTest {
                     }
                 }
             }
+
+            // Hold session/load open until the status collector has seen
+            // Reloading. StateFlow conflates, so Ready can otherwise replace
+            // Reloading before the collector runs.
+            withTimeout(10_000) {
+                while (
+                    reopened.status.value != SessionStatus.Reloading ||
+                    agent.sessionLoads.get() != 1
+                ) {
+                    delay(10)
+                }
+            }
+            assertEquals(1, agent.sessionLoads.get())
+            withTimeout(10_000) {
+                while (SessionStatus.Reloading !in seen) {
+                    delay(10)
+                }
+            }
+            assertFalse(SessionStatus.Ready in seen)
+
+            sessionLoadGate.complete(Unit)
             withTimeout(10_000) { reopenSubscribed.await() }
             awaitStatus(reopened, SessionStatus.Ready)
+            withTimeout(10_000) {
+                while (SessionStatus.Ready !in seen) {
+                    delay(10)
+                }
+            }
 
             val reloadIndex = seen.indexOf(SessionStatus.Reloading)
             assertTrue(reloadIndex >= 0)
@@ -1225,6 +1255,10 @@ private class FakeAgent(
     @Volatile
     var failLoadUnknownId: String? = null
 
+    /** When set, `session/load` waits for this gate before answering. */
+    @Volatile
+    var sessionLoadGate: CompletableDeferred<Unit>? = null
+
     /** When set, `session/list` serves these pages instead of [sessions]. */
     var listPages: List<FakeListPage> = emptyList()
 
@@ -1298,6 +1332,7 @@ private class FakeAgent(
             "session/load" -> {
                 val sessionId = params.string("sessionId").orEmpty()
                 sessionLoads.incrementAndGet()
+                sessionLoadGate?.await()
                 if (sessionId == failLoadUnknownId) {
                     respondError(id, -32002, "Unknown session: $sessionId")
                     return
