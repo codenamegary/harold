@@ -121,6 +121,7 @@ class ChatViewModel @Inject constructor(
     private val sessionAttention: SessionAttentionMarks? = null,
     private val permissionNotifier: PermissionAttentionNotifier? = null,
     private val hostUsage: HostUsageApi? = null,
+    private val sessionRefresher: SessionCatalogRefresher = SessionCatalogRefresher(sessionRepository),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -166,6 +167,7 @@ class ChatViewModel @Inject constructor(
     private var activeOrigin: String? = null
     private var metadataLoaded = false
     private val unreachableOrigins = mutableSetOf<String>()
+    private val linkStatuses = mutableMapOf<String, ConnectionStatus>()
     private val refreshMutex = Mutex()
     private var pickerRefreshJob: Job? = null
     private var restoreJob: Job? = null
@@ -311,7 +313,13 @@ class ChatViewModel @Inject constructor(
                                 sessionOwner.watch(selected.agentId, selected.sessionId)
                             }
                     }
-                    refreshCatalog()
+                    refreshCatalog(
+                        if (metadataLoaded) {
+                            SessionRefreshTrigger.ConnectionChanged
+                        } else {
+                            SessionRefreshTrigger.AppStart
+                        },
+                    )
                 } else {
                     sessionForegroundCoordinator?.setConnectionId(null)
                     sessionOwner.watch(null, null)
@@ -370,7 +378,7 @@ class ChatViewModel @Inject constructor(
         val origin = selectedOrActiveOrigin() ?: return
         sessionForegroundCoordinator?.setConnectionId(origin)
         viewModelScope.launch {
-            refreshCatalog()
+            refreshCatalog(SessionRefreshTrigger.Foreground)
         }
     }
 
@@ -487,7 +495,7 @@ class ChatViewModel @Inject constructor(
         pickerRefreshJob = viewModelScope.launch {
             try {
                 delay(PICKER_REFRESH_DELAY_MS)
-                refreshCatalog()
+                refreshCatalog(SessionRefreshTrigger.PickerOpened)
             } finally {
                 _uiState.update { current -> current.copy(recentSessionsLoading = false) }
             }
@@ -502,7 +510,7 @@ class ChatViewModel @Inject constructor(
         _uiState.update { current -> current.copy(recentSessionsLoading = true) }
         viewModelScope.launch {
             try {
-                refreshCatalog()
+                refreshCatalog(SessionRefreshTrigger.Retry)
             } finally {
                 _uiState.update { current -> current.copy(recentSessionsLoading = false) }
             }
@@ -657,7 +665,7 @@ class ChatViewModel @Inject constructor(
         markModelApplyPending(row)
         activateSession(row)
         startModelSync()
-        refreshCatalog()
+        refreshCatalog(SessionRefreshTrigger.SessionCreated)
     }
 
     /**
@@ -1305,7 +1313,7 @@ class ChatViewModel @Inject constructor(
                     )
                 }
                 if (remains) {
-                    refreshCatalog()
+                    refreshCatalog(SessionRefreshTrigger.ConnectionChanged)
                 } else {
                     activeSessionTracker?.replaceAll(emptyList())
                     sessionForegroundCoordinator?.onSessionsChanged()
@@ -1772,6 +1780,16 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun onHaroldLinks(links: List<ConnectionHealth>) {
+        val hadKnownStatuses = linkStatuses.isNotEmpty()
+        val newlyConnected = links
+            .filter { link ->
+                link.status == ConnectionStatus.Connected &&
+                    linkStatuses[link.connectionId] != ConnectionStatus.Connected
+            }
+            .map { link -> link.connectionId }
+        linkStatuses.clear()
+        linkStatuses.putAll(links.associate { link -> link.connectionId to link.status })
+
         val byOrigin = links.associateBy { link -> link.connectionId }
         fun reachableFor(row: SessionRow): Boolean {
             val link = byOrigin[row.connectionId] ?: return row.connectionReachable
@@ -1798,9 +1816,15 @@ class ChatViewModel @Inject constructor(
         }
         publishRecentSessions()
         syncWatch()
+
+        if (hadKnownStatuses && newlyConnected.isNotEmpty()) {
+            viewModelScope.launch {
+                refreshCatalog(SessionRefreshTrigger.ConnectionChanged)
+            }
+        }
     }
 
-    private suspend fun refreshCatalog() = refreshMutex.withLock {
+    private suspend fun refreshCatalog(trigger: SessionRefreshTrigger) = refreshMutex.withLock {
         loadConnectionMetadata()
         publishLiveSessions()
 
@@ -1830,9 +1854,10 @@ class ChatViewModel @Inject constructor(
         var refreshError: String? = null
         var lastError: Throwable? = null
         origins.forEach { connectionId ->
-            val refreshResult = sessionRepository.refresh(connectionId)
+            val refreshResult = sessionRefresher.refresh(connectionId, trigger)
             refreshResult.fold(
-                onSuccess = { catalog ->
+                onSuccess = { outcome ->
+                    val catalog = outcome.catalog
                     applyWorkspaces(catalog.workspaces)
                     applyAgents(catalog.agents)
                     anySuccess = true

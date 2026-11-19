@@ -424,6 +424,37 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun sshReconnectRefreshesTheCatalog() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val sessionRepository = TestSessionRepository(repository)
+        val connections = RecordingHaroldConnections(mutableListOf())
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionRepository = sessionRepository,
+            connections = connections,
+        )
+        advanceUntilIdle()
+
+        connections.connections.value = listOf(
+            ConnectionHealth(ORIGIN, ConnectionStatus.Connected),
+        )
+        advanceUntilIdle()
+        val scansAfterFirstConnect = sessionRepository.refreshCalls
+
+        connections.connections.value = listOf(
+            ConnectionHealth(ORIGIN, ConnectionStatus.Unreachable),
+        )
+        advanceUntilIdle()
+        connections.connections.value = listOf(
+            ConnectionHealth(ORIGIN, ConnectionStatus.Connected),
+        )
+        advanceUntilIdle()
+
+        assertEquals(scansAfterFirstConnect + 1, sessionRepository.refreshCalls)
+    }
+
+    @Test
     fun dropdownAndSessionsScreenShowTheSameRowsAfterARefresh() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         repository.sessionsByOrigin = mapOf(
@@ -2326,6 +2357,7 @@ class ChatViewModelTest {
         sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
         connectionGateway: FakeConnectionGateway = activeGateway(),
         sessionRepository: SessionRepository = TestSessionRepository(repository),
+        sessionRefresher: SessionCatalogRefresher = SessionCatalogRefresher(sessionRepository),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
         gitApi: GitApi = RecordingGitApi(),
@@ -2364,6 +2396,7 @@ class ChatViewModelTest {
         sessionAttention = sessionAttention,
         permissionNotifier = permissionNotifier,
         hostUsage = hostUsage,
+        sessionRefresher = sessionRefresher,
     )
 
     private fun activeGateway(): FakeConnectionGateway =
