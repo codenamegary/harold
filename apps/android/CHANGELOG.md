@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.6.1](https://github.com/codenamegary/harold/compare/harold-android-v4.6.0...harold-android-v4.6.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **acp:** route agent requests to one client owner ([#534](https://github.com/codenamegary/harold/issues/534)) ([9ca2851](https://github.com/codenamegary/harold/commit/9ca2851379dda1c60f970197a6cf29907fa75b28))
+* **android:** keep a watched session alive through short network outages ([#535](https://github.com/codenamegary/harold/issues/535)) ([28d04b3](https://github.com/codenamegary/harold/commit/28d04b3a7de20cafebcccb79cb017cf24dd9d151)), closes [#532](https://github.com/codenamegary/harold/issues/532)
+* **chat:** simplify workspace selection and add a workspace chooser ([#536](https://github.com/codenamegary/harold/issues/536)) ([d324ebb](https://github.com/codenamegary/harold/commit/d324ebb48308acd9a05e44258ef4b599575ebba1))
+
+
+### Tests
+
+* **acp:** make reload status test deterministic ([#538](https://github.com/codenamegary/harold/issues/538)) ([4587d76](https://github.com/codenamegary/harold/commit/4587d7664fce98ee6f5e04806aa4549e04182b26))
+
 ## [4.6.0](https://github.com/codenamegary/harold/compare/harold-android-v4.5.0...harold-android-v4.6.0) (2026-11-18)
 
 
