@@ -681,14 +681,13 @@ class AcpSession internal constructor(
     private fun emitFrame(message: SessionStreamServerMessage) {
         val requestId = message.requestIdOrNull()
         subscribers.entries.toList().forEach { (id, subscriber) ->
-            if (requestId != null && requestId in subscriber.seenRequests) {
+            // Mark before send: the collector can resume from trySend and
+            // trigger a replay before this loop reaches the next statement.
+            if (requestId != null && !subscriber.seenRequests.add(requestId)) {
                 return@forEach
             }
             val result = subscriber.channel.trySend(message)
             if (result.isSuccess || result.isClosed) {
-                if (result.isSuccess && requestId != null) {
-                    subscriber.seenRequests += requestId
-                }
                 return@forEach
             }
             if (subscribers.remove(id, subscriber)) {
