@@ -45,8 +45,22 @@ Android app -> SSH exec (inline host script) -> detached host -> `agent acp` -> 
   descriptors detached. Later clients run the same command and attach to the
   live host instead of starting another agent.
 - The host owns the agent's stdin FIFO and stdout log. Every client tails the
-  same append-only `logs/<run-id>/out.jsonl`, so two clients see the same
-  output and share one agent process.
+  same append-only `logs/<run-id>/out.jsonl` for notifications and responses,
+  so two clients see the same conversation from one agent process.
+- Agent-to-client requests (`elicitation/create`,
+  `session/request_permission`, filesystem, and terminal requests) go only to
+  the client that most recently sent `session/new`, `session/load`,
+  `session/resume`, or `session/prompt` for that session. Every session has one
+  owner, so a second client cannot answer or dismiss a question it is not
+  showing. A client that receives a request it cannot answer drops it without
+  an error response.
+- Unanswered requests are stored by the host until the owner answers. A client
+  that reconnects sends `session/load`, becomes the owner, and receives the
+  pending request before the session finishes attaching. A client that goes
+  away without answering does not cancel the question.
+- A host started by an older app version has no owner routing. The app still
+  drops requests it cannot answer, so a second client no longer fails the
+  question. Single-owner routing starts with the next host process.
 - The host owns the one ACP `initialize`. Clients replay that response instead
   of initializing the agent again.
 - Closing the app or losing the network closes only the attach bridge. The
@@ -107,9 +121,17 @@ Everything Harold keeps on the host lives under `~/.harold/`:
   run/<agent>/       runtime state for detached ACP hosts
     logs/active      active run id, written atomically before ready
     logs/<run-id>/   one directory per host process
-      out.jsonl      append-only agent stdout, one ACP message per line
+      out.jsonl      append-only agent output, one ACP message per line
       err.log        agent stderr
-    in               FIFO, agent stdin
+    in               FIFO, client input (client id prefix on protocol 2)
+    agent.in         FIFO, agent stdin, written only by the host router
+    out.pipe         FIFO, agent stdout to the host router
+    clients/<client>/route.jsonl  requests routed to one attached client
+    owners/<session> owner client for each ACP session
+    pending/         unanswered agent-to-client requests
+    newreq/          client waiting for a session/new response
+    last-owner       most recently active owner client
+    protocol         host protocol version (2 routes requests by owner)
     ready            present after the host initialize response
     status           host exit reason
     host.pid         detached host process
@@ -140,8 +162,8 @@ files are ignored and safe to delete.
 No compiled Harold binary, daemon, or extra port runs on the host. The host
 script is held in memory for the lifetime of the host process. The host needs
 standard shell tools only: `sh`, `bash`, `mkfifo`, `flock` (optional),
-`nohup`, `tail`, `head`, `wc`, `awk`, `grep`, and `sort`. Runtime state under
-`run/` can be deleted when no host is running.
+`nohup`, `tail`, `head`, `wc`, `awk`, `sed`, `grep`, and `sort`. Runtime state
+under `run/` can be deleted when no host is running.
 
 ## Agent settings
 

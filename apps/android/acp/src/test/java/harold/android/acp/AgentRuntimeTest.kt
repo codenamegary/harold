@@ -591,6 +591,145 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun aRequestForAnUnknownSessionIsDroppedWithoutAnErrorResponse() = runBlocking {
+        withRuntime { runtime, launcher ->
+            runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/unknown-session").getOrThrow()
+            val agent = launcher.agents.single()
+
+            agent.askElicitation("ses_not_here")
+            delay(400)
+
+            assertEquals(0, agent.clientResponsesReceived.get())
+        }
+    }
+
+    @Test
+    fun aSecondSubscriberDoesNotDuplicateAPendingPermissionForTheFirst() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/two-subs").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+            val firstRequest = CompletableDeferred<SessionStreamServerMessage.PermissionRequest>()
+            val firstSubscribed = CompletableDeferred<Unit>()
+            val firstSeen = AtomicInteger(0)
+            val firstSubscription = session.attach()
+            val firstCollector = launch {
+                firstSubscription.events.collect { message ->
+                    when (message) {
+                        is SessionStreamServerMessage.Subscribed -> firstSubscribed.complete(Unit)
+                        is SessionStreamServerMessage.PermissionRequest -> {
+                            firstSeen.incrementAndGet()
+                            firstRequest.complete(message)
+                        }
+                        else -> Unit
+                    }
+                }
+            }
+            withTimeout(10_000) { firstSubscribed.await() }
+
+            assertEquals(
+                PromptResult.Accepted,
+                session.prompt(PromptRequestBody("ask permission")).getOrThrow(),
+            )
+            val request = withTimeout(10_000) { firstRequest.await() }
+
+            val replayed = CompletableDeferred<SessionStreamServerMessage.PermissionRequest>()
+            val secondSubscribed = CompletableDeferred<Unit>()
+            val secondSubscription = session.attach()
+            val secondCollector = launch {
+                secondSubscription.events.collect { message ->
+                    when (message) {
+                        is SessionStreamServerMessage.Subscribed -> secondSubscribed.complete(Unit)
+                        is SessionStreamServerMessage.PermissionRequest -> replayed.complete(message)
+                        else -> Unit
+                    }
+                }
+            }
+            withTimeout(10_000) { secondSubscribed.await() }
+            assertEquals(request.requestId, withTimeout(10_000) { replayed.await() }.requestId)
+            delay(200)
+            assertEquals(1, firstSeen.get())
+
+            session.replyPermission(request.requestId, "allow").getOrThrow()
+            awaitStatus(session, SessionStatus.Ready)
+            firstCollector.cancel()
+            secondCollector.cancel()
+            firstSubscription.detach()
+            secondSubscription.detach()
+            session.close()
+        }
+    }
+
+    @Test
+    fun closingASessionWithAPendingElicitationDoesNotReplyToTheAgent() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/close-elicit").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+            val agent = launcher.agents.single()
+
+            agent.askElicitation(created.sessionId)
+            awaitStatus(session, SessionStatus.AwaitingAnswer)
+
+            session.close()
+            delay(300)
+
+            assertEquals(0, agent.clientResponsesReceived.get())
+        }
+    }
+
+    @Test
+    fun closingASessionWithAPendingPermissionDoesNotReplyToTheAgent() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/close-permission").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+            val agent = launcher.agents.single()
+
+            agent.askPermission(created.sessionId)
+            awaitStatus(session, SessionStatus.AwaitingPermission)
+
+            session.close()
+            delay(300)
+
+            assertEquals(0, agent.clientResponsesReceived.get())
+        }
+    }
+
+    @Test
+    fun trimIdleKeepsAProcessWithAPendingElicitation() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/trim-elicit").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+            val agent = launcher.agents.single()
+
+            agent.askElicitation(created.sessionId)
+            awaitStatus(session, SessionStatus.AwaitingAnswer)
+
+            runtime.trimIdle(idleMillis = 0)
+
+            assertFalse(launcher.channels.single().isClosed())
+            assertFalse(session.isClosed)
+            session.close()
+        }
+    }
+
+    @Test
+    fun backgroundKeepsAProcessWithAPendingPermission() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/background-permission").getOrThrow()
+            val session = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
+            val agent = launcher.agents.single()
+
+            agent.askPermission(created.sessionId)
+            awaitStatus(session, SessionStatus.AwaitingPermission)
+
+            runtime.onBackground()
+
+            assertFalse(launcher.channels.single().isClosed())
+            assertFalse(session.isClosed)
+            session.close()
+        }
+    }
+
+    @Test
     fun backgroundKeepsEveryAgentWarmWhileAnySessionHasWork() = runBlocking {
         val launcher = FakeLauncher(listOf("agent-a", "agent-b"))
         val runtime = AgentRuntime(
@@ -947,6 +1086,7 @@ private class FakeAgent(
 
     val promptsStarted = AtomicInteger(0)
     val cancelsReceived = AtomicInteger(0)
+    val clientResponsesReceived = AtomicInteger(0)
     val promptReceived = CompletableDeferred<Unit>()
     val sessionLoads = AtomicInteger(0)
     val sessionLists = AtomicInteger(0)
@@ -1162,6 +1302,56 @@ private class FakeAgent(
     }
 
     private suspend fun requestClient(method: String, params: JsonObject): JsonElement {
+        val (_, deferred) = sendClientRequest(method, params)
+        return withTimeout(10_000) { deferred.await() }
+    }
+
+    /** Asks for client input without a prompt turn waiting on the answer. */
+    suspend fun askElicitation(sessionId: String) {
+        sendClientRequest(
+            method = "elicitation/create",
+            params = buildJsonObject {
+                put("sessionId", sessionId)
+                put("mode", "form")
+                putJsonObject("requestedSchema") {
+                    put("type", "object")
+                    putJsonObject("properties") {
+                        putJsonObject("mode") {
+                            put("type", "string")
+                            putJsonArray("enum") { add("settings-toggle") }
+                        }
+                    }
+                }
+            },
+        )
+    }
+
+    /** Asks for permission without a prompt turn waiting on the answer. */
+    suspend fun askPermission(sessionId: String) {
+        sendClientRequest(
+            method = "session/request_permission",
+            params = buildJsonObject {
+                put("sessionId", sessionId)
+                put("toolCall", buildJsonObject { put("toolCallId", "tool-1") })
+                put(
+                    "options",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("optionId", "allow")
+                                put("name", "Allow")
+                            },
+                        )
+                    },
+                )
+            },
+        )
+    }
+
+    private suspend fun sendClientRequest(
+        method: String,
+        params: JsonObject,
+    ): Pair<String, CompletableDeferred<JsonElement>> {
         val id = requestIds.incrementAndGet().toString()
         val deferred = CompletableDeferred<JsonElement>()
         clientResponses[id] = deferred
@@ -1173,11 +1363,12 @@ private class FakeAgent(
                 put("params", params)
             },
         )
-        return withTimeout(10_000) { deferred.await() }
+        return id to deferred
     }
 
     private fun completeClientResponse(message: JsonObject) {
         val id = (message["id"] as? JsonPrimitive)?.content ?: return
+        clientResponsesReceived.incrementAndGet()
         val deferred = clientResponses.remove(id) ?: return
         val error = message["error"] as? JsonObject
         if (error != null) {
