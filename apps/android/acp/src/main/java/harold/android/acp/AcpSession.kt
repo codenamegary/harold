@@ -21,7 +21,6 @@ import harold.android.contracts.SessionStreamServerMessage.SessionUpdate
 import harold.android.contracts.SessionStreamServerMessage.StreamReset
 import harold.android.contracts.SessionStreamServerMessage.Subscribed
 import harold.android.network.PromptResult
-import harold.android.process.AgentAuthRequiredException
 import harold.android.process.AgentSessionGoneException
 import harold.android.stream.SessionStatus
 import java.io.Closeable
@@ -170,12 +169,7 @@ class AcpSession internal constructor(
                     val loadedOptions = try {
                         process.sessionLoad(this, cwd)
                     } catch (error: Throwable) {
-                        _status.value = when {
-                            error is AgentSessionGoneException -> SessionStatus.Gone
-                            error is AgentAuthRequiredException -> SessionStatus.AuthFailed
-                            process.isDead -> SessionStatus.Offline
-                            else -> SessionStatus.Error
-                        }
+                        _status.value = attachFailureStatus(error)
                         throw error
                     }
                     configOptions = loadedOptions
@@ -222,7 +216,9 @@ class AcpSession internal constructor(
                 }
                 if (process.isDead) {
                     _status.value = SessionStatus.Offline
-                    return
+                    throw AcpClosedException(
+                        process.closedReason ?: "The agent process is not running.",
+                    )
                 }
                 _status.value = SessionStatus.Ready
                 emitFrame(Subscribed(agentId = agentId, sessionId = sessionId))
@@ -232,7 +228,10 @@ class AcpSession internal constructor(
                 emitPendingInputs()
             }
         } catch (error: Throwable) {
-            if (!process.isDead) {
+            _status.value = attachFailureStatus(error)
+            // A transport failure is a reconnect, not a transcript error. The
+            // stream reports it through its status and disconnect cause.
+            if (!isRetryableAttachFailure(error)) {
                 emitFrame(
                     Error(
                         message = error.message ?: "Could not attach to the session.",

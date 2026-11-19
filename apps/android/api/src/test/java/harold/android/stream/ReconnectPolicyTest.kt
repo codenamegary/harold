@@ -1,6 +1,8 @@
 package harold.android.stream
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReconnectPolicyTest {
@@ -31,5 +33,13 @@ class ReconnectPolicyTest {
         val repeated = (1..8).map { attempt -> ReconnectPolicy.delayMillis(attempt) }
 
         assertEquals(samples, repeated)
+    }
+
+    @Test
+    fun waitsTwoMinutesBeforeGivingUp() {
+        val windowNanos = ReconnectPolicy.WINDOW_MILLIS * 1_000_000L
+
+        assertFalse(ReconnectPolicy.windowExpired(0L, windowNanos - 1))
+        assertTrue(ReconnectPolicy.windowExpired(0L, windowNanos))
     }
 }

@@ -73,12 +73,14 @@ private fun StreamStatus.label(): String? =
         is StreamStatus.Reconnecting -> "Reconnecting (attempt $attempt)"
         is StreamStatus.AuthFailed -> detail?.let { "Auth failed. $it" } ?: "Auth failed"
         is StreamStatus.TransportError -> "Transport error. $message"
+        is StreamStatus.ReconnectExhausted -> "Harold could not reconnect"
         is StreamStatus.SessionGone -> "Session unavailable"
     }
 
 private fun StreamStatus.hasStoppedRetrying(): Boolean =
     this is StreamStatus.AuthFailed ||
         this is StreamStatus.TransportError ||
+        this is StreamStatus.ReconnectExhausted ||
         this is StreamStatus.SessionGone
 
 private fun WorkspaceProbe.summary(): String =

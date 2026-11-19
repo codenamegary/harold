@@ -258,8 +258,9 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
 
     /**
      * A process exit does not prove the agent lost its sessions. Keep the rows
-     * and mark the snapshot stale. The next successful `session/list` clears
-     * the flag and drops rows the agent no longer reports.
+     * until a successful `session/list` confirms what the agent still owns.
+     * Marking them stale here turns a short network outage into a whole list
+     * of "Offline" rows the agent never reported.
      */
     fun removeAgent(connectionId: String, agentId: AgentId) {
         synchronized(lock) {
@@ -268,7 +269,7 @@ class AcpSessionCatalog @Inject constructor() : SessionCatalogReader {
             if (current.sessions.isEmpty()) {
                 byKey.remove(key)
             } else {
-                byKey[key] = current.copy(loading = false, error = null, stale = true)
+                byKey[key] = current.copy(loading = false, error = null, stale = false)
             }
             publishLocked()
         }

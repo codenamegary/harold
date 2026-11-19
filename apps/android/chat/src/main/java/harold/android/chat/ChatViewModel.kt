@@ -230,15 +230,22 @@ class ChatViewModel @Inject constructor(
                     StreamStatus.Live -> null
                     is StreamStatus.Reconnecting -> "Reconnecting (attempt ${status.attempt})"
                     is StreamStatus.AuthFailed -> "Auth failed"
-                    is StreamStatus.TransportError -> status.message
+                    // Transport details stay in the host logs. The transcript
+                    // must never show a raw ConnectException or SSH error.
+                    is StreamStatus.TransportError -> "Harold could not reconnect."
+                    is StreamStatus.ReconnectExhausted -> "Harold could not reconnect."
                     is StreamStatus.SessionGone -> null
                 }
                 val connectionInProgress =
                     status is StreamStatus.Connecting || status is StreamStatus.Reconnecting
+                val retryVisible =
+                    status is StreamStatus.TransportError ||
+                        status is StreamStatus.ReconnectExhausted
                 _uiState.update { current ->
                     current.copy(
                         connectionBanner = banner,
                         connectionInProgress = connectionInProgress,
+                        connectionRetryVisible = retryVisible,
                     )
                 }
                 if (state.status is StreamStatus.Live) {
@@ -496,6 +503,10 @@ class ChatViewModel @Inject constructor(
 
     fun hidePicker() {
         _uiState.update { current -> current.copy(pickerVisible = false) }
+    }
+
+    fun retryConnection() {
+        sessionOwner.retry()
     }
 
     fun retryRecentSessions() {

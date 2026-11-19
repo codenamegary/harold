@@ -63,6 +63,7 @@
     <string name="chat_sessions_loading">Loading…</string>
     <string name="chat_sessions_empty">No recent sessions</string>
     <string name="chat_sessions_retry">Retry</string>
+    <string name="chat_connection_host_logs">Host logs</string>
     <string name="chat_sessions_refresh_failed">Could not refresh sessions. Tap to retry.</string>
     <string name="chat_session_stale">Offline</string>
     <string name="create_session_new_workspace">New workspace</string>

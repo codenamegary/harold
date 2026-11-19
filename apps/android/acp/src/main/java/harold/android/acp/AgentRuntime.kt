@@ -172,6 +172,17 @@ class AgentRuntime @Inject constructor(
         }
     }
 
+    /**
+     * Records a transport failure without restarting the warm host. The
+     * detached agent may still be finishing the turn, so a network blip must
+     * not turn into a stop command.
+     */
+    fun sessionTransportFailed(connectionId: String, agentId: AgentId, sessionId: String) {
+        val poolKey = connections[connectionId] ?: return
+        val process = processes[processKey(poolKey, agentId)] ?: return
+        process.removeSession(connectionId, sessionId)?.close()
+    }
+
     /** Clears the attach failure streak once a stream reaches `subscribed`. */
     fun sessionAttachSucceeded(
         connectionId: String,

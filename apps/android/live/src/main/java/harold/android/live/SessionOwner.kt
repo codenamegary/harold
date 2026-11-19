@@ -60,9 +60,9 @@ interface SessionOwner {
     fun onBackground()
 
     /**
-     * A cheap resume check. If the watched stream received nothing while
-     * backgrounded, it is closed and reopened immediately. A stream that
-     * received a heartbeat or frame is left alone.
+     * A cheap resume check. If the watched stream received no real agent
+     * frame while backgrounded, it is closed and reopened immediately. A
+     * stream that received a frame is left alone.
      */
     fun onForeground()
 

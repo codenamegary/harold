@@ -17,9 +17,10 @@ interface SessionStream {
     fun close()
 
     /**
-     * Monotonic timestamp of the last received message (heartbeats included),
-     * or null before the first byte. The owner compares it across a background
-     * period to tell a surviving connection from one frozen through Doze.
+     * Monotonic timestamp of the last real message from the agent, or null
+     * before the first one. Local timers must not advance it: the owner
+     * compares it across a background period to tell a surviving connection
+     * from one frozen through Doze.
      */
     fun lastFrameAtNanos(): Long?
 

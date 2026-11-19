@@ -283,7 +283,7 @@ class ChatScreenTest {
     }
 
     @Test
-    fun reconnectingWithATranscriptKeepsItAndHidesTheGreenBanner() {
+    fun reconnectingWithATranscriptKeepsItAndShowsTheBanner() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 ChatScreen(
@@ -327,8 +327,63 @@ class ChatScreenTest {
         }
 
         composeTestRule.onNodeWithText("Explain auth").assertIsDisplayed()
-        composeTestRule.onAllNodesWithTag("connection_banner").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Reconnecting (attempt 1)").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("connection_banner").assertCountEquals(1)
         composeTestRule.onAllNodesWithTag("session_loading").assertCountEquals(0)
+    }
+
+    @Test
+    fun stoppedReconnectShowsRetryAndHostLogActions() {
+        var retried = false
+        var logsOpened = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        connectionBanner = "Harold could not reconnect.",
+                        connectionRetryVisible = true,
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/harold",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "harold",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Offline,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                        transcript = AcpTranscriptState(
+                            rows = listOf(
+                                TranscriptUserRow(
+                                    turnId = "turn_01",
+                                    text = "Explain auth",
+                                ),
+                            ),
+                            sessionState = SessionState.Offline,
+                        ),
+                    ),
+                    composerState = TextFieldState(),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                    onRetryConnection = { retried = true },
+                    onOpenHostLogs = { logsOpened = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("connection_retry").performClick()
+        composeTestRule.onNodeWithTag("connection_host_logs").performClick()
+
+        assertTrue(retried)
+        assertTrue(logsOpened)
     }
 
     @Test

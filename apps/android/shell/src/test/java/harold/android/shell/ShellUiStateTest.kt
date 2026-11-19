@@ -33,6 +33,7 @@ class ShellUiStateTest {
             "Transport error. Unknown event type",
             labelFor(StreamStatus.TransportError("Unknown event type")),
         )
+        assertEquals("Harold could not reconnect", labelFor(StreamStatus.ReconnectExhausted))
     }
 
     @Test
@@ -42,6 +43,7 @@ class ShellUiStateTest {
         assertFalse(uiFor(StreamStatus.Reconnecting(attempt = 2)).retryVisible)
         assertTrue(uiFor(StreamStatus.AuthFailed(detail = null)).retryVisible)
         assertTrue(uiFor(StreamStatus.TransportError("drift")).retryVisible)
+        assertTrue(uiFor(StreamStatus.ReconnectExhausted).retryVisible)
     }
 
     @Test

@@ -296,7 +296,7 @@ class AcpSessionListTest {
     }
 
     @Test
-    fun processExitKeepsRowsAsStaleInsteadOfDroppingThem() {
+    fun processExitKeepsRowsWithoutMarkingThemOffline() {
         val catalog = AcpSessionCatalog()
         catalog.replaceAgent(
             connectionId = "conn",
@@ -310,13 +310,13 @@ class AcpSessionListTest {
 
         catalog.removeAgent("conn", "opencode")
 
-        assertEquals(true, catalog.snapshot("conn", "opencode")?.stale)
+        assertEquals(false, catalog.snapshot("conn", "opencode")?.stale)
         assertEquals("sess_1", catalog.find("conn", "opencode", "sess_1")?.sessionId)
         assertEquals(true, catalog.find("conn", "opencode", "sess_2")?.unavailable)
     }
 
     @Test
-    fun aSuccessfulListClearsStaleRowsTheAgentNoLongerReports() {
+    fun aSuccessfulListDropsRowsTheAgentNoLongerReports() {
         val catalog = AcpSessionCatalog()
         catalog.replaceAgent(
             connectionId = "conn",
@@ -327,7 +327,6 @@ class AcpSessionListTest {
             ),
         )
         catalog.removeAgent("conn", "opencode")
-        assertEquals(true, catalog.snapshot("conn", "opencode")?.stale)
 
         catalog.replaceAgent(
             connectionId = "conn",

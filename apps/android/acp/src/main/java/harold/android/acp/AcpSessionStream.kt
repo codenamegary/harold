@@ -3,7 +3,6 @@ package harold.android.acp
 import harold.android.contracts.AgentId
 import harold.android.contracts.SessionStreamServerMessage.Error
 import harold.android.contracts.SessionStreamServerMessage.Subscribed
-import harold.android.process.AgentAuthRequiredException
 import harold.android.process.AgentSessionGoneException
 import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStatus
@@ -21,11 +20,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @Singleton
@@ -92,40 +89,33 @@ private class AcpSessionStream(
                 throw error
             } catch (error: Throwable) {
                 if (!closed.get()) {
-                    if (error is AgentSessionGoneException) {
-                        runtime.sessionGone(connectionId, agentId, sessionId)
-                    } else {
-                        runtime.sessionAttachFailed(connectionId, agentId, sessionId)
+                    val cause = attachFailureCause(error)
+                    when {
+                        error is AgentSessionGoneException ->
+                            runtime.sessionGone(connectionId, agentId, sessionId)
+                        cause is DisconnectCause.Retryable ->
+                            runtime.sessionTransportFailed(connectionId, agentId, sessionId)
+                        else -> runtime.sessionAttachFailed(connectionId, agentId, sessionId)
                     }
-                    _status.value = when {
-                        error is AgentSessionGoneException -> SessionStatus.Gone
-                        error is AgentAuthRequiredException -> SessionStatus.AuthFailed
-                        error is AcpClosedException -> SessionStatus.Offline
-                        else -> SessionStatus.Error
+                    _status.value = attachFailureStatus(error)
+                    if (cause !is DisconnectCause.Retryable) {
+                        handlers.onMessage(
+                            Error(
+                                message = error.message ?: "Could not start the session.",
+                                agentId = agentId,
+                                sessionId = sessionId,
+                                sessionGone = error is AgentSessionGoneException,
+                            ),
+                            null,
+                        )
                     }
-                    handlers.onMessage(
-                        Error(
-                            message = error.message ?: "Could not start the session.",
-                            agentId = agentId,
-                            sessionId = sessionId,
-                            sessionGone = error is AgentSessionGoneException,
-                        ),
-                        null,
-                    )
-                    handlers.onDisconnect(causeFor(error))
+                    handlers.onDisconnect(cause)
                 }
                 return@launch
             }
 
             val (session, attached) = openedSession
             subscription.set(attached)
-            lastFrame.set(System.nanoTime())
-            val heartbeat = launch {
-                while (isActive) {
-                    delay(HEARTBEAT_MILLIS)
-                    lastFrame.set(System.nanoTime())
-                }
-            }
             try {
                 attached.events.collect { message ->
                     lastFrame.set(System.nanoTime())
@@ -151,9 +141,6 @@ private class AcpSessionStream(
                         _status.value = SessionStatus.Gone
                     } else {
                         _status.value = sessionStatus
-                        if (!opened.get()) {
-                            runtime.sessionAttachFailed(connectionId, agentId, sessionId)
-                        }
                     }
                     val cause = when {
                         gone -> DisconnectCause.Gone(
@@ -161,12 +148,22 @@ private class AcpSessionStream(
                         )
                         sessionStatus == SessionStatus.AuthFailed ->
                             DisconnectCause.Unauthorized(reason)
+                        sessionStatus == SessionStatus.Error ->
+                            DisconnectCause.Protocol(
+                                reason ?: "The agent rejected the session.",
+                            )
                         else -> causeFor(reason ?: "The agent process closed.")
+                    }
+                    if (!gone && !opened.get()) {
+                        if (cause is DisconnectCause.Retryable) {
+                            runtime.sessionTransportFailed(connectionId, agentId, sessionId)
+                        } else {
+                            runtime.sessionAttachFailed(connectionId, agentId, sessionId)
+                        }
                     }
                     handlers.onDisconnect(cause)
                 }
             } finally {
-                heartbeat.cancel()
                 statusJob?.cancel()
                 attached.detach()
             }
@@ -184,28 +181,10 @@ private class AcpSessionStream(
     override fun lastFrameAtNanos(): Long? =
         lastFrame.get().takeIf { value -> value > 0L }
 
-    private fun causeFor(error: Throwable): DisconnectCause = when (error) {
-        is AgentSessionGoneException -> DisconnectCause.Gone(error.message ?: "Session unavailable.")
-        is AgentAuthRequiredException -> DisconnectCause.Unauthorized(error.message)
-        is AcpRemoteException -> DisconnectCause.Protocol(error.message ?: "ACP error")
-        else -> {
-            val message = error.message ?: "Session failed."
-            if (message.contains("does not support") || message.contains("did not return this session")) {
-                DisconnectCause.Protocol(message)
-            } else {
-                DisconnectCause.Retryable(message)
-            }
-        }
-    }
-
     private fun causeFor(reason: String): DisconnectCause =
-        if (reason.contains("does not support") || reason.contains("did not return this session")) {
-            DisconnectCause.Protocol(reason)
-        } else {
+        if (isRetryableAttachMessage(reason)) {
             DisconnectCause.Retryable(reason)
+        } else {
+            DisconnectCause.Protocol(reason)
         }
-
-    companion object {
-        private const val HEARTBEAT_MILLIS = 10_000L
-    }
 }

@@ -95,6 +95,8 @@ data class ChatUiState(
     val connectionBanner: String? = null,
     /** True while the stream is attaching or retrying, not merely stopped. */
     val connectionInProgress: Boolean = false,
+    /** True when the retry window ended and the user can start a new one. */
+    val connectionRetryVisible: Boolean = false,
     val selectedSession: SessionRow? = null,
     /** Non-null when the selected session's working folder is gone on the host. */
     val missingSessionFolderPath: String? = null,
@@ -230,6 +232,7 @@ data class ChatUiState(
             // locked. Showing the Offline message too just adds a red line
             // under the transcript while the replay is still streaming.
             streamReconnecting -> null
+            connectionRetryVisible -> null
             else -> composerBlockedMessage(effectiveSessionState)
         }
 
@@ -257,6 +260,14 @@ data class ChatUiState(
                     sessionStatus == SessionStatus.Starting ||
                     effectiveSessionState == SessionState.Starting
                 )
+
+    /**
+     * Connecting and the first replay use the transcript loading animation.
+     * A reconnect with rows already on screen needs the banner instead.
+     */
+    val showConnectionBanner: Boolean
+        get() = connectionBanner != null &&
+            (!connectionInProgress || !showSessionLoading)
 
     val showEmptyWelcome: Boolean
         get() = selectedSession != null &&
