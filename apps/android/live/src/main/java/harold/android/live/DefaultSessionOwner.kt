@@ -59,6 +59,7 @@ class DefaultSessionOwner @Inject constructor(
     private val streamFactory: SessionStreamFactory,
     private val commandApi: SessionCommandApi,
     @ApplicationScope private val scope: CoroutineScope,
+    private val clock: ReconnectClock,
 ) : SessionOwner {
     private val lock = Any()
     private val commandsCatalog = AvailableCommandsCatalog()
@@ -152,7 +153,8 @@ class DefaultSessionOwner @Inject constructor(
         if (this.connectionId == connectionId && loop?.isActive == true) {
             // Already connecting/live/reconnecting toward this server: tearing
             // the loop down would kill a healthy stream. `retry()` only lands
-            // here when the loop has stopped (AuthFailed/TransportError).
+            // here when the loop has stopped (AuthFailed, TransportError, or
+            // ReconnectExhausted).
             synchronized(lock) {
                 ensurePumpLocked()
             }
@@ -184,6 +186,7 @@ class DefaultSessionOwner @Inject constructor(
     override fun retry() {
         val origin = connectionId ?: return
 
+        _connectionState.update { current -> current.copy(attempt = 0) }
         connect(origin)
     }
 
@@ -253,10 +256,10 @@ class DefaultSessionOwner @Inject constructor(
         val active = synchronized(lock) { stream }
 
         if (active != null) {
-            // A frame (heartbeat included) arrived while backgrounded, so the
-            // socket survived. Without one, the process may have been frozen
-            // through Doze over a dead TCP mapping: reopen immediately rather
-            // than waiting out the 75 s idle timeout.
+            // A real agent frame arrived while backgrounded, so the socket
+            // survived. Without one, the process may have been frozen through
+            // Doze over a dead TCP mapping: reopen immediately rather than
+            // waiting out the idle timeout.
             val stale = mark != null &&
                 mark.first === active &&
                 mark.second == active.lastFrameAtNanos()
@@ -400,12 +403,16 @@ class DefaultSessionOwner @Inject constructor(
     private suspend fun run(connectionId: String) {
         var reconnect = false
         var lastTarget: WatchTarget? = null
+        var openedOnce = false
+        var retryWindowStartedAtNanos: Long? = null
         val attachFailures = AtomicInteger(0)
 
         while (currentCoroutineContext().isActive) {
             val target = currentWatchTarget()
             if (target != lastTarget) {
                 lastTarget = target
+                openedOnce = false
+                retryWindowStartedAtNanos = null
                 attachFailures.set(0)
             }
             if (target == null) {
@@ -457,7 +464,9 @@ class DefaultSessionOwner @Inject constructor(
                     },
                     onOpen = {
                         opened.set(true)
+                        openedOnce = true
                         attachFailures.set(0)
+                        retryWindowStartedAtNanos = null
                         applyConnection(ConnectionSignal.Connected)
                     },
                     onDisconnect = { cause -> closed.complete(cause) },
@@ -518,26 +527,44 @@ class DefaultSessionOwner @Inject constructor(
                         )
                     }
                 }
-                val exhaustedAttachRetries = cause is DisconnectCause.Retryable &&
-                    !opened.get() &&
-                    attachFailures.incrementAndGet() >= MAX_PRE_LIVE_ATTEMPTS
-                _sessionStatus.value = when {
-                    exhaustedAttachRetries -> SessionStatus.Error
-                    cause is DisconnectCause.Gone -> SessionStatus.Gone
-                    cause is DisconnectCause.Unauthorized -> SessionStatus.AuthFailed
-                    cause is DisconnectCause.Protocol -> SessionStatus.Error
-                    else -> SessionStatus.Offline
+                _sessionStatus.value = when (cause) {
+                    is DisconnectCause.Gone -> SessionStatus.Gone
+                    is DisconnectCause.Unauthorized -> SessionStatus.AuthFailed
+                    is DisconnectCause.Protocol -> SessionStatus.Error
+                    is DisconnectCause.Retryable -> SessionStatus.Offline
                 }
-                if (exhaustedAttachRetries) {
-                    // Stop the reconnect loop with the actual cause instead of
-                    // retrying a failed attach until the app is killed.
-                    applyConnection(
-                        ConnectionSignal.Disconnected(
-                            DisconnectCause.Protocol(
-                                cause.message.ifBlank { "Could not open the session." },
-                            ),
-                        ),
+
+                if (cause is DisconnectCause.Retryable) {
+                    val startedAtNanos = retryWindowStartedAtNanos
+                        ?: clock.nowNanos().also { started -> retryWindowStartedAtNanos = started }
+                    val attachFailureCount = if (!openedOnce) {
+                        attachFailures.incrementAndGet()
+                    } else {
+                        attachFailures.get()
+                    }
+                    val preLiveExhausted = !openedOnce &&
+                        attachFailureCount >= MAX_PRE_LIVE_ATTEMPTS
+                    val windowExpired = ReconnectPolicy.windowExpired(
+                        startedAtNanos = startedAtNanos,
+                        nowNanos = clock.nowNanos(),
                     )
+                    if (preLiveExhausted || windowExpired) {
+                        applyConnection(ConnectionSignal.RetriesExhausted)
+                        _sessionStatus.value = SessionStatus.Offline
+                        _snapshot.update { current ->
+                            current.copy(
+                                reconnecting = false,
+                                transcript = current.transcript.copy(
+                                    sessionState = SessionState.Offline,
+                                ),
+                            )
+                        }
+                        synchronized(lock) {
+                            pump?.cancel()
+                            pump = null
+                        }
+                        return
+                    }
                 }
 
                 val status = _connectionState.value.status
@@ -978,7 +1005,11 @@ class DefaultSessionOwner @Inject constructor(
     }
 
     private companion object {
-        /** Pre-live retries before a failed attach becomes a terminal error. */
-        const val MAX_PRE_LIVE_ATTEMPTS = 5
+        /**
+         * First-attach retries before a never-opened session stops retrying.
+         * A session that opened at least once is retried for the full
+         * [ReconnectPolicy.WINDOW_MILLIS] instead.
+         */
+        const val MAX_PRE_LIVE_ATTEMPTS = 10
     }
 }

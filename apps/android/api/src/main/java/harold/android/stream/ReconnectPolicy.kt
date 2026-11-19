@@ -9,6 +9,9 @@ object ReconnectPolicy {
     const val BASE_DELAY_MS = 250L
     const val MAX_DELAY_MS = 4_000L
 
+    /** How long a watched session keeps retrying a transport failure. */
+    const val WINDOW_MILLIS = 120_000L
+
     private const val MAX_SHIFT = 4
 
     fun delayMillis(attempt: Int): Long {
@@ -16,4 +19,7 @@ object ReconnectPolicy {
 
         return (BASE_DELAY_MS shl exponent).coerceAtMost(MAX_DELAY_MS)
     }
+
+    fun windowExpired(startedAtNanos: Long, nowNanos: Long): Boolean =
+        nowNanos - startedAtNanos >= WINDOW_MILLIS * 1_000_000L
 }

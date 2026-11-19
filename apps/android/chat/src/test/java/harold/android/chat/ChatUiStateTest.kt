@@ -72,6 +72,55 @@ class ChatUiStateTest {
     }
 
     @Test
+    fun reconnectingWithATranscriptShowsTheConnectionBanner() {
+        val state = ChatUiState(
+            connectionBanner = "Reconnecting (attempt 2)",
+            connectionInProgress = true,
+            selectedSession = sessionRow(SessionState.Running),
+            transcript = AcpTranscriptState(
+                sessionState = SessionState.Running,
+                rows = listOf(
+                    TranscriptAssistantRow(turnId = "turn_01", text = "Still here."),
+                ),
+            ),
+            streamReconnecting = true,
+        )
+
+        assertTrue(state.showConnectionBanner)
+    }
+
+    @Test
+    fun connectingKeepsTheBannerInTheLoadingAnimation() {
+        val state = ChatUiState(
+            connectionBanner = "Connecting…",
+            connectionInProgress = true,
+            selectedSession = sessionRow(SessionState.Idle),
+        )
+
+        assertFalse(state.showConnectionBanner)
+    }
+
+    @Test
+    fun reconnectExhaustionShowsTheBannerAndOffersRetry() {
+        val state = ChatUiState(
+            connectionBanner = "Harold could not reconnect.",
+            connectionRetryVisible = true,
+            selectedSession = sessionRow(SessionState.Offline),
+            transcript = AcpTranscriptState(
+                sessionState = SessionState.Offline,
+                rows = listOf(
+                    TranscriptAssistantRow(turnId = "turn_01", text = "Still here."),
+                ),
+            ),
+        )
+
+        assertTrue(state.showConnectionBanner)
+        assertTrue(state.connectionRetryVisible)
+        assertNull(state.composerBlockedMessage)
+        assertFalse(state.composerEnabled)
+    }
+
+    @Test
     fun transcriptAndTerminalErrorsAreNotLoadingStates() {
         val withRows = ChatUiState(
             streamReconnecting = true,

@@ -325,6 +325,8 @@ fun ChatScreen(
     onSessionClick: (SessionRow) -> Unit = {},
     onSeeAllSessionsClick: () -> Unit = {},
     onRetryRecentSessions: () -> Unit = {},
+    onRetryConnection: () -> Unit = {},
+    onOpenHostLogs: () -> Unit = {},
     onCreateClick: () -> Unit = {},
     onStartNewSessionForGone: (SessionRow) -> Unit = {},
     onAttachmentsPicked: (List<AttachmentPick>) -> Unit = {},
@@ -843,17 +845,39 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Attaching and replaying have their own animation in the
-            // transcript area. The banner is reserved for stops and errors.
-            if (uiState.connectionBanner != null && !uiState.connectionInProgress) {
-                Text(
-                    text = uiState.connectionBanner,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .testTag("connection_banner")
-                        .semantics {
-                            liveRegion = LiveRegionMode.Polite
-                        },
-                )
+            // transcript area. The banner is reserved for reconnects with
+            // rows on screen and for terminal connection failures.
+            if (uiState.showConnectionBanner) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = uiState.connectionBanner.orEmpty(),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("connection_banner")
+                            .semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                    )
+                    if (uiState.connectionRetryVisible) {
+                        TextButton(
+                            onClick = onOpenHostLogs,
+                            modifier = Modifier.testTag("connection_host_logs"),
+                        ) {
+                            Text(text = stringResource(R.string.chat_connection_host_logs))
+                        }
+                        TextButton(
+                            onClick = onRetryConnection,
+                            modifier = Modifier.testTag("connection_retry"),
+                        ) {
+                            Text(text = stringResource(R.string.chat_sessions_retry))
+                        }
+                    }
+                }
             }
 
             if (hasSelectedSession && uiState.agentAuth.showAuthPanel) {

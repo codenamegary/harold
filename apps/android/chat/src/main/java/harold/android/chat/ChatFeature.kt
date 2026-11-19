@@ -89,6 +89,13 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                     navigator.openSessions()
                 },
                 onRetryRecentSessions = viewModel::retryRecentSessions,
+                onRetryConnection = viewModel::retryConnection,
+                onOpenHostLogs = {
+                    uiState.selectedSession
+                        ?.connectionId
+                        ?.takeIf { connectionId -> connectionId.isNotEmpty() }
+                        ?.let(navigator::openConnectionSettings)
+                },
                 onCreateClick = {
                     viewModel.hidePicker()
                     navigator.openCreateSession()

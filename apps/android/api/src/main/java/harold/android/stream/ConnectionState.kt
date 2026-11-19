@@ -21,6 +21,9 @@ sealed interface StreamStatus {
         val message: String,
     ) : StreamStatus
 
+    /** Terminal. Retrying for the whole window did not restore the stream. */
+    data object ReconnectExhausted : StreamStatus
+
     /** Terminal. The agent no longer has this session. */
     data class SessionGone(
         val message: String,
@@ -60,6 +63,9 @@ sealed interface ConnectionSignal {
     /** No session is watched, so no stream can open. Not a connection attempt. */
     data object Idle : ConnectionSignal
 
+    /** The bounded retry window ended while the transport was still down. */
+    data object RetriesExhausted : ConnectionSignal
+
     data class Disconnected(
         val cause: DisconnectCause,
     ) : ConnectionSignal
@@ -72,6 +78,9 @@ fun reduce(state: ConnectionState, signal: ConnectionSignal): ConnectionState =
         ConnectionSignal.Connected -> state.copy(status = StreamStatus.Live, attempt = 0)
 
         ConnectionSignal.Idle -> state.copy(status = StreamStatus.Idle, attempt = 0)
+
+        ConnectionSignal.RetriesExhausted ->
+            state.copy(status = StreamStatus.ReconnectExhausted)
 
         is ConnectionSignal.Disconnected -> when (val cause = signal.cause) {
             is DisconnectCause.Unauthorized ->

@@ -13,6 +13,7 @@ import harold.android.contracts.SessionState
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.network.PromptResult
 import harold.android.network.SessionCommandApi
+import harold.android.stream.ReconnectPolicy
 import harold.android.stream.StreamStatus
 import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStatus
@@ -109,6 +110,7 @@ class DefaultSessionOwnerTest {
             streamFactory = factory,
             commandApi = ScriptedCommandApi(),
             scope = loopScope,
+            clock = ReconnectClock { testScheduler.currentTime * 1_000_000L },
         )
 
         owner.connect(ORIGIN)
@@ -476,9 +478,11 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
-    fun stopsAfterRepeatedPreLiveAttachFailures() = runTest {
+    fun keepsRetryingPastFiveAttachFailuresAfterTheSessionOpened() = runTest {
         val factory = ScriptedSessionStreamFactory(
-            listOf(closedWith(DisconnectCause.Retryable("agent closed"))),
+            listOf(liveThen(DisconnectCause.Retryable("closed"))) +
+                List(6) { closedWith(DisconnectCause.Retryable("agent closed")) } +
+                listOf(liveThen(DisconnectCause.Protocol("stop"))),
         )
         val owner = owner(factory)
 
@@ -486,12 +490,94 @@ class DefaultSessionOwnerTest {
         owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
-        assertEquals(5, factory.openCount)
-        assertEquals(
-            StreamStatus.TransportError("agent closed"),
-            owner.connectionState.value.status,
+        assertEquals(8, factory.openCount)
+        assertEquals(StreamStatus.TransportError("stop"), owner.connectionState.value.status)
+    }
+
+    @Test
+    fun givesUpOnlyAfterTheRetryWindowForANeverOpenedSession() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            List(20) { closedWith(DisconnectCause.Retryable("agent closed")) },
         )
-        assertEquals(SessionStatus.Error, owner.sessionStatus.value)
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceTimeBy(30_000)
+        runCurrent()
+
+        assertEquals(10, factory.openCount)
+        assertEquals(StreamStatus.ReconnectExhausted, owner.connectionState.value.status)
+        assertEquals(SessionStatus.Offline, owner.sessionStatus.value)
+        assertFalse(owner.snapshot.value.reconnecting)
+    }
+
+    @Test
+    fun givesUpOnlyAfterTwoMinutesForAnAlreadyOpenedSession() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(liveThen(DisconnectCause.Retryable("closed"))) +
+                List(60) {
+                    closedWith(DisconnectCause.Retryable("java.net.ConnectException: ENETUNREACH"))
+                },
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceTimeBy(ReconnectPolicy.WINDOW_MILLIS + 5_000)
+        runCurrent()
+
+        assertEquals(StreamStatus.ReconnectExhausted, owner.connectionState.value.status)
+        assertEquals(SessionStatus.Offline, owner.sessionStatus.value)
+        assertFalse(owner.snapshot.value.reconnecting)
+        assertTrue(factory.openCount > 10)
+    }
+
+    @Test
+    fun retryAfterTheWindowOpensTheStreamAgain() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(liveThen(DisconnectCause.Retryable("closed"))) +
+                List(60) { closedWith(DisconnectCause.Retryable("closed")) },
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceTimeBy(ReconnectPolicy.WINDOW_MILLIS + 5_000)
+        runCurrent()
+        assertEquals(StreamStatus.ReconnectExhausted, owner.connectionState.value.status)
+        val openedBeforeRetry = factory.openCount
+        factory.setScripts(listOf(holdOpen()))
+
+        owner.retry()
+        runCurrent()
+
+        assertEquals(openedBeforeRetry + 1, factory.openCount)
+        assertEquals(StreamStatus.Live, owner.connectionState.value.status)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun retryableConnectExceptionShowsReconnectingInsteadOfATransportError() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(
+                closedWith(DisconnectCause.Retryable("java.net.ConnectException: ENETUNREACH")),
+                holdOpen(),
+            ),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        runCurrent()
+
+        assertEquals(StreamStatus.Reconnecting(attempt = 1), owner.connectionState.value.status)
+
+        advanceUntilIdle()
+        assertEquals(StreamStatus.Live, owner.connectionState.value.status)
+        owner.disconnect()
+        advanceUntilIdle()
     }
 
     @Test
@@ -1868,6 +1954,7 @@ class DefaultSessionOwnerTest {
             streamFactory = factory,
             commandApi = commands,
             scope = this,
+            clock = ReconnectClock { testScheduler.currentTime * 1_000_000L },
         )
 
     private fun liveThen(cause: DisconnectCause): Script =
@@ -1987,9 +2074,13 @@ private sealed interface Script {
 }
 
 private class ScriptedSessionStreamFactory(
-    private val scripts: List<Script>,
+    private var scripts: List<Script>,
     private val now: () -> Long = { 0L },
 ) : SessionStreamFactory {
+    fun setScripts(next: List<Script>) {
+        scripts = next
+    }
+
     var openCount = 0
         private set
     val openedAt = mutableListOf<Long>()

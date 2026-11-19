@@ -107,6 +107,19 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun transportFailuresDoNotStopTheDetachedHost() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/one").getOrThrow()
+
+            runtime.sessionTransportFailed(FIRST_ROW, AGENT_ID, created.sessionId)
+            runtime.sessionTransportFailed(FIRST_ROW, AGENT_ID, created.sessionId)
+
+            assertEquals(0, launcher.stopCount)
+            assertEquals(1, launcher.launchCount)
+        }
+    }
+
+    @Test
     fun unknownSessionOnLoadIsGoneAndDoesNotRestartTheProcess() = runBlocking {
         withRuntimeAndCatalog { runtime, launcher, catalog ->
             val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/one").getOrThrow()
@@ -143,6 +156,78 @@ class AgentRuntimeTest {
             // One launch for the replacement process that owned the attach.
             // A gone session must not trigger another restart.
             assertEquals(before + 1, launcher.launchCount)
+        }
+    }
+
+    @Test
+    fun retryableOpenFailureIsOfflineAndEmitsNoErrorFrame() = runBlocking {
+        val launcher = FakeLauncher().also { fake ->
+            fake.launchFailure = java.net.ConnectException("ENETUNREACH")
+        }
+        val runtime = AgentRuntime(
+            launcher = launcher,
+            files = NoopFiles,
+            catalog = AcpSessionCatalog(),
+        )
+        try {
+            val messages = mutableListOf<SessionStreamServerMessage>()
+            val disconnected = CompletableDeferred<DisconnectCause>()
+            val stream = AcpSessionStreamFactory(runtime).open(
+                connectionId = FIRST_ROW,
+                agentId = AGENT_ID,
+                sessionId = "sess_lost",
+                lastEventId = null,
+                handlers = harold.android.stream.SessionStreamHandlers(
+                    onMessage = { message, _ -> messages += message },
+                    onDisconnect = { cause -> disconnected.complete(cause) },
+                ),
+            )
+
+            val cause = withTimeout(10_000) { disconnected.await() }
+            stream.close()
+
+            assertTrue(cause is DisconnectCause.Retryable)
+            assertTrue((cause as DisconnectCause.Retryable).message.contains("ENETUNREACH"))
+            assertEquals(SessionStatus.Offline, stream.status.value)
+            assertTrue(
+                "a transport failure must not write an error frame into the chat",
+                messages.none { message -> message is SessionStreamServerMessage.Error },
+            )
+        } finally {
+            runtime.closeConnection(FIRST_ROW)
+            launcher.close()
+        }
+    }
+
+    @Test
+    fun lastFrameIgnoresLocalHeartbeats() = runBlocking {
+        withRuntime { runtime, launcher ->
+            val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/heartbeat").getOrThrow()
+            val subscribed = CompletableDeferred<Unit>()
+            val stream = AcpSessionStreamFactory(runtime).open(
+                connectionId = FIRST_ROW,
+                agentId = AGENT_ID,
+                sessionId = created.sessionId,
+                lastEventId = null,
+                handlers = harold.android.stream.SessionStreamHandlers(
+                    onMessage = { message, _ ->
+                        if (message is SessionStreamServerMessage.Subscribed) {
+                            subscribed.complete(Unit)
+                        }
+                    },
+                ),
+            )
+            try {
+                withTimeout(10_000) { subscribed.await() }
+                val before = stream.lastFrameAtNanos()
+
+                delay(10_500)
+
+                assertEquals(before, stream.lastFrameAtNanos())
+                assertEquals(1, launcher.launchCount)
+            } finally {
+                stream.close()
+            }
         }
     }
 
@@ -990,6 +1075,20 @@ private class FakeLauncher(
     @Volatile
     var failLoadUnknownId: String? = null
 
+    @Volatile
+    var launchFailure: Throwable? = null
+
+    var stopCount = 0
+        private set
+
+    override suspend fun stopAgent(
+        connectionId: String,
+        agentId: String,
+    ): Result<Unit> {
+        stopCount += 1
+        return Result.success(Unit)
+    }
+
     override suspend fun launchableAgents(connectionId: String): Result<List<LaunchableAgent>> =
         Result.success(agentIds.map { id -> LaunchableAgent(id = id, displayName = id) })
 
@@ -1000,6 +1099,7 @@ private class FakeLauncher(
         agentId: String,
     ): Result<AgentProcessChannel> {
         launchCount += 1
+        launchFailure?.let { error -> return Result.failure(error) }
         val channel = FakeChannel().also { created -> created.failWrites = failNewChannelWrites }
         channels += channel
         agents += FakeAgent(channel, scope).also { agent ->

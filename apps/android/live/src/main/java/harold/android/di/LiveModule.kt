@@ -18,6 +18,7 @@ import harold.android.foreground.UserInputAttentionNotifier
 import harold.android.foreground.SessionAttentionMarks
 import harold.android.foreground.SessionForegroundLauncher
 import harold.android.live.DefaultSessionOwner
+import harold.android.live.ReconnectClock
 import harold.android.live.SessionOwner
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -67,5 +68,9 @@ abstract class LiveModule {
         @ApplicationScope
         fun applicationScope(): CoroutineScope =
             CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        @Provides
+        @Singleton
+        fun reconnectClock(): ReconnectClock = ReconnectClock { System.nanoTime() }
     }
 }

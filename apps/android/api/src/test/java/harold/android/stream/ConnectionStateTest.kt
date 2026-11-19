@@ -99,6 +99,13 @@ class ConnectionStateTest {
         assertEquals(StreamStatus.Reconnecting(attempt = 1), state.status)
     }
 
+    @Test
+    fun stopsRetryingWhenTheRetryWindowExpires() {
+        val state = reduce(live(), ConnectionSignal.RetriesExhausted)
+
+        assertEquals(StreamStatus.ReconnectExhausted, state.status)
+    }
+
     private fun live(): ConnectionState =
         reduce(reduce(ConnectionState(), ConnectionSignal.ConnectRequested), ConnectionSignal.Connected)
 }

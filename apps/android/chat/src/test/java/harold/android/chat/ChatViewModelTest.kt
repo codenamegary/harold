@@ -61,6 +61,7 @@ import harold.android.session.ActiveConnectionState
 import harold.android.testing.FakeConnectionStore
 import harold.android.session.ConnectionGateway
 import harold.android.stream.ConnectionState
+import harold.android.stream.StreamStatus
 import harold.android.testing.FakeConnectionGateway
 import harold.android.testing.FakeSpeechRecognitionClient
 import harold.android.user.UserRepository
@@ -979,6 +980,32 @@ class ChatViewModelTest {
         assertTrue(viewModel.uiState.value.streamReconnecting)
         assertEquals(0, viewModel.uiState.value.transcript.rows.size)
         assertEquals(SessionState.Offline, viewModel.uiState.value.effectiveSessionState)
+    }
+
+    @Test
+    fun reconnectExhaustionShowsARetryBannerWithoutTheRawException() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+        )
+        advanceUntilIdle()
+
+        sessionOwner.publishConnection(
+            ConnectionState(
+                status = StreamStatus.TransportError(
+                    "java.net.ConnectException: ENETUNREACH",
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("Harold could not reconnect.", viewModel.uiState.value.connectionBanner)
+        assertTrue(viewModel.uiState.value.connectionRetryVisible)
+
+        viewModel.retryConnection()
+        assertEquals(1, sessionOwner.retries)
     }
 
     @Test
@@ -2991,9 +3018,15 @@ private class ChatFakeSessionOwner : SessionOwner {
         private set
     var backgroundMarks = 0
         private set
+    var retries = 0
+        private set
 
     fun publish(snapshot: SessionSnapshot) {
         _snapshot.value = snapshot
+    }
+
+    fun publishConnection(state: ConnectionState) {
+        _connectionState.value = state
     }
 
     fun publishTitles(titles: Map<String, String>) {
@@ -3009,7 +3042,9 @@ private class ChatFakeSessionOwner : SessionOwner {
     override fun connect(connectionId: String) {
         connections += connectionId
     }
-    override fun retry() = Unit
+    override fun retry() {
+        retries += 1
+    }
 
     override fun disconnect() {
         disconnects += 1

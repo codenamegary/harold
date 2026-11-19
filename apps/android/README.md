@@ -96,9 +96,10 @@ Android app -> SSH exec (inline host script) -> detached host -> `agent acp` -> 
   confirms them. The watched session reconnects through the one existing retry
   loop and starts one new process. Other sessions start a process when opened.
 - A failed session attach discards the in-memory session. Two consecutive
-  failures also restart that agent's host. After five failed attaches
-  before the stream opens, the reconnect loop stops and shows the agent's
-  error instead of retrying forever.
+  failures also restart that agent's host. A session that opened at least
+  once keeps retrying for a two minute window, then offers Retry. A session
+  that never opened stops after ten attach failures. Transport failures stay
+  retryable; only auth, a gone session, and ACP protocol errors are terminal.
 - Removing the last saved connection for a host identity closes its pooled SSH
   session and stops every detached host on it.
 
