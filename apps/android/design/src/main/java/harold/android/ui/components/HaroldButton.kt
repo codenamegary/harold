@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import harold.android.ui.theme.Lime
+import harold.android.ui.theme.LimeInk
 
 enum class HaroldButtonVariant {
     Primary,
@@ -83,8 +85,8 @@ fun HaroldButton(
                 shape = ButtonShape,
                 contentPadding = contentPadding,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = Lime,
+                    contentColor = LimeInk,
                 ),
                 modifier = modifier.defaultMinSize(minHeight = minHeight),
             ) {

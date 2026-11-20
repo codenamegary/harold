@@ -162,6 +162,7 @@ fun SwipeToDeleteListItem(
                 { Text(text = confirmationText) }
             },
             dismissLabel = cancelLabel,
+            destructive = true,
             confirmModifier = Modifier.testTag("swipe_delete_confirm_action_$rowTag"),
             dismissModifier = Modifier.testTag("swipe_delete_confirm_cancel_$rowTag"),
         )

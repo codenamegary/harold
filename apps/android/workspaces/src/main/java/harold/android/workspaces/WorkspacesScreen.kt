@@ -245,6 +245,7 @@ fun WorkspacesScreen(
             title = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_title)) },
             body = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_body)) },
             dismissLabel = stringResource(R.string.workspaces_cancel),
+            destructive = true,
             confirmModifier = Modifier.testTag("workspaces_cleanup_confirm"),
             dismissModifier = Modifier.testTag("workspaces_cleanup_cancel"),
         )

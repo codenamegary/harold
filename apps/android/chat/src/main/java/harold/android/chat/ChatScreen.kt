@@ -572,6 +572,7 @@ fun ChatScreen(
                 Text(text = stringResource(R.string.chat_remove_confirm_body))
             },
             dismissLabel = stringResource(R.string.chat_remove_cancel),
+            destructive = true,
             confirmModifier = Modifier.testTag("disconnect_confirm"),
             dismissModifier = Modifier.testTag("disconnect_cancel"),
         )

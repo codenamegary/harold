@@ -51,7 +51,7 @@ private fun LoadingSkeletonRow(height: Dp) {
             .fillMaxWidth()
             .height(height)
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -60,7 +60,7 @@ private fun LoadingSkeletonRow(height: Dp) {
             modifier = Modifier
                 .size(32.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.24f)),
         )
         Column(
             modifier = Modifier.weight(1f),
@@ -79,6 +79,6 @@ private fun SkeletonBar(widthFraction: Float, height: Dp) {
             .fillMaxWidth(widthFraction)
             .height(height)
             .clip(RoundedCornerShape(999.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.24f)),
     )
 }

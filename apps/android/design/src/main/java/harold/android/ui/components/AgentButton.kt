@@ -40,6 +40,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import harold.android.ui.theme.Lime
+import harold.android.ui.theme.LimeInk
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -67,8 +69,8 @@ fun AgentButtonColors(
     variant: AgentButtonVariant,
 ): ButtonColors = when (variant) {
     AgentButtonVariant.Primary -> ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
+        containerColor = Lime,
+        contentColor = LimeInk,
         disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
         disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
     )
@@ -217,8 +219,8 @@ fun AgentIconButton(
 ) {
     val colors = when (variant) {
         AgentButtonVariant.Primary -> IconButtonDefaults.iconButtonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            containerColor = Lime,
+            contentColor = LimeInk,
             disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         )

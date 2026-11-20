@@ -192,6 +192,7 @@ fun ConnectionSettingsScreen(
             title = { Text(text = stringResource(R.string.settings_forget_confirm_title)) },
             body = { Text(text = stringResource(R.string.settings_forget_confirm_body)) },
             dismissLabel = stringResource(R.string.connections_cancel),
+            destructive = true,
             confirmModifier = Modifier.testTag("settings_forget_confirm"),
             dismissModifier = Modifier.testTag("settings_forget_cancel"),
         )
@@ -220,6 +221,7 @@ fun ConnectionSettingsScreen(
             // spinner keeps the request and its result in one place.
             busy = uiState.agentLogs.cleanupRunning,
             busyLabel = stringResource(R.string.settings_agent_logs_cleanup_running),
+            destructive = true,
             confirmModifier = Modifier.testTag("settings_agent_logs_cleanup_confirm"),
             dismissModifier = Modifier.testTag("settings_agent_logs_cleanup_cancel"),
         )
