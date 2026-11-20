@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.7.0](https://github.com/codenamegary/harold/compare/harold-android-v4.6.1...harold-android-v4.7.0) (2026-11-20)
+
+
+### Features
+
+* **chat:** forward agent-printed loopback links over SSH ([#540](https://github.com/codenamegary/harold/issues/540)) ([f234f67](https://github.com/codenamegary/harold/commit/f234f67dce84177b012e00a7a4ff760715f7112c))
+
 ## [4.6.1](https://github.com/codenamegary/harold/compare/harold-android-v4.6.0...harold-android-v4.6.1) (2026-11-19)
 
 
