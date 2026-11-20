@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -56,6 +55,7 @@ import harold.android.ui.components.HaroldBadge
 import harold.android.ui.debug.probeTag
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
+import harold.android.ui.components.HaroldDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -63,6 +63,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,6 +93,8 @@ import harold.android.chat.composer.insertSlashShortcut
 import harold.android.chat.composer.removeCommandToken
 import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.SessionState
+import harold.android.network.LoopbackAddress
+import harold.android.network.parseLoopbackUrl
 import harold.android.ui.promptinput.PromptEdit
 import harold.android.voice.VoiceDictationPresentation
 
@@ -377,6 +380,11 @@ fun ChatScreen(
     onElicitationUrlAccepted: () -> Unit = {},
     onElicitationUrlOpenFailed: (String) -> Unit = {},
     onElicitationDismissWaitingUrl: (String) -> Unit = {},
+    onDevServerRequest: (address: LoopbackAddress, acceptElicitation: Boolean) -> Unit = { _, _ -> },
+    onDevServerOpen: (LoopbackAddress) -> Unit = {},
+    onDevServerBrowserLaunched: () -> Unit = {},
+    onDevServerBrowserLaunchFailed: (String) -> Unit = {},
+    onDevServerDismiss: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var disconnectConfirmVisible by remember { mutableStateOf(false) }
@@ -454,9 +462,15 @@ fun ChatScreen(
     /**
      * Opens a URL prompt in the browser. The accept reply is sent only after
      * the Intent resolves, so a device with no browser never acknowledges a
-     * link the user could not open.
+     * link the user could not open. A loopback URL is only reachable once the
+     * host port is forwarded, so it takes the dev-server prompt first.
      */
     fun openElicitationUrl(url: String, acceptOnSuccess: Boolean) {
+        val address = parseLoopbackUrl(url)
+        if (address != null) {
+            onDevServerRequest(address, acceptOnSuccess)
+            return
+        }
         val intent = Intent(Intent.ACTION_VIEW, url.toUri())
         try {
             context.startActivity(intent)
@@ -496,43 +510,30 @@ fun ChatScreen(
     }
 
     if (uiState.notificationPermissionDenied) {
-        AlertDialog(
+        HaroldDialog(
             onDismissRequest = onDismissNotificationPermissionPrompt,
-            title = { Text(text = stringResource(R.string.notification_permission_title)) },
-            text = { Text(text = stringResource(R.string.notification_permission_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val intent = Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", context.packageName, null),
-                        )
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                        .testTag("notification_permission_settings")
-                        .semantics {
-                            contentDescription = openSettingsContentDescription
-                        },
-                ) {
-                    Text(text = stringResource(R.string.notification_permission_open_settings))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = onDismissNotificationPermissionPrompt,
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                        .testTag("notification_permission_dismiss")
-                        .semantics {
-                            contentDescription = notNowContentDescription
-                        },
-                ) {
-                    Text(text = stringResource(R.string.notification_permission_not_now))
-                }
+            confirmLabel = stringResource(R.string.notification_permission_open_settings),
+            onConfirm = {
+                val intent = Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                )
+                context.startActivity(intent)
             },
             modifier = Modifier.testTag("notification_permission_dialog"),
+            title = { Text(text = stringResource(R.string.notification_permission_title)) },
+            body = { Text(text = stringResource(R.string.notification_permission_body)) },
+            dismissLabel = stringResource(R.string.notification_permission_not_now),
+            confirmModifier = Modifier
+                .testTag("notification_permission_settings")
+                .semantics {
+                    contentDescription = openSettingsContentDescription
+                },
+            dismissModifier = Modifier
+                .testTag("notification_permission_dismiss")
+                .semantics {
+                    contentDescription = notNowContentDescription
+                },
         )
     }
 
@@ -550,8 +551,14 @@ fun ChatScreen(
     }
 
     if (disconnectConfirmVisible) {
-        AlertDialog(
+        HaroldDialog(
             onDismissRequest = { disconnectConfirmVisible = false },
+            confirmLabel = stringResource(R.string.chat_remove_confirm),
+            onConfirm = {
+                disconnectConfirmVisible = false
+                onDisconnectFromServer()
+            },
+            modifier = Modifier.testTag("disconnect_confirm_dialog"),
             title = {
                 Text(
                     text = if (disconnectName.isNotEmpty()) {
@@ -561,34 +568,59 @@ fun ChatScreen(
                     },
                 )
             },
-            text = {
+            body = {
                 Text(text = stringResource(R.string.chat_remove_confirm_body))
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        disconnectConfirmVisible = false
-                        onDisconnectFromServer()
-                    },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                        .testTag("disconnect_confirm"),
-                ) {
-                    Text(text = stringResource(R.string.chat_remove_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { disconnectConfirmVisible = false },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                        .testTag("disconnect_cancel"),
-                ) {
-                    Text(text = stringResource(R.string.chat_remove_cancel))
-                }
-            },
-            modifier = Modifier.testTag("disconnect_confirm_dialog"),
+            dismissLabel = stringResource(R.string.chat_remove_cancel),
+            confirmModifier = Modifier.testTag("disconnect_confirm"),
+            dismissModifier = Modifier.testTag("disconnect_cancel"),
         )
+    }
+
+    val devServerLink = uiState.devServerLink
+    val devServerNoBrowser = stringResource(R.string.chat_dev_server_no_browser)
+    LaunchedEffect(devServerLink.browserUrl) {
+        val url = devServerLink.browserUrl ?: return@LaunchedEffect
+        val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+        val failure = runCatching { context.startActivity(intent) }.exceptionOrNull()
+        if (failure == null) {
+            onDevServerBrowserLaunched()
+        } else {
+            onDevServerBrowserLaunchFailed(
+                if (failure is ActivityNotFoundException) {
+                    devServerNoBrowser
+                } else {
+                    failure.message ?: devServerNoBrowser
+                },
+            )
+        }
+    }
+
+    // A tap only asks. Nothing is forwarded until the user confirms, because
+    // agent output can name any address it likes.
+    devServerLink.promptAddress?.let { address ->
+        DevServerLinkPrompt(
+            address = address,
+            opening = devServerLink.isOpening,
+            onConfirm = { onDevServerOpen(address) },
+            onDismiss = onDevServerDismiss,
+        )
+    }
+
+    devServerLink.error?.let { message ->
+        DevServerLinkErrorDialog(
+            message = message,
+            onDismiss = onDevServerDismiss,
+        )
+    }
+
+    // The transcript hands this to every visible row, and a row rebuilds its
+    // URI handler when the lambda identity changes. One stable reference keeps
+    // the handler intact while the stream keeps appending; the state read keeps
+    // the newest callback without changing that identity.
+    val devServerRequest by rememberUpdatedState(onDevServerRequest)
+    val onLoopbackLink = remember {
+        { address: LoopbackAddress -> devServerRequest(address, false) }
     }
 
     val contextUsageText = uiState.contextUsage?.let(::formatContextUsage)
@@ -992,6 +1024,7 @@ fun ChatScreen(
                             hasPendingPermission = uiState.activePermissionRequest != null,
                             hasPendingQuestion = uiState.activeElicitation != null,
                             modifier = Modifier.fillMaxSize(),
+                            onLoopbackLink = onLoopbackLink,
                         )
                     }
                 }

@@ -3,6 +3,7 @@ package harold.android.transport.ssh
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
+import com.jcraft.jsch.JSchException
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.SftpException
 import harold.android.credentials.SshAuth
@@ -120,6 +121,26 @@ class JschSshConnection private constructor(
         session.disconnect()
     }
 
+    override suspend fun forwardLocalPort(
+        remoteHost: String,
+        remotePort: Int,
+        preferredLocalPort: Int?,
+    ): SshLocalPortForward = withContext(Dispatchers.IO) {
+        val localPort = try {
+            bindLoopbackForward(preferredLocalPort) { requestedPort ->
+                session.setPortForwardingL(LOOPBACK, requestedPort, remoteHost, remotePort)
+            }
+        } catch (error: JSchException) {
+            throw SshException(error.message ?: "Port forwarding failed", error)
+        }
+        SshLocalPortForward(
+            localPort = localPort,
+            remoteHost = remoteHost,
+            remotePort = remotePort,
+            release = { runCatching { session.delPortForwardingL(localPort) } },
+        )
+    }
+
     /**
      * JSch's SFTP channel is not safe for concurrent operations. Every read,
      * write, list, and stat holds the lock for the whole operation so two
@@ -223,6 +244,7 @@ class JschSshConnection private constructor(
         private const val CONNECT_TIMEOUT_MILLIS = 20_000
         private const val EXIT_POLL_MILLIS = 40L
         private const val STDERR_LIMIT_BYTES = 64 * 1024
+        private const val LOOPBACK = "127.0.0.1"
 
         fun connect(config: SshConfig): JschSshConnection {
             val jsch = JSch()
@@ -261,6 +283,34 @@ class JschSshConnection private constructor(
 
         private fun wrap(error: Exception): SshException =
             if (error is SshException) error else SshException(error.message ?: "SSH failure", error)
+    }
+}
+
+/** Asks the OS for a loopback port instead of naming one. */
+private const val EPHEMERAL_LOCAL_PORT = 0
+
+/**
+ * Binds a loopback listener, preferring [preferredPort] and returning the port
+ * the OS actually bound. `requestedPort == 0` means "pick a free port".
+ *
+ * The preferred port is attempted instead of probed first: checking it for
+ * availability and then binding is not atomic, so two concurrent forwards can
+ * both claim it and the loser fails a tap that an ephemeral port would have
+ * served. Binding decides the race in one step, and only a real bind failure
+ * falls back. A preferred port stays worth trying because a stable origin
+ * keeps the browser's cookies and storage across reconnects.
+ */
+internal fun bindLoopbackForward(
+    preferredPort: Int?,
+    bind: (requestedPort: Int) -> Int,
+): Int {
+    if (preferredPort == null || preferredPort <= 0) {
+        return bind(EPHEMERAL_LOCAL_PORT)
+    }
+    return try {
+        bind(preferredPort)
+    } catch (_: JSchException) {
+        bind(EPHEMERAL_LOCAL_PORT)
     }
 }
 

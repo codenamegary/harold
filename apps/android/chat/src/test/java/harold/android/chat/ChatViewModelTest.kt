@@ -36,6 +36,7 @@ import harold.android.credentials.SavedConnection
 import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionRepository
 import harold.android.live.ContextUsage
+import harold.android.live.Elicitation
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.live.TranscriptUserRow
@@ -49,8 +50,11 @@ import harold.android.navigation.Navigator
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
+import harold.android.network.DevServerTunnel
+import harold.android.network.DevServerTunnelApi
 import harold.android.network.GitApi
 import harold.android.network.HostUsageApi
+import harold.android.network.LoopbackAddress
 import harold.android.network.SessionConfigApi
 import harold.android.network.SessionFolderProbe
 import harold.android.network.SessionFolderState
@@ -2352,6 +2356,24 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun forgettingAConnectionClosesItsDevServerTunnels() = runTest(dispatcher) {
+        val tunnels = RecordingDevServerTunnels()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = ChatFakeSessionOwner(),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
+            devServerTunnelApi = tunnels,
+        )
+        advanceUntilIdle()
+
+        viewModel.disconnectFromServer()
+        advanceUntilIdle()
+
+        assertEquals(listOf(ORIGIN), tunnels.closedConnections)
+    }
+
+    @Test
     fun authRequiredStreamErrorHydratesAuth() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
@@ -2655,6 +2677,274 @@ class ChatViewModelTest {
         assertEquals(ORIGIN to "/tmp/harold", gitApi.summaryCalls.last())
     }
 
+    @Test
+    fun openingADevServerLinkForwardsItAndHandsBackTheLocalUrl() = runTest(dispatcher) {
+        val tunnels = RecordingDevServerTunnels()
+        val viewModel = createDevServerViewModel(tunnels)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+
+        viewModel.requestDevServerLink(DEV_SERVER)
+        assertEquals(DEV_SERVER, viewModel.uiState.value.devServerLink.pending)
+        assertNull(viewModel.uiState.value.devServerLink.opening)
+
+        viewModel.openDevServerLink(DEV_SERVER)
+        assertEquals(DEV_SERVER, viewModel.uiState.value.devServerLink.opening)
+        advanceUntilIdle()
+
+        assertEquals(listOf(ORIGIN to DEV_SERVER), tunnels.opens)
+        assertEquals(
+            "http://127.0.0.1:49152/",
+            viewModel.uiState.value.devServerLink.browserUrl,
+        )
+        assertNull(viewModel.uiState.value.devServerLink.pending)
+        assertFalse(viewModel.uiState.value.devServerLink.isOpening)
+    }
+
+    @Test
+    fun aDevServerLinkWithoutASelectedSessionReportsTheMissingConnection() = runTest(dispatcher) {
+        val tunnels = RecordingDevServerTunnels()
+        val viewModel = createDevServerViewModel(tunnels)
+        advanceUntilIdle()
+
+        viewModel.requestDevServerLink(DEV_SERVER)
+        viewModel.openDevServerLink(DEV_SERVER)
+        advanceUntilIdle()
+
+        assertEquals("No connection for this session", viewModel.uiState.value.devServerLink.error)
+        assertTrue(tunnels.opens.isEmpty())
+    }
+
+    @Test
+    fun aFailedForwardReportsTheReasonInsteadOfAUrl() = runTest(dispatcher) {
+        val tunnels = RecordingDevServerTunnels(failure = IllegalStateException("ssh is down"))
+        val viewModel = createDevServerViewModel(tunnels)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+
+        viewModel.requestDevServerLink(DEV_SERVER)
+        viewModel.openDevServerLink(DEV_SERVER)
+        advanceUntilIdle()
+
+        assertEquals("ssh is down", viewModel.uiState.value.devServerLink.error)
+        assertNull(viewModel.uiState.value.devServerLink.browserUrl)
+    }
+
+    @Test
+    fun aSecondTapWhileTheForwardOpensIsIgnored() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val tunnels = RecordingDevServerTunnels(gate = gate)
+        val viewModel = createDevServerViewModel(tunnels)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+        val second = DEV_SERVER.copy(port = 4000)
+
+        viewModel.requestDevServerLink(DEV_SERVER)
+        viewModel.openDevServerLink(DEV_SERVER)
+        runCurrent()
+        viewModel.requestDevServerLink(second)
+        viewModel.openDevServerLink(second)
+        runCurrent()
+
+        assertEquals(listOf(ORIGIN to DEV_SERVER), tunnels.opens)
+        // The second tap must not replace the address the first one opened.
+        assertEquals(DEV_SERVER, viewModel.uiState.value.devServerLink.promptAddress)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf(ORIGIN to DEV_SERVER), tunnels.opens)
+        assertEquals(
+            "http://127.0.0.1:49152/",
+            viewModel.uiState.value.devServerLink.browserUrl,
+        )
+    }
+
+    @Test
+    fun aSecondElicitationLinkWhileTheForwardOpensReportsInsteadOfDropping() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val gate = CompletableDeferred<Unit>()
+        val tunnels = RecordingDevServerTunnels(gate = gate)
+        val viewModel = createDevServerViewModel(tunnels, sessionOwner)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                pendingElicitations = listOf(urlElicitation()),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.requestDevServerLink(DEV_SERVER, acceptElicitationOnLaunch = true)
+        viewModel.openDevServerLink(DEV_SERVER)
+        runCurrent()
+        // A second agent link while the first forward is still being made
+        // cannot be opened, and its accept must not be dropped in silence.
+        viewModel.requestDevServerLink(
+            DEV_SERVER.copy(port = 4000),
+            acceptElicitationOnLaunch = true,
+        )
+
+        assertEquals(
+            DEV_SERVER,
+            viewModel.uiState.value.devServerLink.promptAddress,
+        )
+        assertNotNull(viewModel.uiState.value.elicitationUiState.urlOpenError)
+        assertTrue(sessionOwner.elicitationReplies.isEmpty())
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf(ORIGIN to DEV_SERVER), tunnels.opens)
+    }
+
+    @Test
+    fun switchingSessionsDropsAPendingDevServerLink() = runTest(dispatcher) {
+        val tunnels = RecordingDevServerTunnels()
+        val viewModel = createDevServerViewModel(tunnels)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+
+        viewModel.requestDevServerLink(DEV_SERVER)
+        assertEquals(DEV_SERVER, viewModel.uiState.value.devServerLink.pending)
+
+        viewModel.selectSession(listedSession("sess_01", "Beta"))
+        advanceUntilIdle()
+
+        assertEquals(DevServerLinkUi(), viewModel.uiState.value.devServerLink)
+        assertTrue(tunnels.opens.isEmpty())
+    }
+
+    @Test
+    fun dismissingADevServerLinkClearsIt() = runTest(dispatcher) {
+        val viewModel = createDevServerViewModel(RecordingDevServerTunnels())
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+
+        viewModel.requestDevServerLink(DEV_SERVER, acceptElicitationOnLaunch = true)
+        assertEquals(
+            DevServerLinkUi(pending = DEV_SERVER, acceptElicitationOnLaunch = true),
+            viewModel.uiState.value.devServerLink,
+        )
+
+        viewModel.dismissDevServerLink()
+
+        assertEquals(DevServerLinkUi(), viewModel.uiState.value.devServerLink)
+    }
+
+    @Test
+    fun aLaunchedBrowserClearsOnlyTheForwardedUrl() = runTest(dispatcher) {
+        val tunnels = RecordingDevServerTunnels()
+        val viewModel = createDevServerViewModel(tunnels)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+
+        viewModel.openDevServerLink(DEV_SERVER)
+        advanceUntilIdle()
+
+        viewModel.devServerBrowserLaunched()
+
+        assertEquals(DevServerLinkUi(), viewModel.uiState.value.devServerLink)
+        assertTrue(tunnels.closes.isEmpty())
+    }
+
+    @Test
+    fun aFailedBrowserLaunchReportsTheErrorAndClosesTheForward() = runTest(dispatcher) {
+        val tunnels = RecordingDevServerTunnels()
+        val viewModel = createDevServerViewModel(tunnels)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+
+        viewModel.openDevServerLink(DEV_SERVER)
+        advanceUntilIdle()
+        viewModel.reportDevServerBrowserLaunchFailure("No browser available")
+        advanceUntilIdle()
+
+        assertEquals("No browser available", viewModel.uiState.value.devServerLink.error)
+        assertNull(viewModel.uiState.value.devServerLink.browserUrl)
+        assertEquals(1, tunnels.closes.size)
+        assertEquals(tunnels.tunnels, tunnels.closes)
+    }
+
+    @Test
+    fun anElicitationAcceptWaitsForTheForwardAndTheBrowser() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val tunnels = RecordingDevServerTunnels()
+        val viewModel = createDevServerViewModel(tunnels, sessionOwner)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                pendingElicitations = listOf(urlElicitation()),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(
+            "http://localhost:3000/login",
+            (viewModel.uiState.value.activeElicitation as Elicitation.Url).url,
+        )
+
+        viewModel.requestDevServerLink(DEV_SERVER, acceptElicitationOnLaunch = true)
+        viewModel.openDevServerLink(DEV_SERVER)
+        advanceUntilIdle()
+
+        assertTrue(sessionOwner.elicitationReplies.isEmpty())
+
+        viewModel.devServerBrowserLaunched()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("req_url" to JsonObject(mapOf("action" to JsonPrimitive("accept")))),
+            sessionOwner.elicitationReplies,
+        )
+    }
+
+    @Test
+    fun aFailedForwardForAnElicitationReportsThroughTheElicitation() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val tunnels = RecordingDevServerTunnels(failure = IllegalStateException("ssh is down"))
+        val viewModel = createDevServerViewModel(tunnels, sessionOwner)
+        advanceUntilIdle()
+        selectDevServerSession(viewModel)
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                pendingElicitations = listOf(urlElicitation()),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.requestDevServerLink(DEV_SERVER, acceptElicitationOnLaunch = true)
+        viewModel.openDevServerLink(DEV_SERVER)
+        advanceUntilIdle()
+
+        assertEquals("ssh is down", viewModel.uiState.value.elicitationUiState.urlOpenError)
+        assertNull(viewModel.uiState.value.devServerLink.error)
+        assertTrue(sessionOwner.elicitationReplies.isEmpty())
+    }
+
+    private fun createDevServerViewModel(
+        tunnels: DevServerTunnelApi,
+        sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
+    ): ChatViewModel = createViewModel(
+        repository = ChatFakeUserRepository(),
+        navigation = ChatFakeNavigationPreferences(),
+        sessionOwner = sessionOwner,
+        devServerTunnelApi = tunnels,
+    )
+
+    /**
+     * A session only has an SSH origin once it is known to belong to a saved
+     * Harold, so the dev-server tests select one that names its connection.
+     */
+    private fun TestScope.selectDevServerSession(viewModel: ChatViewModel) {
+        viewModel.selectSession(listedSession("sess_02", "Alpha").copy(connectionId = ORIGIN))
+        advanceUntilIdle()
+    }
+
     private fun createViewModel(
         repository: ChatFakeUserRepository,
         navigation: ChatFakeNavigationPreferences,
@@ -2672,6 +2962,7 @@ class ChatViewModelTest {
         sessionAttention: harold.android.foreground.SessionAttentionMarks? = null,
         permissionNotifier: harold.android.foreground.PermissionAttentionNotifier? = null,
         hostUsage: HostUsageApi? = null,
+        devServerTunnelApi: DevServerTunnelApi? = null,
         sessionFolderProbe: SessionFolderProbe = SessionFolderProbe { _, _ ->
             SessionFolderState.Available
         },
@@ -2700,6 +2991,7 @@ class ChatViewModelTest {
         sessionAttention = sessionAttention,
         permissionNotifier = permissionNotifier,
         hostUsage = hostUsage,
+        devServerTunnelApi = devServerTunnelApi,
         sessionRefresher = sessionRefresher,
     )
 
@@ -3007,6 +3299,7 @@ private class ChatFakeSessionOwner : SessionOwner {
 
     val prompts = mutableListOf<String>()
     val permissionReplies = mutableListOf<Pair<String, String>>()
+    val elicitationReplies = mutableListOf<Pair<String, JsonElement>>()
     val rememberedConfigs = mutableListOf<Triple<AgentId, String, List<ConfigOption>>>()
     var cancels = 0
         private set
@@ -3109,6 +3402,11 @@ private class ChatFakeSessionOwner : SessionOwner {
 
     override suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit> {
         _snapshot.update { current -> current.copy(extension = null) }
+        return Result.success(Unit)
+    }
+
+    override suspend fun replyElicitation(requestId: String, result: JsonElement): Result<Unit> {
+        elicitationReplies += requestId to result
         return Result.success(Unit)
     }
 
@@ -3382,6 +3680,67 @@ private fun session(
     title = title,
     updatedAt = updatedAt,
 )
+
+private val DEV_SERVER = LoopbackAddress(host = "localhost", port = 3000)
+
+/** A URL elicitation the agent asked the user to open. */
+private fun urlElicitation(requestId: String = "req_url") = Elicitation.Url(
+    requestId = requestId,
+    agentId = "cursor",
+    sessionId = "sess_02",
+    message = "Sign in to continue",
+    raw = JsonObject(emptyMap()),
+    elicitationId = "elicit_01",
+    url = "http://localhost:3000/login",
+    host = "localhost:3000",
+)
+
+/**
+ * Stands in for the SSH forwarder. [gate] holds the forward open so a test can
+ * observe what a tap leaves behind while the tunnel is still being made.
+ */
+private class RecordingDevServerTunnels(
+    private val failure: Throwable? = null,
+    private val gate: CompletableDeferred<Unit>? = null,
+) : DevServerTunnelApi {
+    val opens = mutableListOf<Pair<String, LoopbackAddress>>()
+    val tunnels = mutableListOf<DevServerTunnel>()
+    val closes = mutableListOf<DevServerTunnel>()
+    val closedConnections = mutableListOf<String>()
+
+    override val hasOpenTunnels: Boolean
+        get() = tunnels.size > closes.size
+
+    override suspend fun open(
+        connectionId: String,
+        address: LoopbackAddress,
+    ): Result<DevServerTunnel> {
+        opens += connectionId to address
+        gate?.await()
+        failure?.let { error -> return Result.failure(error) }
+        val port = 49151 + opens.size
+        val tunnel = DevServerTunnel(
+            connectionId = connectionId,
+            localUrl = "http://127.0.0.1:$port/",
+            localPort = port,
+            address = address,
+        )
+        tunnels += tunnel
+        return Result.success(tunnel)
+    }
+
+    override suspend fun close(tunnel: DevServerTunnel) {
+        closes += tunnel
+    }
+
+    override suspend fun closeConnection(connectionId: String) {
+        closedConnections += connectionId
+    }
+
+    override suspend fun closeAll() {
+        closes += tunnels
+    }
+}
 
 private fun listedSession(id: String, title: String) = SessionRow(
     sessionId = id,

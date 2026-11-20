@@ -2,6 +2,7 @@ package harold.android.chat
 
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -9,21 +10,54 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.model.rememberMarkdownState
 import com.mikepenz.markdown.model.rememberStreamingMarkdownState
+import harold.android.network.LoopbackAddress
+import harold.android.network.parseLoopbackUrl
 
 @Composable
 fun MarkdownMessage(
     text: String,
     modifier: Modifier = Modifier,
     streaming: Boolean = false,
+    onLoopbackLink: ((LoopbackAddress) -> Unit)? = null,
 ) {
-    if (streaming) {
-        StreamingMarkdown(text = text, modifier = modifier)
+    val decorated = remember(text, streaming) {
+        if (streaming) text else markDevServerLinks(linkifyLoopbackUrls(text))
+    }
+    val composed: @Composable () -> Unit = {
+        if (streaming) {
+            StreamingMarkdown(text = text, modifier = modifier)
+        } else {
+            CompletedMarkdown(text = decorated, modifier = modifier)
+        }
+    }
+    if (onLoopbackLink == null) {
+        composed()
     } else {
-        CompletedMarkdown(text = text, modifier = modifier)
+        // The renderer resolves link clicks through LocalUriHandler, so a
+        // handler here sees every link in the message and can hand loopback
+        // addresses to the confirmation prompt.
+        val fallback = LocalUriHandler.current
+        val intercepting = remember(fallback, onLoopbackLink) {
+            object : UriHandler {
+                override fun openUri(uri: String) {
+                    val address = parseLoopbackUrl(uri)
+                    if (address != null) {
+                        onLoopbackLink(address)
+                    } else {
+                        fallback.openUri(uri)
+                    }
+                }
+            }
+        }
+        CompositionLocalProvider(LocalUriHandler provides intercepting) {
+            composed()
+        }
     }
 }
 
@@ -43,6 +77,7 @@ private fun CompletedMarkdown(
             markdownState = markdownState,
             typography = haroldMarkdownTypography(),
             dimens = haroldMarkdownDimens(),
+            extendedSpans = devServerLinkExtendedSpans(),
             modifier = modifier.testTag("markdown_message"),
         )
     }

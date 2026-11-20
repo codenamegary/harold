@@ -154,6 +154,11 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onElicitationUrlAccepted = viewModel::acceptElicitationUrl,
                 onElicitationUrlOpenFailed = viewModel::reportElicitationUrlOpenFailure,
                 onElicitationDismissWaitingUrl = viewModel::dismissUrlElicitation,
+                onDevServerRequest = viewModel::requestDevServerLink,
+                onDevServerOpen = viewModel::openDevServerLink,
+                onDevServerBrowserLaunched = viewModel::devServerBrowserLaunched,
+                onDevServerBrowserLaunchFailed = viewModel::reportDevServerBrowserLaunchFailure,
+                onDevServerDismiss = viewModel::dismissDevServerLink,
             )
         }
 
