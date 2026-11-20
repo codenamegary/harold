@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +48,8 @@ private val MIN_TOUCH_TARGET = 48.dp
  *   [confirmLabel].
  * @param confirmModifier applied to the confirm button, for test tags.
  * @param dismissModifier applied to the dismiss button, for test tags.
+ * @param destructive paints the confirm action with the error role. Use it
+ *   for remove, forget, and delete confirmations.
  */
 @Composable
 fun HaroldDialog(
@@ -61,6 +65,7 @@ fun HaroldDialog(
     busyLabel: String? = null,
     confirmModifier: Modifier = Modifier,
     dismissModifier: Modifier = Modifier,
+    destructive: Boolean = false,
 ) {
     AlertDialog(
         onDismissRequest = {
@@ -74,6 +79,13 @@ fun HaroldDialog(
             TextButton(
                 onClick = onConfirm,
                 enabled = !busy,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = if (destructive) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                ),
                 modifier = Modifier
                     .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                     .then(confirmModifier),

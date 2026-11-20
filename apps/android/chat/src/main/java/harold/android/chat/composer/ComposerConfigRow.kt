@@ -74,7 +74,6 @@ import harold.android.ui.theme.Body
 import harold.android.ui.theme.Dim
 import harold.android.ui.theme.Lime
 import harold.android.ui.theme.Line
-import harold.android.ui.theme.LineInput
 
 /**
  * The composer's reserved config controls: model, mode and thinking stepper.
@@ -210,7 +209,9 @@ fun ComposerConfigRow(
                                     modifier = Modifier
                                         .size(width = 3.dp, height = 14.dp)
                                         .clip(RoundedCornerShape(1.dp))
-                                        .background(LineInput.copy(alpha = 0.45f))
+                                        .background(
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                        )
                                         .testTag("composer_config_thinking_placeholder_bar_$i"),
                                 )
                             }
@@ -375,7 +376,13 @@ fun ComposerConfigRow(
                                             modifier = Modifier
                                                 .size(width = 3.dp, height = 14.dp)
                                                 .clip(RoundedCornerShape(1.dp))
-                                                .background(if (isLit) Lime else LineInput.copy(alpha = 0.45f))
+                                                .background(
+                                                    if (isLit) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                                    },
+                                                )
                                                 .testTag("composer_config_thinking_bar_$i"),
                                         )
                                     }
@@ -450,6 +457,7 @@ private fun SavingBeam(modifier: Modifier = Modifier) {
         label = "saving_beam_progress",
     )
 
+    val accent = MaterialTheme.colorScheme.primary
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -466,9 +474,9 @@ private fun SavingBeam(modifier: Modifier = Modifier) {
                     val brush = Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Lime.copy(alpha = 0.2f),
-                            Lime,
-                            Lime.copy(alpha = 0.2f),
+                            accent.copy(alpha = 0.2f),
+                            accent,
+                            accent.copy(alpha = 0.2f),
                             Color.Transparent,
                         ),
                         startX = startX,

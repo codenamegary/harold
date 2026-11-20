@@ -29,7 +29,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.live.TranscriptUserRow
-import harold.android.ui.theme.Lime
 
 private const val CollapsedPromptLines = 8
 
@@ -56,7 +55,7 @@ fun TranscriptTurnHeader(
             modifier = Modifier
                 .width(3.dp)
                 .fillMaxHeight()
-                .background(Lime)
+                .background(MaterialTheme.colorScheme.primary)
                 .testTag("turn_accent"),
         )
         Column(
