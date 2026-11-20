@@ -16,7 +16,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -28,7 +27,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.HaroldDialog
 import harold.android.ui.components.LoadingSkeletonList
 import harold.android.ui.components.SwipeToDeleteListItem
 
@@ -238,27 +237,16 @@ fun WorkspacesScreen(
     }
 
     if (uiState.cleanupConfirmVisible) {
-        AlertDialog(
+        HaroldDialog(
             onDismissRequest = onHideCleanupConfirm,
-            title = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_title)) },
-            text = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = onCleanupMissing,
-                    modifier = Modifier.testTag("workspaces_cleanup_confirm"),
-                ) {
-                    Text(text = stringResource(R.string.workspaces_cleanup_confirm_action))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = onHideCleanupConfirm,
-                    modifier = Modifier.testTag("workspaces_cleanup_cancel"),
-                ) {
-                    Text(text = stringResource(R.string.workspaces_cancel))
-                }
-            },
+            confirmLabel = stringResource(R.string.workspaces_cleanup_confirm_action),
+            onConfirm = onCleanupMissing,
             modifier = Modifier.testTag("workspaces_cleanup_dialog"),
+            title = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_title)) },
+            body = { Text(text = stringResource(R.string.workspaces_cleanup_confirm_body)) },
+            dismissLabel = stringResource(R.string.workspaces_cancel),
+            confirmModifier = Modifier.testTag("workspaces_cleanup_confirm"),
+            dismissModifier = Modifier.testTag("workspaces_cleanup_cancel"),
         )
     }
 }

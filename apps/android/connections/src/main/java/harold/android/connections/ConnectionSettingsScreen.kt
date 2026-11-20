@@ -6,13 +6,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -27,6 +25,7 @@ import harold.android.contracts.AgentLogs
 import harold.android.contracts.LogRun
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
+import harold.android.ui.components.HaroldDialog
 import harold.android.ui.components.HaroldDropdownField
 import harold.android.ui.components.HaroldDropdownOption
 import harold.android.ui.components.HaroldFormScreen
@@ -185,36 +184,28 @@ fun ConnectionSettingsScreen(
     )
 
     if (uiState.forgetConfirmVisible) {
-        AlertDialog(
+        HaroldDialog(
             onDismissRequest = onHideForgetConfirm,
-            title = { Text(text = stringResource(R.string.settings_forget_confirm_title)) },
-            text = { Text(text = stringResource(R.string.settings_forget_confirm_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = onForget,
-                    modifier = Modifier.testTag("settings_forget_confirm"),
-                ) {
-                    Text(text = stringResource(R.string.settings_forget_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = onHideForgetConfirm,
-                    modifier = Modifier.testTag("settings_forget_cancel"),
-                ) {
-                    Text(text = stringResource(R.string.connections_cancel))
-                }
-            },
+            confirmLabel = stringResource(R.string.settings_forget_confirm),
+            onConfirm = onForget,
             modifier = Modifier.testTag("settings_forget_dialog"),
+            title = { Text(text = stringResource(R.string.settings_forget_confirm_title)) },
+            body = { Text(text = stringResource(R.string.settings_forget_confirm_body)) },
+            dismissLabel = stringResource(R.string.connections_cancel),
+            confirmModifier = Modifier.testTag("settings_forget_confirm"),
+            dismissModifier = Modifier.testTag("settings_forget_cancel"),
         )
     }
 
     if (uiState.agentLogs.cleanupConfirmVisible) {
         val preview = hostLogCleanupPreview(uiState.agentLogs.logs)
-        AlertDialog(
+        HaroldDialog(
             onDismissRequest = onHideLogsCleanup,
+            confirmLabel = stringResource(R.string.settings_agent_logs_cleanup_confirm),
+            onConfirm = onCleanupLogs,
+            modifier = Modifier.testTag("settings_agent_logs_cleanup_dialog"),
             title = { Text(text = stringResource(R.string.settings_agent_logs_cleanup_title)) },
-            text = {
+            body = {
                 Text(
                     text = pluralStringResource(
                         R.plurals.settings_agent_logs_cleanup_body,
@@ -224,30 +215,13 @@ fun ConnectionSettingsScreen(
                     ),
                 )
             },
-            confirmButton = {
-                TextButton(
-                    onClick = onCleanupLogs,
-                    enabled = !uiState.agentLogs.cleanupRunning,
-                    modifier = Modifier.testTag("settings_agent_logs_cleanup_confirm"),
-                ) {
-                    Text(
-                        text = if (uiState.agentLogs.cleanupRunning) {
-                            stringResource(R.string.settings_agent_logs_cleanup_running)
-                        } else {
-                            stringResource(R.string.settings_agent_logs_cleanup_confirm)
-                        },
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = onHideLogsCleanup,
-                    modifier = Modifier.testTag("settings_agent_logs_cleanup_cancel"),
-                ) {
-                    Text(text = stringResource(R.string.connections_cancel))
-                }
-            },
-            modifier = Modifier.testTag("settings_agent_logs_cleanup_dialog"),
+            dismissLabel = stringResource(R.string.connections_cancel),
+            // The cleanup runs on the host; holding the dialog open with a
+            // spinner keeps the request and its result in one place.
+            busy = uiState.agentLogs.cleanupRunning,
+            busyLabel = stringResource(R.string.settings_agent_logs_cleanup_running),
+            confirmModifier = Modifier.testTag("settings_agent_logs_cleanup_confirm"),
+            dismissModifier = Modifier.testTag("settings_agent_logs_cleanup_cancel"),
         )
     }
 }

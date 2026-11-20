@@ -159,6 +159,8 @@ data class ChatUiState(
     val activeConnectionName: String = "",
     val activeConnectionColorId: String = "",
     val activeConnectionIconId: String = "",
+    /** Loopback link forwarding state for the selected session. */
+    val devServerLink: DevServerLinkUi = DevServerLinkUi(),
 ) {
     /** Latest context window usage for the selected session, live or from the host logs. */
     val contextUsage: ContextUsage?
@@ -350,6 +352,7 @@ internal fun ChatUiState.resetSessionScopedState(
     pickerVisible = false,
     changesAvailable = false,
     changesBadgeCount = 0,
+    devServerLink = DevServerLinkUi(),
 )
 
 internal fun SessionUsage.toContextUsage(): ContextUsage = ContextUsage(

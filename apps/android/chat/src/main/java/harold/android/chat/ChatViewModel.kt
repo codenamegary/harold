@@ -59,8 +59,11 @@ import harold.android.navigation.NavigationPreferences
 import harold.android.navigation.Navigator
 import harold.android.navigation.SessionPreferences
 import harold.android.network.AttachmentApi
+import harold.android.network.DevServerTunnel
+import harold.android.network.DevServerTunnelApi
 import harold.android.network.GitApi
 import harold.android.network.HostUsageApi
+import harold.android.network.LoopbackAddress
 import harold.android.network.SessionConfigApi
 import harold.android.network.SessionFolderProbe
 import harold.android.network.SessionFolderState
@@ -123,6 +126,7 @@ class ChatViewModel @Inject constructor(
     private val sessionAttention: SessionAttentionMarks? = null,
     private val permissionNotifier: PermissionAttentionNotifier? = null,
     private val hostUsage: HostUsageApi? = null,
+    private val devServerTunnelApi: DevServerTunnelApi? = null,
     private val sessionRefresher: SessionCatalogRefresher = SessionCatalogRefresher(sessionRepository),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -196,6 +200,8 @@ class ChatViewModel @Inject constructor(
     private var pendingModelValueLoaded: Boolean = false
     private var modelSyncTimeoutJob: Job? = null
     private val appliedModelSessions = mutableSetOf<String>()
+    /** The forward behind the pending browser URL, kept so a failed launch closes it. */
+    private var openDevServerTunnel: DevServerTunnel? = null
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -1156,6 +1162,151 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Records a loopback link the user tapped so the screen can ask before
+     * anything is forwarded. [acceptElicitationOnLaunch] keeps the ACP accept
+     * in UI state until the forwarded URL actually reaches a browser.
+     */
+    fun requestDevServerLink(
+        address: LoopbackAddress,
+        acceptElicitationOnLaunch: Boolean = false,
+    ) {
+        // Nothing is forwarded yet, so an address already opening is left
+        // alone rather than replaced by a second request. A link the agent
+        // asked to open is the exception: its accept can never be sent from
+        // here, and dropping it would make the user's Open do nothing.
+        if (_uiState.value.devServerLink.isOpening) {
+            if (acceptElicitationOnLaunch) {
+                reportElicitationUrlOpenFailure(
+                    "Harold is already opening a dev server link",
+                )
+            }
+            return
+        }
+        _uiState.update { current ->
+            current.copy(
+                devServerLink = DevServerLinkUi(
+                    pending = address,
+                    acceptElicitationOnLaunch = acceptElicitationOnLaunch,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Forwards a loopback address from an agent message over the selected
+     * session's SSH connection, then hands the local URL to the screen so it
+     * can open the browser.
+     */
+    fun openDevServerLink(address: LoopbackAddress) {
+        val api = devServerTunnelApi ?: return
+        if (_uiState.value.devServerLink.isOpening) {
+            return
+        }
+        val acceptElicitation = _uiState.value.devServerLink.acceptElicitationOnLaunch
+        val connectionId = selectedSessionOrigin()
+        if (connectionId == null) {
+            reportDevServerLinkFailure("No connection for this session", acceptElicitation)
+            return
+        }
+        _uiState.update { current ->
+            current.copy(
+                devServerLink = current.devServerLink.copy(pending = address, opening = address),
+            )
+        }
+        viewModelScope.launch {
+            val result = api.open(connectionId, address)
+            val tunnel = result.getOrNull()
+            if (tunnel != null) {
+                openDevServerTunnel = tunnel
+                // Keep the process in the foreground so the forward and its
+                // SSH connection survive the switch to the browser.
+                sessionForegroundCoordinator?.onTunnelChanged()
+                _uiState.update { current ->
+                    current.copy(
+                        devServerLink = current.devServerLink.copy(
+                            pending = null,
+                            opening = null,
+                            browserUrl = tunnel.localUrl,
+                        ),
+                    )
+                }
+                return@launch
+            }
+            val message = result.exceptionOrNull()
+                ?.message
+                ?.takeIf { error -> error.isNotBlank() }
+                ?: "Could not forward ${address.authority} over SSH"
+            reportDevServerLinkFailure(message, acceptElicitation)
+        }
+    }
+
+    /**
+     * Called after the browser intent resolves, so the one-shot URL clears. An
+     * elicitation accept is sent here and nowhere earlier: a device with no
+     * browser must not acknowledge a link the user could not open.
+     */
+    fun devServerBrowserLaunched() {
+        val acceptElicitation = _uiState.value.devServerLink.acceptElicitationOnLaunch
+        openDevServerTunnel = null
+        _uiState.update { current ->
+            current.copy(
+                devServerLink = current.devServerLink.copy(
+                    browserUrl = null,
+                    acceptElicitationOnLaunch = false,
+                ),
+            )
+        }
+        if (acceptElicitation) {
+            acceptElicitationUrl()
+        }
+    }
+
+    /**
+     * Called when no browser took the forwarded URL. The forward is closed so
+     * it cannot outlive the tap, and the failure is reported instead of being
+     * swallowed with the one-shot URL.
+     */
+    fun reportDevServerBrowserLaunchFailure(message: String) {
+        val acceptElicitation = _uiState.value.devServerLink.acceptElicitationOnLaunch
+        val tunnel = openDevServerTunnel
+        val api = devServerTunnelApi
+        openDevServerTunnel = null
+        reportDevServerLinkFailure(message, acceptElicitation)
+        if (tunnel != null && api != null) {
+            viewModelScope.launch {
+                api.close(tunnel)
+                sessionForegroundCoordinator?.onTunnelChanged()
+            }
+        }
+    }
+
+    /** Closes the dev-server prompt without forwarding anything. */
+    fun dismissDevServerLink() {
+        _uiState.update { current -> current.copy(devServerLink = DevServerLinkUi()) }
+    }
+
+    /**
+     * Ends a dev-server link attempt. A link the agent asked to open reports
+     * through the elicitation surface, because its accept is never sent and
+     * the user has to be told why; a waiting or transcript link has no such
+     * surface, so it shows the dev-server error dialog.
+     */
+    private fun reportDevServerLinkFailure(message: String, acceptElicitation: Boolean) {
+        _uiState.update { current ->
+            current.copy(
+                devServerLink = if (acceptElicitation) {
+                    DevServerLinkUi()
+                } else {
+                    DevServerLinkUi(error = message)
+                },
+            )
+        }
+        if (acceptElicitation) {
+            reportElicitationUrlOpenFailure(message)
+        }
+    }
+
     private fun updateElicitationDraft(update: (ElicitationDraft) -> ElicitationDraft) {
         _uiState.update { current ->
             current.copy(
@@ -1318,6 +1469,9 @@ class ChatViewModel @Inject constructor(
                 )
                 sessionRefresher.forget(originToRemove)
                 hostUsage?.forgetConnection(originToRemove)
+                // A forward outlives the chat stream by design, so the tunnels
+                // for a forgotten connection have to be torn down here.
+                devServerTunnelApi?.closeConnection(originToRemove)
                 settleAfterForget(
                     removedConnectionId = originToRemove,
                     remains = remains,

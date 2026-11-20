@@ -4,6 +4,7 @@ import harold.android.credentials.SshConfig
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 class SshException(
     message: String,
@@ -37,10 +38,43 @@ interface SshExecChannel : Closeable {
     suspend fun awaitExit(): Int
 }
 
+/**
+ * A loopback listener on this device that forwards every connection to
+ * [remotePort] on the host. Closing it removes only the listener. The SSH
+ * session that owns it keeps running until its lease is released.
+ */
+class SshLocalPortForward(
+    val localPort: Int,
+    val remoteHost: String,
+    val remotePort: Int,
+    private val release: () -> Unit,
+) : Closeable {
+    private val closed = AtomicBoolean(false)
+
+    override fun close() {
+        if (closed.compareAndSet(false, true)) {
+            release()
+        }
+    }
+}
+
 interface SshConnection : Closeable {
     val isConnected: Boolean
 
     suspend fun exec(command: String): SshExecChannel
+
+    /**
+     * Binds `127.0.0.1:[preferredLocalPort]` on this device and forwards it to
+     * [remoteHost]:[remotePort] on the host. A null or busy preferred port
+     * falls back to a free loopback port. Connections carry raw TCP, so HTTP,
+     * websockets and server restarts all behave like a normal local server.
+     */
+    suspend fun forwardLocalPort(
+        remoteHost: String,
+        remotePort: Int,
+        preferredLocalPort: Int? = null,
+    ): SshLocalPortForward =
+        throw SshException("This connection cannot forward ports")
 
     suspend fun readFile(path: String): ByteArray
 

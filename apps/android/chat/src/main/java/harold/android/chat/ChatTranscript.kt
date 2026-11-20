@@ -32,6 +32,7 @@ import harold.android.live.TranscriptRow
 import harold.android.live.TranscriptThinkingRow
 import harold.android.live.TranscriptToolRow
 import harold.android.live.TranscriptUserRow
+import harold.android.network.LoopbackAddress
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -101,6 +102,7 @@ fun ChatTranscript(
     modifier: Modifier = Modifier,
     hasPendingPermission: Boolean = false,
     hasPendingQuestion: Boolean = false,
+    onLoopbackLink: ((LoopbackAddress) -> Unit)? = null,
 ) {
     val blocks = groupTranscriptRows(rows)
     val listState = rememberLazyListState()
@@ -203,6 +205,7 @@ fun ChatTranscript(
                                         row = block.row,
                                         index = block.index,
                                         streaming = block.index == streamingRowIndex,
+                                        onLoopbackLink = onLoopbackLink,
                                     )
                                 }
                             }
@@ -265,6 +268,7 @@ private fun TranscriptBlockRow(
     row: TranscriptRow,
     index: Int,
     streaming: Boolean,
+    onLoopbackLink: ((LoopbackAddress) -> Unit)? = null,
 ) {
     when (row) {
         is TranscriptUserRow -> {
@@ -283,6 +287,7 @@ private fun TranscriptBlockRow(
                     .padding(horizontal = 4.dp)
                     .probeTag("transcript_assistant"),
                 streaming = streaming,
+                onLoopbackLink = onLoopbackLink,
             )
         }
 

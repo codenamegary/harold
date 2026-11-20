@@ -11,10 +11,12 @@ import harold.android.host.HostSessionFolderProbe
 import harold.android.host.HostUsageRepository
 import harold.android.host.HostWorkspaceApi
 import harold.android.host.SshAgentProcessLauncher
+import harold.android.host.SshDevServerTunnels
 import harold.android.host.SshSessionFileService
 import harold.android.network.AgentAuthApi
 import harold.android.network.AgentSettingsApi
 import harold.android.network.AttachmentApi
+import harold.android.network.DevServerTunnelApi
 import harold.android.network.GitApi
 import harold.android.network.HostApi
 import harold.android.network.HostLogsApi
@@ -55,6 +57,10 @@ abstract class HostModule {
     @Binds
     @Singleton
     abstract fun hostUsageApi(impl: HostUsageRepository): HostUsageApi
+
+    @Binds
+    @Singleton
+    abstract fun devServerTunnelApi(impl: SshDevServerTunnels): DevServerTunnelApi
 
     @Binds
     @Singleton

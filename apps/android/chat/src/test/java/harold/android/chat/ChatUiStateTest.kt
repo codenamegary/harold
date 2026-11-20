@@ -15,6 +15,7 @@ import harold.android.live.AcpTranscriptState
 import harold.android.live.ContextUsage
 import harold.android.live.TranscriptAssistantRow
 import harold.android.live.emptyAcpTranscript
+import harold.android.network.LoopbackAddress
 import harold.android.stream.SessionStatus
 
 class ChatUiStateTest {
@@ -234,6 +235,23 @@ class ChatUiStateTest {
         // SessionConfigWriter owns the composer config; clearing it here would
         // strand the bar whenever the next session has the same options.
         assertEquals(busy.composerConfig, reset.composerConfig)
+    }
+
+    @Test
+    fun switchingSessionsClearsTheDevServerLink() {
+        // A forward the previous session asked for must not be confirmed or
+        // accepted against the session that replaces it.
+        val pending = ChatUiState(
+            selectedSession = sessionRow(SessionState.Running),
+            devServerLink = DevServerLinkUi(
+                pending = LoopbackAddress(host = "localhost", port = 3000),
+                browserUrl = "http://127.0.0.1:3000/",
+                error = "Could not forward",
+                acceptElicitationOnLaunch = true,
+            ),
+        )
+
+        assertEquals(DevServerLinkUi(), pending.resetSessionScopedState().devServerLink)
     }
 
     @Test

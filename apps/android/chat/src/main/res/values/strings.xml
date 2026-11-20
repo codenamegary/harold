@@ -101,6 +101,14 @@
     <string name="chat_remove_confirm_body">This removes the saved SSH key and connection from this device. The host\'s authorized_keys entry is unchanged.</string>
     <string name="chat_remove_confirm">Remove</string>
     <string name="chat_remove_cancel">Cancel</string>
+    <string name="chat_dev_server_prompt_title">Open dev server?</string>
+    <string name="chat_dev_server_prompt_body">Harold will forward %1$s from your host over SSH to this phone, then open it in your browser.</string>
+    <string name="chat_dev_server_prompt_confirm">Yes, open</string>
+    <string name="chat_dev_server_prompt_connecting">Connecting</string>
+    <string name="chat_dev_server_prompt_cancel">No</string>
+    <string name="chat_dev_server_error_title">Could not open dev server</string>
+    <string name="chat_dev_server_error_close">Close</string>
+    <string name="chat_dev_server_no_browser">No browser available</string>
     <plurals name="chat_changes_content_description_count">
         <item quantity="one">Changes, %d uncommitted file</item>
         <item quantity="other">Changes, %d uncommitted files</item>

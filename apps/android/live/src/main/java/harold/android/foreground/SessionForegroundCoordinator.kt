@@ -1,5 +1,6 @@
 package harold.android.foreground
 
+import harold.android.network.DevServerTunnelApi
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +40,7 @@ class SessionForegroundCoordinator @Inject constructor(
     private val tracker: ActiveSessionTracker,
     private val permissionChecker: NotificationPermissionChecker,
     private val launcher: SessionForegroundLauncher,
+    private val devServerTunnels: DevServerTunnelApi? = null,
 ) {
     private val _state = MutableStateFlow(ForegroundCoordinatorState())
     val state: StateFlow<ForegroundCoordinatorState> = _state.asStateFlow()
@@ -71,9 +73,16 @@ class SessionForegroundCoordinator @Inject constructor(
         _state.value = _state.value.copy(permissionDenied = false)
     }
 
+    fun onTunnelChanged() {
+        reconcile()
+    }
+
     fun reconcile() {
         val active = tracker.sessions.value
-        val desired = active.isNotEmpty()
+        // A forwarded dev server keeps the process in the foreground so the
+        // SSH connection and its local listener survive the browser switch.
+        val tunnelsOpen = devServerTunnels?.hasOpenTunnels == true
+        val desired = active.isNotEmpty() || tunnelsOpen
         val permitted = permissionChecker.hasPostNotificationsPermission()
 
         if (!desired) {
@@ -89,7 +98,19 @@ class SessionForegroundCoordinator @Inject constructor(
             return
         }
 
-        val presentation = runningNotification(active)
+        val presentation = if (active.isEmpty()) {
+            RunningNotification(
+                copy = NotificationCopy(
+                    title = "Dev server link open",
+                    text = "Harold is forwarding a host port over SSH",
+                ),
+                largeIconId = null,
+                openSessionId = null,
+                openSessionList = false,
+            )
+        } else {
+            runningNotification(active)
+        }
 
         if (!permitted) {
             if (launcher.isRunning) {
