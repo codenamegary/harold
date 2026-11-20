@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.7.1](https://github.com/codenamegary/harold/compare/harold-android-v4.7.0...harold-android-v4.7.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **android:** make the light theme readable ([#542](https://github.com/codenamegary/harold/issues/542)) ([710e523](https://github.com/codenamegary/harold/commit/710e5234f9023525c930d0304db3016e4fcaa9ff))
+
 ## [4.7.0](https://github.com/codenamegary/harold/compare/harold-android-v4.6.1...harold-android-v4.7.0) (2026-11-20)
 
 
